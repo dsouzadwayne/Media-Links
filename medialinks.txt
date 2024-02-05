@@ -51,7 +51,8 @@
         var filmName = window.location.pathname.split('/')[2];
 
         // Add links to the div
-        var links = [
+        // A test
+            var links = [
             { url: `https://letterboxd.com/film/${filmName}`, text: 'Main' },
             { url: `https://letterboxd.com/film/${filmName}/crew/`, text: 'Crew' },
             { url: `https://letterboxd.com/film/${filmName}/details/`, text: 'Details' },
