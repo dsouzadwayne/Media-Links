@@ -1,19 +1,17 @@
 {
-  "manifest_version": 3,
-  "name": "IMDb and Letterboxd Links",
-  "version": "0.1",
-  "description": "Add IMDb specific links and Letterboxd sidebar",
-  "permissions": [
-    "activeTab"
-  ],
-  "content_scripts": [
-    {
-      "matches": [
-        "*://www.imdb.com/title/tt*",
-        "*://letterboxd.com/film/*"
-      ],
-      "js": ["content.js"],
-      "css": ["styles.css"]
-    }
-  ]
+"manifest_version": 3,
+"name": "media links",
+"version": "0.1",
+"description": "add imdb specific links and letterboxd sidebar",
+"permissions": [],
+"content_scripts": [
+{
+"matches": [
+"https://www.imdb.com/title/tt*",
+"https://letterboxd.com/film/*"
+],
+"js": ["content.js"],
+"css": ["styles.css"]
+}
+]
 }
