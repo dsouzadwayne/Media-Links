@@ -3,12 +3,12 @@
   --secondary-color: #333;
   --text-color: #fff;
   --accent-color: #007bff;
+  --hover-color: #555;
 }
 
 #custom-sidebar {
   position: fixed;
   top: 0;
-  left: 0;
   bottom: 0;
   width: 250px;
   background-color: var(--primary-color);
@@ -17,24 +17,47 @@
   z-index: 9999;
   font-family: Arial, sans-serif;
   color: var(--text-color);
+  transition: transform 0.3s ease;
+  transform: translateX(-100%);
 }
 
-.sidebar-header {
+#custom-sidebar.open {
+  transform: translateX(0);
+}
+
+#custom-sidebar .sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 20px;
 }
 
-.sidebar-header h3 {
+#custom-sidebar .sidebar-header h3 {
   margin: 0;
   font-size: 18px;
   font-weight: bold;
+  color: var(--text-color);
 }
 
-.sidebar-content {
+#custom-sidebar .sidebar-toggle {
+  background: none;
+  border: none;
+  color: var(--text-color);
+  font-size: 24px;
+  cursor: pointer;
+  transition: color 0.3s ease;
+}
+
+#custom-sidebar .sidebar-toggle:hover {
+  color: var(--accent-color);
+}
+
+#custom-sidebar .sidebar-content {
   display: flex;
   flex-direction: column;
 }
 
-.sidebar-link {
+#custom-sidebar .sidebar-link {
   display: block;
   padding: 10px;
   margin-bottom: 10px;
@@ -45,10 +68,61 @@
   transition: background-color 0.3s ease;
 }
 
-.sidebar-link:hover {
-  background-color: #555;
+#custom-sidebar .sidebar-link:hover {
+  background-color: var(--hover-color);
 }
 
-.sidebar-link.active {
+#custom-sidebar .sidebar-link.active {
   background-color: var(--accent-color);
+}
+
+#sidebarToggle {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  background-color: var(--accent-color);
+  color: #fff;
+  border: none;
+  padding: 10px;
+  font-size: 24px;
+  cursor: pointer;
+  z-index: 9998;
+  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  transition: transform 0.3s ease;
+}
+
+#sidebarToggle:hover {
+  transform: scale(1.1);
+}
+
+#sidebarToggle:focus {
+  outline: none;
+}
+
+@media (max-width: 600px) {
+  #custom-sidebar {
+    width: 100%;
+    transform: translateY(-100%);
+  }
+
+  #custom-sidebar.open {
+    transform: translateY(0);
+  }
+
+  #sidebarToggle {
+    top: auto;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  #sidebarToggle:hover {
+    transform: translateX(-50%) scale(1.1);
+  }
 }

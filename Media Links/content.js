@@ -7,6 +7,7 @@
     sidebar.innerHTML = `
       <div class="sidebar-header">
         <h3>Links</h3>
+        <button class="sidebar-toggle" id="sidebarClose">&times;</button>
       </div>
       <div class="sidebar-content"></div>
     `;
@@ -30,35 +31,53 @@
     });
   };
 
-  const init = () => {
-    const sidebar = createSidebar();
+  const createToggleButton = () => {
+    const toggleButton = document.createElement('button');
+    toggleButton.id = 'sidebarToggle';
+    toggleButton.title = 'Toggle Sidebar';
+    toggleButton.innerHTML = '&#9776;';
+    document.body.appendChild(toggleButton);
+    return toggleButton;
+  };
 
-    if (window.location.hostname === 'www.imdb.com') {
-      const imdbId = window.location.pathname.split('/')[2];
-      const links = [
-        { url: `/title/${imdbId}/`, text: 'Main' },
-        { url: `/title/${imdbId}/fullcredits`, text: 'Cast' },
-        { url: `/title/${imdbId}/companycredits`, text: 'Production Companies' },
-        { url: `/title/${imdbId}/awards`, text: 'Awards' },
-        { url: `/title/${imdbId}/releaseinfo`, text: 'Release Info' },
-        { url: `/title/${imdbId}/technical`, text: 'Technical Info' },
-        { url: `/title/${imdbId}/plotsummary`, text: 'Plot' },
-        { url: `/title/${imdbId}/parentalguide`, text: 'Parents Guide' },
-        { url: `/title/${imdbId}/ratings`, text: 'Ratings' }
-      ];
-      addLinks(sidebar, links);
-    } else if (window.location.hostname === 'letterboxd.com') {
-      const filmName = window.location.pathname.split('/')[2];
-      const links = [
-        { url: `/film/${filmName}/`, text: 'Main' },
-        { url: `/film/${filmName}/crew/`, text: 'Crew' },
-        { url: `/film/${filmName}/details/`, text: 'Details' },
-        { url: `/film/${filmName}/genres/`, text: 'Genres' },
-        { url: `/film/${filmName}/releases/`, text: 'Releases' }
-      ];
-      addLinks(sidebar, links);
-    }
+  const setupEventListeners = (sidebar, toggleButton) => {
+    toggleButton.addEventListener('click', () => {
+      sidebar.classList.toggle('open');
+    });
 
+    const closeButton = document.getElementById('sidebarClose');
+    closeButton.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+    });
+  };
+
+  const getLinksForIMDb = () => {
+    const imdbId = window.location.pathname.split('/')[2];
+    return [
+      { url: `/title/${imdbId}/`, text: 'Main' },
+      { url: `/title/${imdbId}/fullcredits`, text: 'Cast' },
+      { url: `/title/${imdbId}/companycredits`, text: 'Production Companies' },
+      { url: `/title/${imdbId}/awards`, text: 'Awards' },
+      { url: `/title/${imdbId}/releaseinfo`, text: 'Release Info' },
+      { url: `/title/${imdbId}/technical`, text: 'Technical Info' },
+      { url: `/title/${imdbId}/plotsummary`, text: 'Plot' },
+      { url: `/title/${imdbId}/parentalguide`, text: 'Parents Guide' },
+      { url: `/title/${imdbId}/ratings`, text: 'Ratings' }
+    ];
+  };
+
+  const getLinksForLetterboxd = () => {
+    const filmName = window.location.pathname.split('/')[2];
+    return [
+      { url: `/film/${filmName}/`, text: 'Main' },
+      { url: `/film/${filmName}/crew/`, text: 'Crew' },
+      { url: `/film/${filmName}/details/`, text: 'Details' },
+      { url: `/film/${filmName}/genres/`, text: 'Genres' },
+      { url: `/film/${filmName}/releases/`, text: 'Releases' }
+    ];
+  };
+
+  const setActiveLink = (sidebar) => {
     const currentUrl = window.location.pathname;
     const sidebarLinks = sidebar.querySelectorAll('.sidebar-link');
     sidebarLinks.forEach(link => {
@@ -72,6 +91,22 @@
         }
       }
     });
+  };
+
+  const init = () => {
+    const sidebar = createSidebar();
+    const toggleButton = createToggleButton();
+    setupEventListeners(sidebar, toggleButton);
+
+    let links = [];
+    if (window.location.hostname === 'www.imdb.com') {
+      links = getLinksForIMDb();
+    } else if (window.location.hostname === 'letterboxd.com') {
+      links = getLinksForLetterboxd();
+    }
+    addLinks(sidebar, links);
+
+    setActiveLink(sidebar);
   };
 
   init();
