@@ -2,7 +2,7 @@
 "manifest_version": 3,
 "name": "Media Links",
 "version": "0.2",
-"description": "Add IMDb specific links and Letterboxd sidebar",
+"description": "Navigate IMDb and Letterboxd with a sidebar",
 "permissions": [],
 "content_scripts": [
 {
