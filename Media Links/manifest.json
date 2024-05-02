@@ -5,7 +5,6 @@
     "description": "Navigate IMDb and Letterboxd with a sidebar",
     "permissions": [
       "activeTab",
-      "scripting",
       "sidePanel"
     ],
     "host_permissions": [

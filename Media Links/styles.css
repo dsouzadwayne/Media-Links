@@ -1,9 +1,11 @@
 :root {
-  --primary-color: #1f1f1f;
+  --primary-color: #1a1a1a;
   --secondary-color: #2c2c2c;
-  --text-color: #e0e0e0;
-  --accent-color: #f5c518;
+  --text-color: #f0f0f0;
+  --accent-color: #ffd700;
   --hover-color: #3c3c3c;
+  --font-family: 'Roboto', sans-serif;
+  --base-font-size: 16px;
 }
 
 body {
@@ -13,13 +15,14 @@ body {
   height: 100vh;
   overflow-y: auto;
   background-color: var(--primary-color);
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-family: var(--font-family);
+  font-size: var(--base-font-size);
 }
 
 #custom-sidebar {
   width: 100%;
   height: 100%;
-  padding: 20px;
+  padding: 2rem;
   box-sizing: border-box;
 }
 
@@ -27,57 +30,69 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
-  margin-bottom: 30px;
+  margin-bottom: 2rem;
 }
 
 #custom-sidebar .sidebar-header h3 {
   margin: 0;
-  font-size: 24px;
-  font-weight: bold;
+  font-size: 2.5rem;
+  font-weight: 700;
   color: var(--accent-color);
   text-transform: uppercase;
-  letter-spacing: 2px;
+  letter-spacing: 0.1rem;
 }
 
 #custom-sidebar .sidebar-content {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 15px;
+  gap: 1rem;
 }
 
 #custom-sidebar .sidebar-link {
   display: flex;
   align-items: center;
-  padding: 15px;
+  padding: 1.25rem;
+  font-size: 1.25rem;
   color: var(--text-color);
   text-decoration: none;
   background-color: var(--secondary-color);
-  border-radius: 8px;
-  transition: background-color 0.3s ease;
+  border-radius: 0.5rem;
+  transition: background-color 0.3s ease, transform 0.2s ease;
   cursor: pointer;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 #custom-sidebar .sidebar-link:hover {
   background-color: var(--hover-color);
+  transform: translateY(-2px);
 }
 
 #custom-sidebar .sidebar-link.active {
   background-color: var(--accent-color);
   color: var(--primary-color);
-  font-weight: bold;
+  font-weight: 700;
 }
 
 #custom-sidebar .sidebar-link::before {
   content: '';
   display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 10px;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-right: 1rem;
   border-radius: 50%;
   background-color: var(--text-color);
 }
 
 #custom-sidebar .sidebar-link.active::before {
   background-color: var(--primary-color);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --primary-color: #f0f0f0;
+    --secondary-color: #e0e0e0;
+    --text-color: #1a1a1a;
+    --accent-color: #ffa500;
+    --hover-color: #d0d0d0;
+  }
 }
