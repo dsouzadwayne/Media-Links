@@ -5,11 +5,13 @@
     "description": "Navigate IMDb and Letterboxd with a sidebar",
     "permissions": [
       "activeTab",
-      "sidePanel"
+      "sidePanel",
+      "scripting"
     ],
     "host_permissions": [
       "https://www.imdb.com/",
-      "https://letterboxd.com/"
+      "https://letterboxd.com/",
+      "https://www.cbfcindia.gov.in/"
     ],
     "background": {
       "service_worker": "background.js"
