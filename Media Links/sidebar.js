@@ -239,7 +239,10 @@ const initSearch = () => {
   updatePreview();
 };
 
-const init = () => {
+// Track if static elements are initialized
+let staticInitialized = false;
+
+const updateLinks = () => {
  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
    const tabUrl = tabs[0].url;
    if (tabUrl) {
@@ -262,15 +265,25 @@ const init = () => {
      }
    }
  });
- 
- initTabs();
- initSearch();
+};
+
+const init = () => {
+  // Only initialize static elements once
+  if (!staticInitialized) {
+    initTabs();
+    initSearch();
+    staticInitialized = true;
+  }
+  
+  // Always update links for current page
+  updateLinks();
 };
 
 init();
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
  if (changeInfo.status === 'complete' && tab.active) {
-   init();
+   // Only update links, not reinitialize everything
+   updateLinks();
  }
 });
