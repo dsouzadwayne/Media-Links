@@ -114,6 +114,131 @@ const setActiveLink = () => {
  });
 };
 
+// Tab functionality
+const initTabs = () => {
+  const tabButtons = document.querySelectorAll('.tab-button');
+  const tabPanels = document.querySelectorAll('.tab-panel');
+  
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const targetTab = button.dataset.tab;
+      
+      // Update active states
+      tabButtons.forEach(btn => btn.classList.remove('active'));
+      tabPanels.forEach(panel => panel.classList.remove('active'));
+      
+      button.classList.add('active');
+      document.getElementById(`${targetTab}-tab`).classList.add('active');
+    });
+  });
+};
+
+// Search functionality
+const generateQueries = (elements) => {
+  if (elements.length === 0) return [];
+  
+  const queries = [];
+  
+  // Single element queries
+  if (elements.length >= 1) {
+    queries.push(elements[0]);
+    queries.push(`"${elements[0]}"`);
+    queries.push(`intitle:"${elements[0]}"`);
+    queries.push(`allintitle:${elements[0]}`);
+    queries.push(`intext:"${elements[0]}"`);
+  }
+  
+  // Two element combinations
+  if (elements.length >= 2) {
+    queries.push(`${elements[0]} ${elements[1]}`);
+    queries.push(`"${elements[0]}" ${elements[1]}`);
+    queries.push(`${elements[0]} "${elements[1]}"`);
+    queries.push(`"${elements[0]}" "${elements[1]}"`);
+    queries.push(`"${elements[0]} ${elements[1]}"`);
+    queries.push(`intitle:"${elements[0]}" ${elements[1]}`);
+    queries.push(`"${elements[0]}" AND "${elements[1]}"`);
+    queries.push(`"${elements[0]}" OR "${elements[1]}"`);
+  }
+  
+  // Three element combinations
+  if (elements.length >= 3) {
+    queries.push(`${elements[0]} ${elements[1]} ${elements[2]}`);
+    queries.push(`"${elements[0]}" "${elements[1]}" "${elements[2]}"`);
+    queries.push(`"${elements[0]} ${elements[1]}" ${elements[2]}`);
+    queries.push(`"${elements[0]} ${elements[1]} ${elements[2]}"`);
+    queries.push(`"${elements[0]}" AND "${elements[1]}" AND "${elements[2]}"`);
+  }
+  
+  // Four element combinations
+  if (elements.length >= 4) {
+    queries.push(`${elements[0]} ${elements[1]} ${elements[2]} ${elements[3]}`);
+    queries.push(`"${elements[0]}" "${elements[1]}" "${elements[2]}" "${elements[3]}"`);
+    queries.push(`"${elements[0]} ${elements[1]}" "${elements[2]} ${elements[3]}"`);
+    queries.push(`"${elements[0]} ${elements[1]} ${elements[2]} ${elements[3]}"`);
+    queries.push(`"${elements[0]}" AND "${elements[1]}" AND "${elements[2]}" AND "${elements[3]}"`);
+  }
+  
+  return queries;
+};
+
+const initSearch = () => {
+  const searchInputs = document.querySelectorAll('.search-element');
+  const previewList = document.getElementById('preview-list');
+  const executeBtn = document.querySelector('.search-execute-btn');
+  
+  const updatePreview = () => {
+    const elements = [];
+    searchInputs.forEach(input => {
+      if (input.value.trim()) {
+        elements.push(input.value.trim());
+      }
+    });
+    
+    const queries = generateQueries(elements);
+    
+    if (queries.length === 0) {
+      previewList.innerHTML = '<div class="preview-item">Enter elements to see search combinations...</div>';
+      return;
+    }
+    
+    previewList.innerHTML = queries.slice(0, 10).map((query, index) => 
+      `<div class="preview-item">${index + 1}. ${query}</div>`
+    ).join('');
+    
+    if (queries.length > 10) {
+      previewList.innerHTML += `<div class="preview-item">... and ${queries.length - 10} more combinations</div>`;
+    }
+  };
+  
+  searchInputs.forEach(input => {
+    input.addEventListener('input', updatePreview);
+  });
+  
+  executeBtn.addEventListener('click', () => {
+    const elements = [];
+    searchInputs.forEach(input => {
+      if (input.value.trim()) {
+        elements.push(input.value.trim());
+      }
+    });
+    
+    if (elements.length === 0) {
+      return;
+    }
+    
+    const queries = generateQueries(elements);
+    
+    queries.forEach((query, index) => {
+      setTimeout(() => {
+        const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+        chrome.tabs.create({ url: url, active: false });
+      }, index * 150);
+    });
+  });
+  
+  updatePreview();
+};
+
 const init = () => {
  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
    const tabUrl = tabs[0].url;
@@ -137,6 +262,9 @@ const init = () => {
      }
    }
  });
+ 
+ initTabs();
+ initSearch();
 };
 
 init();

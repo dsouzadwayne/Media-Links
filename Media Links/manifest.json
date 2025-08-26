@@ -1,32 +1,26 @@
 {
-    "manifest_version": 3,
-    "name": "Media Links",
-    "version": "0.3",
-    "description": "Navigate IMDb and Letterboxd with a sidebar",
-    "permissions": [
-      "activeTab",
-      "sidePanel",
-      "scripting"
-    ],
-    "host_permissions": [
-      "https://www.imdb.com/",
-      "https://letterboxd.com/",
-      "https://www.cbfcindia.gov.in/"
-    ],
-    "background": {
+   "background": {
       "service_worker": "background.js"
-    },
-    "side_panel": {
+   },
+   "commands": {
+      "_execute_sidebar_action": {
+         "description": "Open Media Links sidebar",
+         "suggested_key": {
+            "default": "Alt+M",
+            "mac": "Alt+M"
+         }
+      }
+   },
+   "description": "Navigate IMDb and Letterboxd with a sidebar",
+   "host_permissions": [ "https://www.imdb.com/", "https://letterboxd.com/", "https://www.cbfcindia.gov.in/" ],
+   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAg7lsvd5P2DYSQrFcVsv4OUxx3/2FCs6Osaxufuikf/QZz5LXWTqnyk3MUtFFPk16hvNROLoRrfm/uHzGwWRTCMWe9cbepoNeNko863NQsGpy+XQXU3YKSCqdU5l/7vweqdR7Z1rEwvVG+NDxqpmqwsnOaFhFMLTS5lzTGF5HelkXQeQrT1UoJsNoo87gfiNcOb31vYaogtJqDcO1rxlve9wcmQPwODUBk/XeXoIl5nFKOtpOy0JjD2ErAfln8YDnGwOXvtvOLx7OJIsZ/gfDKKf/bIX2uXVNGHQM+P2gcSZVyxo6B0xOEd/iSmLWbdU4bBvM65VW+87Blp3Oejk9CQIDAQAB",
+   "manifest_version": 3,
+   "name": "Media Links",
+   "permissions": [ "activeTab", "sidePanel", "scripting" ],
+   "side_panel": {
       "default_path": "sidebar.html",
       "default_width": 300
-    },
-    "commands": {
-      "_execute_sidebar_action": {
-        "suggested_key": {
-          "default": "Alt+M",
-          "mac": "Alt+M"
-        },
-        "description": "Open Media Links sidebar"
-      }
-    }
-  }
+   },
+   "update_url": "https://clients2.google.com/service/update2/crx",
+   "version": "0.5"
+}
