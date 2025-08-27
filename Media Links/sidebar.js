@@ -181,10 +181,24 @@ const generateQueries = (elements) => {
   return queries;
 };
 
+const getSearchUrl = (query, engine) => {
+  const encodedQuery = encodeURIComponent(query);
+  switch(engine) {
+    case 'youtube':
+      return `https://www.youtube.com/results?search_query=${encodedQuery}`;
+    case 'google-ai':
+      return `https://www.google.com/search?q=${encodedQuery}&udm=50&aep=11`;
+    case 'google':
+    default:
+      return `https://www.google.com/search?q=${encodedQuery}`;
+  }
+};
+
 const initSearch = () => {
   const searchInputs = document.querySelectorAll('.search-element');
   const previewList = document.getElementById('preview-list');
   const executeBtn = document.querySelector('.search-execute-btn');
+  const engineSelector = document.getElementById('search-engine');
   
   const updatePreview = () => {
     const elements = [];
@@ -227,10 +241,11 @@ const initSearch = () => {
     }
     
     const queries = generateQueries(elements);
+    const selectedEngine = engineSelector.value;
     
     queries.forEach((query, index) => {
       setTimeout(() => {
-        const url = `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+        const url = getSearchUrl(query, selectedEngine);
         chrome.tabs.create({ url: url, active: false });
       }, index * 150);
     });

@@ -206,6 +206,41 @@ body {
   margin: 0;
 }
 
+/* Search Engine Selector */
+.search-engine-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.search-engine-selector label {
+  color: var(--text-color);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.search-engine-dropdown {
+  padding: 0.75rem;
+  border: 2px solid var(--hover-color);
+  border-radius: 0.5rem;
+  background-color: var(--secondary-color);
+  color: var(--text-color);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: border-color 0.3s ease;
+}
+
+.search-engine-dropdown:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  background-color: var(--primary-color);
+}
+
+.search-engine-dropdown option {
+  background-color: var(--primary-color);
+  color: var(--text-color);
+}
+
 .search-inputs {
   display: flex;
   flex-direction: column;
