@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Search</title>
+  <link rel="stylesheet" href="search-styles.css">
+</head>
+<body>
+  <div class="search-page">
+    <div class="header">
+        <button class="sidebar-toggle" id="sidebar-toggle">></button>
+      <h1>Search</h1>
+    </div>
+    
+    <div class="main-container">
+      <div class="sidebar" id="sidebar">
+        <button class="sidebar-btn active" data-section="search">Search</button>
+        <button class="sidebar-btn" data-section="settings">Settings</button>
+      </div>
+      
+      <div class="content" id="content">
+        <div id="search-section" class="section active">
+          <h2>Search</h2>
+          <p class="instructions">Enter up to 4 elements to generate multiple search combinations</p>
+          
+          <div class="search-engine-selector">
+            <label for="search-engine">Search Engine:</label>
+            <select id="search-engine" class="search-engine-dropdown">
+              <option value="google">Google</option>
+              <option value="youtube">YouTube</option>
+              <option value="google-ai">Google AI Mode</option>
+            </select>
+          </div>
+          
+          <div class="search-inputs">
+            <input type="text" class="search-element" id="search1" placeholder="Element 1">
+            <input type="text" class="search-element" id="search2" placeholder="Element 2">
+            <input type="text" class="search-element" id="search3" placeholder="Element 3">
+            <input type="text" class="search-element" id="search4" placeholder="Element 4">
+          </div>
+          
+          <button class="search-execute-btn">Execute Search</button>
+          
+          <div class="search-preview">
+            <h3>Preview:</h3>
+            <div id="preview-list"></div>
+          </div>
+        </div>
+        
+        <div id="settings-section" class="section">
+          <h2>Settings</h2>
+          <p class="settings-instructions">Configure search patterns for different element combinations</p>
+          
+          <div class="profile-selector">
+            <label for="profile-select">Select Profile:</label>
+            <select id="profile-select" class="profile-dropdown">
+              <option value="1">1 Element</option>
+              <option value="2">2 Elements</option>
+              <option value="3">3 Elements</option>
+              <option value="4">4 Elements</option>
+            </select>
+          </div>
+          
+          <div id="profile-container">
+            <div id="profile1" class="profile-content active">
+              <h3>1 Element Profile</h3>
+              <div class="profile-settings" data-profile="1"></div>
+            </div>
+            <div id="profile2" class="profile-content">
+              <h3>2 Elements Profile</h3>
+              <div class="profile-settings" data-profile="2"></div>
+            </div>
+            <div id="profile3" class="profile-content">
+              <h3>3 Elements Profile</h3>
+              <div class="profile-settings" data-profile="3"></div>
+            </div>
+            <div id="profile4" class="profile-content">
+              <h3>4 Elements Profile</h3>
+              <div class="profile-settings" data-profile="4"></div>
+            </div>
+          </div>
+          
+          <div class="settings-actions">
+            <button class="settings-save-btn" id="save-btn">Save Settings</button>
+            <button class="settings-reset-btn" id="reset-btn">Reset to Default</button>
+            <button class="settings-select-all-btn" id="select-all-btn">Select All</button>
+            <button class="settings-deselect-all-btn" id="deselect-all-btn">Deselect All</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="search.js"></script>
+</body>
+</html>
