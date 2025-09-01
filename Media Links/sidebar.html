@@ -12,6 +12,7 @@
     <div class="tabs">
       <button class="tab-button active" data-tab="links">Links</button>
       <button class="tab-button" data-tab="search">Search</button>
+      <button class="tab-button" data-tab="settings">Settings</button>
     </div>
     <div class="tab-content">
       <div id="links-tab" class="tab-panel active">
@@ -38,6 +39,25 @@
           <div class="search-preview">
             <h4>Preview:</h4>
             <div id="preview-list"></div>
+          </div>
+        </div>
+      </div>
+      <div id="settings-tab" class="tab-panel">
+        <div class="settings-container">
+          <h4>Search Query Patterns</h4>
+          <p class="settings-instructions">Enter search elements first, then customize which patterns to use</p>
+          
+          <div id="dynamic-settings">
+            <div class="no-elements-message">
+              <p>Enter search elements in the Search tab to see available pattern options</p>
+            </div>
+          </div>
+          
+          <div class="settings-actions">
+            <button class="settings-save-btn">Save Settings</button>
+            <button class="settings-reset-btn">Reset to Default</button>
+            <button class="settings-select-all-btn">Select All</button>
+            <button class="settings-deselect-all-btn">Deselect All</button>
           </div>
         </div>
       </div>
