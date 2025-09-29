@@ -1,9 +1,9 @@
 :root {
-  --primary-color: #1a1a1a;
-  --secondary-color: #2c2c2c;
-  --text-color: #f0f0f0;
-  --accent-color: #ffd700;
-  --hover-color: #3c3c3c;
+  --primary-color: #1e1e2e;
+  --secondary-color: #313244;
+  --text-color: #cdd6f4;
+  --accent-color: #cba6f7;
+  --hover-color: #45475a;
   --font-family: 'Roboto', sans-serif;
   --base-font-size: 16px;
 }
@@ -186,8 +186,7 @@ body {
 
 .cbfc-form .apply-button:hover {
   transform: translateY(-2px);
-  background-color: var(--hover-color);
-  color: var(--text-color);
+  background-color: #b4a1e8;
 }
 
 /* Search Tab */
@@ -280,7 +279,7 @@ body {
 
 .search-execute-btn:hover {
   transform: translateY(-2px);
-  background-color: #ffea00;
+  background-color: #b4a1e8;
 }
 
 .search-preview {
@@ -460,12 +459,12 @@ body {
 }
 
 .checkbox-label span code {
-  background-color: var(--secondary-color);
+  background-color: rgba(203, 166, 247, 0.2);
   padding: 0.25rem 0.5rem;
   border-radius: 0.25rem;
   font-family: 'Courier New', monospace;
   font-size: 0.85rem;
-  color: #90ee90;
+  color: #b4a1e8;
   word-break: break-all;
 }
 
@@ -493,13 +492,13 @@ body {
 }
 
 .section-select-all-btn {
-  background-color: #28a745;
-  color: var(--text-color);
+  background-color: #a6e3a1;
+  color: var(--primary-color);
 }
 
 .section-select-all-btn:hover {
   transform: translateY(-1px);
-  background-color: #218838;
+  background-color: #94d890;
 }
 
 .section-deselect-all-btn {
@@ -509,7 +508,7 @@ body {
 
 .section-deselect-all-btn:hover {
   transform: translateY(-1px);
-  background-color: var(--primary-color);
+  background-color: #585b70;
 }
 
 /* Global settings actions */
@@ -545,27 +544,27 @@ body {
 
 .settings-save-btn:hover {
   transform: translateY(-2px);
-  background-color: #ffea00;
+  background-color: #b4a1e8;
 }
 
 .settings-reset-btn {
-  background-color: #dc3545;
-  color: var(--text-color);
+  background-color: #f38ba8;
+  color: var(--primary-color);
 }
 
 .settings-reset-btn:hover {
   transform: translateY(-2px);
-  background-color: #c82333;
+  background-color: #f07a99;
 }
 
 .settings-select-all-btn {
-  background-color: #28a745;
-  color: var(--text-color);
+  background-color: #a6e3a1;
+  color: var(--primary-color);
 }
 
 .settings-select-all-btn:hover {
   transform: translateY(-2px);
-  background-color: #218838;
+  background-color: #94d890;
 }
 
 .settings-deselect-all-btn {
@@ -575,7 +574,7 @@ body {
 
 .settings-deselect-all-btn:hover {
   transform: translateY(-2px);
-  background-color: var(--secondary-color);
+  background-color: #585b70;
 }
 
 /* Scrollbar */
@@ -594,14 +593,4 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent-color);
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --primary-color: #f0f0f0;
-    --secondary-color: #e0e0e0;
-    --text-color: #1a1a1a;
-    --accent-color: #ffa500;
-    --hover-color: #d0d0d0;
-  }
 }
