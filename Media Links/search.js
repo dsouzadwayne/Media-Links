@@ -2,6 +2,60 @@
 let profileSettings = {};
 let currentProfile = 1;
 
+// Load and apply theme
+const loadTheme = () => {
+  chrome.storage.sync.get(['theme'], (result) => {
+    const theme = result.theme || 'catppuccin-mocha';
+    document.body.setAttribute('data-theme', theme);
+  });
+};
+
+// Load and apply default search engine
+const loadDefaultSearchEngine = () => {
+  chrome.storage.sync.get(['defaultSearchEngine'], (result) => {
+    const defaultEngine = result.defaultSearchEngine || 'google';
+
+    // Set search engine dropdown
+    const engineSelect = document.getElementById('search-engine');
+    if (engineSelect) {
+      engineSelect.value = defaultEngine;
+    }
+
+    // Set default search engine setting dropdown
+    const engineSetting = document.getElementById('default-search-engine-setting');
+    if (engineSetting) {
+      engineSetting.value = defaultEngine;
+    }
+  });
+};
+
+// Save default search engine
+const saveDefaultSearchEngine = (engine) => {
+  chrome.storage.sync.set({ defaultSearchEngine: engine }, () => {
+    // Update the search engine dropdown to match
+    const engineSelect = document.getElementById('search-engine');
+    if (engineSelect) {
+      engineSelect.value = engine;
+    }
+  });
+};
+
+loadTheme();
+loadDefaultSearchEngine();
+
+// Load search elements from URL parameters
+const loadSearchFromUrl = () => {
+  const urlParams = new URLSearchParams(window.location.search);
+
+  for (let i = 1; i <= 4; i++) {
+    const param = urlParams.get(`e${i}`);
+    const input = document.getElementById(`search${i}`);
+    if (param && input) {
+      input.value = param;
+    }
+  }
+};
+
 const defaultPatterns = {
   1: {
     'plain': true,
@@ -344,6 +398,10 @@ const getSearchUrl = (query, engine) => {
       return `https://www.youtube.com/results?search_query=${encodedQuery}`;
     case 'google-ai':
       return `https://www.google.com/search?q=${encodedQuery}&udm=50&aep=11`;
+    case 'bing':
+      return `https://www.bing.com/search?q=${encodedQuery}`;
+    case 'duckduckgo':
+      return `https://duckduckgo.com/?q=${encodedQuery}`;
     case 'google':
     default:
       return `https://www.google.com/search?q=${encodedQuery}`;
@@ -411,9 +469,10 @@ const initNavigation = () => {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
+  loadSearchFromUrl();
   loadSettings();
   initNavigation();
-  
+
   const searchInputs = document.querySelectorAll('.search-element');
   const executeBtn = document.querySelector('.search-execute-btn');
   const engineSelector = document.getElementById('search-engine');
@@ -445,7 +504,15 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('reset-btn').addEventListener('click', resetCurrentProfileSettings);
   document.getElementById('select-all-btn').addEventListener('click', selectAllInCurrentProfile);
   document.getElementById('deselect-all-btn').addEventListener('click', deselectAllInCurrentProfile);
-  
+
+  // Default search engine setting
+  const engineSetting = document.getElementById('default-search-engine-setting');
+  if (engineSetting) {
+    engineSetting.addEventListener('change', (e) => {
+      saveDefaultSearchEngine(e.target.value);
+    });
+  }
+
   document.addEventListener('change', (e) => {
     if (e.target.classList.contains('query-setting')) {
       const profileNum = parseInt(e.target.dataset.profileNum);

@@ -20,6 +20,60 @@
   --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Light Theme */
+body[data-theme="light"] {
+  --primary-bg: #ffffff;
+  --secondary-bg: #f9fafb;
+  --surface-bg: #f3f4f6;
+  --text-primary: #1f2937;
+  --text-secondary: #4b5563;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-glow: rgba(99, 102, 241, 0.2);
+  --success: #10b981;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --border: #e5e7eb;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+/* Dark Theme */
+body[data-theme="dark"] {
+  --primary-bg: #1a1a1a;
+  --secondary-bg: #0f0f0f;
+  --surface-bg: #2d2d2d;
+  --text-primary: #e5e5e5;
+  --text-secondary: #a3a3a3;
+  --accent: #8b5cf6;
+  --accent-hover: #7c3aed;
+  --accent-glow: rgba(139, 92, 246, 0.2);
+  --success: #22c55e;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --border: #404040;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.6), 0 2px 4px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+}
+
+/* Catppuccin Mocha Theme */
+body[data-theme="catppuccin-mocha"] {
+  --primary-bg: #1e1e2e;
+  --secondary-bg: #181825;
+  --surface-bg: #313244;
+  --text-primary: #cdd6f4;
+  --text-secondary: #bac2de;
+  --accent: #cba6f7;
+  --accent-hover: #b4a1e8;
+  --accent-glow: rgba(203, 166, 247, 0.2);
+  --success: #a6e3a1;
+  --danger: #f38ba8;
+  --warning: #fab387;
+  --border: #45475a;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -206,12 +260,14 @@ body {
 }
 
 .search-engine-selector,
-.profile-selector {
+.profile-selector,
+.default-engine-setting {
   margin-bottom: 2rem;
 }
 
 .search-engine-selector label,
-.profile-selector label {
+.profile-selector label,
+.default-engine-setting label {
   color: var(--text-secondary);
   font-weight: 500;
   font-size: 0.875rem;
