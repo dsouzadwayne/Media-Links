@@ -200,14 +200,20 @@ const initializeProfileSettings = (profileNum) => {
     const settings = profileSettings[wordCount] || { ...defaultPatterns[wordCount] };
     
     const title = document.createElement('h4');
-    const comboText = wordCount === 1 ? 
+    const comboText = wordCount === 1 ?
       `Individual words` :
       `${wordCount}-word combinations`;
-    
-    title.innerHTML = `
-      <span class="section-title">${comboText}</span>
-      <span class="section-status" id="status-${profileNum}-${wordCount}"></span>
-    `;
+
+    const titleSpan = document.createElement('span');
+    titleSpan.className = 'section-title';
+    titleSpan.textContent = comboText;
+
+    const statusSpan = document.createElement('span');
+    statusSpan.className = 'section-status';
+    statusSpan.id = `status-${profileNum}-${wordCount}`;
+
+    title.appendChild(titleSpan);
+    title.appendChild(statusSpan);
     section.appendChild(title);
     
     const patterns = Object.keys(patternDescriptions[wordCount] || {});
@@ -228,7 +234,16 @@ const initializeProfileSettings = (profileNum) => {
       const exampleCombo = exampleElements.slice(0, wordCount);
       const example = generateExampleQuery(pattern, exampleCombo, wordCount);
       const description = patternDescriptions[wordCount][pattern].description;
-      span.innerHTML = `<strong>${description}:</strong> <code>${example}</code>`;
+
+      const strong = document.createElement('strong');
+      strong.textContent = description + ':';
+
+      const code = document.createElement('code');
+      code.textContent = example;
+
+      span.appendChild(strong);
+      span.appendChild(document.createTextNode(' '));
+      span.appendChild(code);
       
       label.appendChild(checkbox);
       label.appendChild(span);
@@ -416,16 +431,27 @@ const updateSearchPreview = () => {
   const queries = generateQueries(elements);
   
   if (queries.length === 0) {
-    previewList.innerHTML = '<div class="preview-item">Enter elements to see search combinations...</div>';
+    previewList.textContent = '';
+    const emptyDiv = document.createElement('div');
+    emptyDiv.className = 'preview-item';
+    emptyDiv.textContent = 'Enter elements to see search combinations...';
+    previewList.appendChild(emptyDiv);
     return;
   }
-  
-  previewList.innerHTML = queries.slice(0, 10).map((query, index) => 
-    `<div class="preview-item">${index + 1}. ${query}</div>`
-  ).join('');
-  
+
+  previewList.textContent = '';
+  queries.slice(0, 10).forEach((query, index) => {
+    const previewItem = document.createElement('div');
+    previewItem.className = 'preview-item';
+    previewItem.textContent = `${index + 1}. ${query}`;
+    previewList.appendChild(previewItem);
+  });
+
   if (queries.length > 10) {
-    previewList.innerHTML += `<div class="preview-item">... and ${queries.length - 10} more combinations</div>`;
+    const moreItem = document.createElement('div');
+    moreItem.className = 'preview-item';
+    moreItem.textContent = `... and ${queries.length - 10} more combinations`;
+    previewList.appendChild(moreItem);
   }
 };
 

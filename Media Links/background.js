@@ -3,7 +3,7 @@ chrome.runtime.onInstalled.addListener(() => {
       openPanelOnActionClick: true
     });
 
-    // Create context menu
+    // Create parent context menu
     chrome.contextMenus.create({
       id: 'search-selection',
       title: 'Search with Media Links',
@@ -25,6 +25,33 @@ chrome.runtime.onInstalled.addListener(() => {
       chrome.sidePanel.open();
     }
   });
+
+  // Grouping patterns for word combinations
+  const groupingPatterns = {
+    1: [
+      { id: '1', display: 'word1', pattern: [[0]] }
+    ],
+    2: [
+      { id: '1-1', display: 'word1 | word2', pattern: [[0], [1]] },
+      { id: '2', display: 'word1-word2', pattern: [[0, 1]] }
+    ],
+    3: [
+      { id: '1-1-1', display: 'word1 | word2 | word3', pattern: [[0], [1], [2]] },
+      { id: '1-2', display: 'word1 | word2-word3', pattern: [[0], [1, 2]] },
+      { id: '2-1', display: 'word1-word2 | word3', pattern: [[0, 1], [2]] },
+      { id: '3', display: 'word1-word2-word3', pattern: [[0, 1, 2]] }
+    ],
+    4: [
+      { id: '1-1-1-1', display: 'word1 | word2 | word3 | word4', pattern: [[0], [1], [2], [3]] },
+      { id: '1-1-2', display: 'word1 | word2 | word3-word4', pattern: [[0], [1], [2, 3]] },
+      { id: '1-2-1', display: 'word1 | word2-word3 | word4', pattern: [[0], [1, 2], [3]] },
+      { id: '2-1-1', display: 'word1-word2 | word3 | word4', pattern: [[0, 1], [2], [3]] },
+      { id: '1-3', display: 'word1 | word2-word3-word4', pattern: [[0], [1, 2, 3]] },
+      { id: '2-2', display: 'word1-word2 | word3-word4', pattern: [[0, 1], [2, 3]] },
+      { id: '3-1', display: 'word1-word2-word3 | word4', pattern: [[0, 1, 2], [3]] },
+      { id: '4', display: 'word1-word2-word3-word4', pattern: [[0, 1, 2, 3]] }
+    ]
+  };
 
   // Pattern templates for generating queries
   const patternDescriptions = {
@@ -144,28 +171,94 @@ chrome.runtime.onInstalled.addListener(() => {
     return queries;
   };
 
+  // Store current selection info for context menu
+  let currentSelectionInfo = { words: [], wordCount: 0 };
+
+  // Sanitize text for context menu display
+  const sanitizeForContextMenu = (text) => {
+    // Remove special characters that could cause issues
+    // Limit length to prevent display issues
+    return text.replace(/[&<>"']/g, '').substring(0, 50);
+  };
+
+  // Update context menu when selection changes
+  const updateContextMenu = (selectionText) => {
+    const words = selectionText.trim().split(/\s+/).slice(0, 4);
+    const wordCount = words.length;
+
+    // Sanitize words before storing
+    const sanitizedWords = words.map(sanitizeForContextMenu);
+    currentSelectionInfo = { words: sanitizedWords, wordCount };
+
+    // Remove all existing menus
+    chrome.contextMenus.removeAll(() => {
+      // Recreate parent menu
+      chrome.contextMenus.create({
+        id: 'search-selection',
+        title: 'Search with Media Links',
+        contexts: ['selection']
+      });
+
+      // Create submenus based on word count
+      const patterns = groupingPatterns[wordCount] || [];
+      patterns.forEach(pattern => {
+        // Replace placeholders with sanitized words
+        let displayText = pattern.display;
+        sanitizedWords.forEach((word, index) => {
+          // Use replaceAll to handle all occurrences
+          displayText = displayText.replaceAll(`word${index + 1}`, word);
+        });
+
+        chrome.contextMenus.create({
+          id: `grouping-${wordCount}-${pattern.id}`,
+          parentId: 'search-selection',
+          title: displayText,
+          contexts: ['selection']
+        });
+      });
+    });
+  };
+
+  // Listen for selection updates
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'selectionChanged' && message.text) {
+      updateContextMenu(message.text);
+    }
+  });
+
   // Handle context menu click
   chrome.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === 'search-selection' && info.selectionText) {
-      // Split selected text into words (max 4)
-      const words = info.selectionText.trim().split(/\s+/).slice(0, 4);
+    if (info.menuItemId.startsWith('grouping-')) {
+      // Parse the grouping pattern from menu item ID
+      const parts = info.menuItemId.split('-');
+      const wordCount = parseInt(parts[1]);
+      const patternId = parts.slice(2).join('-');
+
+      const words = currentSelectionInfo.words;
+      const groupingPattern = groupingPatterns[wordCount].find(p => p.id === patternId);
+
+      if (!groupingPattern) return;
+
+      // Group words according to pattern
+      const groupedWords = groupingPattern.pattern.map(indices => {
+        return indices.map(i => words[i]).join(' ');
+      });
 
       // Load settings and execute searches
       chrome.storage.sync.get(['profileSettings', 'defaultSearchEngine'], (result) => {
-        const wordCount = words.length;
-        const profileKey = `profile${wordCount}`;
+        const profileKey = `profile${groupedWords.length}`;
         const profileSettings = result.profileSettings?.[profileKey] || {};
         const searchEngine = result.defaultSearchEngine || 'google';
 
-        // Generate queries based on saved profile
-        const queries = generateQueries(words, profileSettings);
+        // Generate queries based on grouped words
+        const queries = generateQueries(groupedWords, profileSettings);
 
         // Open each query in a new tab
         queries.forEach((query, index) => {
           setTimeout(() => {
             const searchUrl = getSearchUrl(query, searchEngine);
             chrome.tabs.create({ url: searchUrl, active: index === 0 });
-          }, index * 100); // Stagger tab opening
+          }, index * 100);
         });
       });
     }

@@ -5,7 +5,15 @@ const createLink = (url, text) => {
   link.classList.add('sidebar-link');
   link.addEventListener('click', () => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      chrome.tabs.update(tabs[0].id, { url: `https://${new URL(tabs[0].url).hostname}${url}` });
+      // Validate URL starts with / to prevent XSS
+      if (!url.startsWith('/')) {
+        console.error('Invalid URL path:', url);
+        return;
+      }
+      const currentUrl = new URL(tabs[0].url);
+      // Construct safe URL using URL constructor
+      const newUrl = `${currentUrl.protocol}//${currentUrl.hostname}${url}`;
+      chrome.tabs.update(tabs[0].id, { url: newUrl });
     });
   });
   return link;
@@ -13,8 +21,9 @@ const createLink = (url, text) => {
 
 const addLinks = (links) => {
   const sidebarContent = document.querySelector('.sidebar-content');
-  sidebarContent.innerHTML = '';
-  
+  // Clear content safely using textContent instead of innerHTML
+  sidebarContent.textContent = '';
+
   if (Array.isArray(links)) {
     links.forEach(link => {
       const linkElement = createLink(link.url, link.text);
@@ -68,6 +77,16 @@ const getLinksForCBFC = () => {
   button.classList.add('apply-button');
   button.addEventListener('click', () => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const currentUrl = tabs[0].url;
+      // Only execute on CBFC domain for security
+      if (!currentUrl || !currentUrl.startsWith('https://www.cbfcindia.gov.in/')) {
+        console.error('Script injection only allowed on CBFC domain');
+        return;
+      }
+
+      // Sanitize input to prevent script injection
+      const sanitizedFilmName = input.value.replace(/[<>"']/g, '');
+
       chrome.scripting.executeScript({
         target: { tabId: tabs[0].id },
         function: (filmName) => {
@@ -76,7 +95,7 @@ const getLinksForCBFC = () => {
             filmInput.value = filmName;
           }
         },
-        args: [input.value]
+        args: [sanitizedFilmName]
       });
     });
   });
