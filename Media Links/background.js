@@ -173,6 +173,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Store current selection info for context menu
   let currentSelectionInfo = { words: [], wordCount: 0 };
+  let menuUpdateTimeout = null;
 
   // Sanitize text for context menu display
   const sanitizeForContextMenu = (text) => {
@@ -182,59 +183,97 @@ chrome.runtime.onInstalled.addListener(() => {
   };
 
   // Update context menu when selection changes
-  const updateContextMenu = (selectionText) => {
-    const words = selectionText.trim().split(/\s+/).slice(0, 4);
-    const wordCount = words.length;
+  const updateContextMenu = (selectionText, immediate = false) => {
+    clearTimeout(menuUpdateTimeout);
 
-    // Sanitize words before storing
-    const sanitizedWords = words.map(sanitizeForContextMenu);
-    currentSelectionInfo = { words: sanitizedWords, wordCount };
+    const updateMenus = () => {
+      const words = selectionText.trim().split(/\s+/).slice(0, 4);
+      const wordCount = words.length;
 
-    // Remove all existing menus
-    chrome.contextMenus.removeAll(() => {
-      // Recreate parent menu
-      chrome.contextMenus.create({
-        id: 'search-selection',
-        title: 'Search with Media Links',
-        contexts: ['selection']
+      // Don't rebuild for empty selection
+      if (wordCount === 0) return;
+
+      // Sanitize words before storing
+      const sanitizedWords = words.map(sanitizeForContextMenu);
+      currentSelectionInfo = { words: sanitizedWords, wordCount };
+
+      // Remove all existing menus
+      chrome.contextMenus.removeAll(() => {
+        try {
+          // Recreate parent menu
+          chrome.contextMenus.create({
+            id: 'search-selection',
+            title: 'Search with Media Links',
+            contexts: ['selection']
+          });
+
+          // Create submenus based on word count
+          const patterns = groupingPatterns[wordCount] || [];
+          patterns.forEach(pattern => {
+            // Replace placeholders with sanitized words
+            let displayText = pattern.display;
+            sanitizedWords.forEach((word, index) => {
+              // Use replaceAll to handle all occurrences
+              displayText = displayText.replaceAll(`word${index + 1}`, word);
+            });
+
+            // Truncate menu title if too long (Chrome limit is ~50 chars)
+            if (displayText.length > 50) {
+              displayText = displayText.substring(0, 47) + '...';
+            }
+
+            try {
+              chrome.contextMenus.create({
+                id: `grouping-${wordCount}-${pattern.id}`,
+                parentId: 'search-selection',
+                title: displayText,
+                contexts: ['selection']
+              });
+            } catch (error) {
+              console.error('Failed to create context menu item:', error, displayText);
+            }
+          });
+        } catch (error) {
+          console.error('Failed to create context menu:', error);
+        }
       });
+    };
 
-      // Create submenus based on word count
-      const patterns = groupingPatterns[wordCount] || [];
-      patterns.forEach(pattern => {
-        // Replace placeholders with sanitized words
-        let displayText = pattern.display;
-        sanitizedWords.forEach((word, index) => {
-          // Use replaceAll to handle all occurrences
-          displayText = displayText.replaceAll(`word${index + 1}`, word);
-        });
-
-        chrome.contextMenus.create({
-          id: `grouping-${wordCount}-${pattern.id}`,
-          parentId: 'search-selection',
-          title: displayText,
-          contexts: ['selection']
-        });
-      });
-    });
+    // If immediate update requested (from contextmenu), update right away
+    // Otherwise use debouncing for other events
+    if (immediate) {
+      updateMenus();
+    } else {
+      menuUpdateTimeout = setTimeout(updateMenus, 50);
+    }
   };
 
   // Listen for selection updates
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.type === 'selectionChanged' && message.text) {
-      updateContextMenu(message.text);
+      // Check if this is from a contextmenu event (immediate update needed)
+      const isContextMenu = message.fromContextMenu || false;
+      updateContextMenu(message.text, isContextMenu);
     }
   });
 
   // Handle context menu click
   chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId.startsWith('grouping-')) {
+      // Validate selection text exists
+      if (!info.selectionText) {
+        console.warn('Context menu clicked without selection text');
+        return;
+      }
+
       // Parse the grouping pattern from menu item ID
       const parts = info.menuItemId.split('-');
       const wordCount = parseInt(parts[1]);
       const patternId = parts.slice(2).join('-');
 
-      const words = currentSelectionInfo.words;
+      // Use actual selected text instead of stored info
+      // Don't double-sanitize - the text is already clean for use
+      const words = info.selectionText.trim().split(/\s+/).slice(0, 4);
       const groupingPattern = groupingPatterns[wordCount].find(p => p.id === patternId);
 
       if (!groupingPattern) return;
