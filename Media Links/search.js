@@ -5,7 +5,7 @@ let currentProfile = 1;
 // Load and apply theme
 const loadTheme = () => {
   chrome.storage.sync.get(['theme'], (result) => {
-    const theme = result.theme || 'catppuccin-mocha';
+    const theme = result.theme || 'light';
     document.body.setAttribute('data-theme', theme);
   });
 };
@@ -498,6 +498,21 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSearchFromUrl();
   loadSettings();
   initNavigation();
+
+  // Settings button handler
+  const appSettingsBtn = document.getElementById('app-settings-btn');
+  if (appSettingsBtn) {
+    appSettingsBtn.addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
+    });
+  }
+
+  // Listen for theme changes
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'themeChanged') {
+      document.body.setAttribute('data-theme', message.theme);
+    }
+  });
 
   const searchInputs = document.querySelectorAll('.search-element');
   const executeBtn = document.querySelector('.search-execute-btn');

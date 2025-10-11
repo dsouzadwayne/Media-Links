@@ -59,54 +59,6 @@ const getLinksForLetterboxd = (filmName) => {
   ];
 };
 
-const getLinksForCBFC = () => {
-  const container = document.createElement('div');
-  container.classList.add('cbfc-form');
-  
-  const label = document.createElement('label');
-  label.textContent = 'Film Name: ';
-  label.setAttribute('for', 'film-name-input');
-  
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.id = 'film-name-input';
-  input.classList.add('form-control');
-  
-  const button = document.createElement('button');
-  button.textContent = 'Apply';
-  button.classList.add('apply-button');
-  button.addEventListener('click', () => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const currentUrl = tabs[0].url;
-      // Only execute on CBFC domain for security
-      if (!currentUrl || !currentUrl.startsWith('https://www.cbfcindia.gov.in/')) {
-        console.error('Script injection only allowed on CBFC domain');
-        return;
-      }
-
-      // Sanitize input to prevent script injection
-      const sanitizedFilmName = input.value.replace(/[<>"']/g, '');
-
-      chrome.scripting.executeScript({
-        target: { tabId: tabs[0].id },
-        function: (filmName) => {
-          const filmInput = document.querySelector('#film-title');
-          if (filmInput) {
-            filmInput.value = filmName;
-          }
-        },
-        args: [sanitizedFilmName]
-      });
-    });
-  });
-  
-  container.appendChild(label);
-  container.appendChild(input);
-  container.appendChild(button);
-  
-  return container;
-};
-
 const setActiveLink = () => {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tabUrl = tabs[0].url;
@@ -130,23 +82,47 @@ const setActiveLink = () => {
 const updateLinks = () => {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     const tabUrl = tabs[0].url;
+    const linksTab = document.querySelector('[data-tab="links"]');
+
     if (tabUrl) {
       try {
         const currentUrl = new URL(tabUrl);
         let links = [];
+        let hasLinks = false;
+
         if (currentUrl.hostname === 'www.imdb.com') {
           const imdbId = currentUrl.pathname.split('/')[2];
           links = getLinksForIMDb(imdbId);
+          hasLinks = true;
         } else if (currentUrl.hostname === 'letterboxd.com') {
           const filmName = currentUrl.pathname.split('/')[2];
           links = getLinksForLetterboxd(filmName);
-        } else if (currentUrl.hostname === 'www.cbfcindia.gov.in') {
-          links = getLinksForCBFC();
+          hasLinks = true;
         }
-        addLinks(links);
-        setActiveLink();
+
+        // Show/hide Links tab based on whether we have links
+        if (linksTab) {
+          if (hasLinks) {
+            linksTab.style.display = '';
+            addLinks(links);
+            setActiveLink();
+          } else {
+            linksTab.style.display = 'none';
+            // If Links tab was active, switch to Search tab
+            if (linksTab.classList.contains('active')) {
+              document.getElementById('search-button').click();
+            }
+          }
+        }
       } catch (error) {
         console.error('Invalid URL:', tabUrl);
+        if (linksTab) {
+          linksTab.style.display = 'none';
+        }
+      }
+    } else {
+      if (linksTab) {
+        linksTab.style.display = 'none';
       }
     }
   });
@@ -154,55 +130,14 @@ const updateLinks = () => {
 
 const loadTheme = () => {
   chrome.storage.sync.get(['theme'], (result) => {
-    const theme = result.theme || 'catppuccin-mocha';
-    document.body.setAttribute('data-theme', theme);
-    const themeSelect = document.getElementById('theme-select');
-    if (themeSelect) {
-      themeSelect.value = theme;
-    }
-  });
-};
-
-const saveTheme = (theme) => {
-  chrome.storage.sync.set({ theme: theme }, () => {
+    const theme = result.theme || 'light';
     document.body.setAttribute('data-theme', theme);
   });
-};
-
-const switchTab = (tabName) => {
-  // Remove active class from all tabs and panels
-  document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-  document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
-
-  // Add active class to selected tab and panel
-  const selectedButton = document.querySelector(`[data-tab="${tabName}"]`);
-  const selectedPanel = document.getElementById(`${tabName}-tab`);
-
-  if (selectedButton) selectedButton.classList.add('active');
-  if (selectedPanel) selectedPanel.classList.add('active');
 };
 
 const init = () => {
-  // Load saved settings
+  // Load saved theme
   loadTheme();
-
-  // Initialize tab buttons
-  document.querySelectorAll('.tab-button').forEach(button => {
-    button.addEventListener('click', (e) => {
-      const tabName = e.target.getAttribute('data-tab');
-      if (tabName) {
-        switchTab(tabName);
-      }
-    });
-  });
-
-  // Initialize theme selector
-  const themeSelect = document.getElementById('theme-select');
-  if (themeSelect) {
-    themeSelect.addEventListener('change', (e) => {
-      saveTheme(e.target.value);
-    });
-  }
 
   // Initialize search button (opens in new tab)
   const searchButton = document.getElementById('search-button');
@@ -211,6 +146,29 @@ const init = () => {
       chrome.tabs.create({ url: chrome.runtime.getURL('search.html') });
     });
   }
+
+  // Initialize settings button (opens in new tab)
+  const settingsButton = document.getElementById('settings-button');
+  if (settingsButton) {
+    settingsButton.addEventListener('click', () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
+    });
+  }
+
+  // Initialize close button
+  const closeButton = document.getElementById('close-sidebar');
+  if (closeButton) {
+    closeButton.addEventListener('click', () => {
+      window.close();
+    });
+  }
+
+  // Listen for theme changes
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'themeChanged') {
+      document.body.setAttribute('data-theme', message.theme);
+    }
+  });
 
   updateLinks();
 };

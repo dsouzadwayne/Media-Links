@@ -74,6 +74,351 @@ body[data-theme="catppuccin-mocha"] {
   --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
 }
 
+/* Cats Theme - Warm orange/cream color scheme */
+body[data-theme="cats"] {
+  --primary-bg: #2d1f1a;
+  --secondary-bg: #241712;
+  --surface-bg: #3d2b23;
+  --text-primary: #f5deb3;
+  --text-secondary: #d4a574;
+  --accent: #ff9933;
+  --accent-hover: #ff7700;
+  --accent-glow: rgba(255, 153, 51, 0.3);
+  --success: #8bc34a;
+  --danger: #ff6b6b;
+  --warning: #ffd93d;
+  --border: #5d4a3f;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.6), 0 2px 4px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+}
+
+body[data-theme="cats"]::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: url('cat.png');
+  background-repeat: repeat;
+  background-size: 180px;
+  background-position: center;
+  opacity: 0.18;
+  filter: sepia(100%) saturate(200%) hue-rotate(10deg) brightness(1.2);
+  pointer-events: none;
+  z-index: -1;
+  animation: catDrift 30s ease-in-out infinite alternate;
+}
+
+/* Playful cat with yarn ball decoration */
+body[data-theme="cats"]::after {
+  content: '';
+  position: fixed;
+  bottom: 30px;
+  left: 30px;
+  width: 120px;
+  height: 120px;
+  background-image: url('cat-playing.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  filter: brightness(0) saturate(100%) invert(56%) sepia(88%) saturate(2049%) hue-rotate(357deg) brightness(102%) contrast(104%);
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 1000;
+  animation: playfulWiggle 4s ease-in-out infinite;
+  drop-shadow: 0 0 10px rgba(255, 153, 51, 0.8);
+  filter:
+    brightness(0)
+    saturate(100%)
+    invert(56%)
+    sepia(88%)
+    saturate(2049%)
+    hue-rotate(357deg)
+    brightness(102%)
+    contrast(104%)
+    drop-shadow(0 0 8px rgba(255, 153, 51, 0.9))
+    drop-shadow(0 0 15px rgba(255, 153, 51, 0.6));
+}
+
+@keyframes catDrift {
+  0% {
+    background-position: 0% 0%;
+    transform: rotate(0deg);
+  }
+  100% {
+    background-position: 100% 100%;
+    transform: rotate(5deg);
+  }
+}
+
+@keyframes playfulWiggle {
+  0%, 100% {
+    transform: rotate(0deg) translateY(0px);
+  }
+  25% {
+    transform: rotate(-5deg) translateY(-5px);
+  }
+  75% {
+    transform: rotate(5deg) translateY(-5px);
+  }
+}
+
+/* Cat Night Theme - Starry night aesthetic */
+body[data-theme="cat-night"] {
+  --primary-bg: #0a0e27;
+  --secondary-bg: #0d1124;
+  --surface-bg: #151b3d;
+  --text-primary: #e0e7ff;
+  --text-secondary: #c7d2fe;
+  --accent: #818cf8;
+  --accent-hover: #6366f1;
+  --accent-glow: rgba(129, 140, 248, 0.3);
+  --success: #34d399;
+  --danger: #f87171;
+  --warning: #fbbf24;
+  --border: #1e2749;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.7), 0 2px 4px -1px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 10px 10px -5px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(180deg, #0a0e27 0%, #1a1f3a 50%, #0d1428 100%);
+}
+
+body[data-theme="cat-night"]::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image:
+    radial-gradient(2px 2px at 10% 20%, white, transparent),
+    radial-gradient(2px 2px at 80% 80%, white, transparent),
+    radial-gradient(1px 1px at 50% 50%, white, transparent),
+    radial-gradient(1px 1px at 70% 10%, white, transparent),
+    radial-gradient(2px 2px at 30% 60%, white, transparent),
+    radial-gradient(1px 1px at 90% 70%, white, transparent),
+    radial-gradient(1px 1px at 25% 85%, white, transparent),
+    radial-gradient(2px 2px at 65% 30%, white, transparent),
+    radial-gradient(1px 1px at 40% 40%, white, transparent),
+    radial-gradient(2px 2px at 85% 50%, white, transparent);
+  background-size: 200% 200%;
+  background-position: 0% 0%;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.7;
+  animation: starsFloat 10s ease-in-out infinite;
+}
+
+body[data-theme="cat-night"]::after {
+  content: '';
+  position: fixed;
+  bottom: 30px;
+  left: 30px;
+  width: 100px;
+  height: 100px;
+  background-image: url('cat-playing.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  filter:
+    brightness(0)
+    saturate(100%)
+    invert(70%)
+    sepia(40%)
+    saturate(1000%)
+    hue-rotate(200deg)
+    brightness(100%)
+    contrast(100%)
+    drop-shadow(0 0 10px rgba(129, 140, 248, 0.9))
+    drop-shadow(0 0 20px rgba(129, 140, 248, 0.6));
+  opacity: 0.7;
+  pointer-events: none;
+  z-index: 1000;
+  animation: playfulWiggle 4s ease-in-out infinite;
+}
+
+@keyframes starsFloat {
+  0%, 100% {
+    opacity: 0.7;
+    background-position: 0% 0%;
+  }
+  50% {
+    opacity: 1;
+    background-position: 100% 100%;
+  }
+}
+
+@keyframes nightCatFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-15px) rotate(3deg);
+  }
+}
+
+body[data-theme="cat-night"] .search-execute-btn {
+  border-radius: 2rem;
+  box-shadow: 0 4px 15px rgba(129, 140, 248, 0.4);
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+body[data-theme="cat-night"] .search-execute-btn:hover {
+  transform: translateY(-5px) scale(1.05);
+  box-shadow: 0 8px 25px rgba(129, 140, 248, 0.6);
+}
+
+body[data-theme="cat-night"] .sidebar-btn {
+  border-radius: 1.5rem;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+body[data-theme="cat-night"] .sidebar-btn:hover {
+  transform: scale(1.08) rotate(-2deg);
+  box-shadow: 0 0 15px rgba(129, 140, 248, 0.4);
+}
+
+body[data-theme="cat-night"] .sidebar-btn.active {
+  animation: meowWiggle 0.5s ease-in-out;
+  box-shadow: 0 0 20px rgba(129, 140, 248, 0.5);
+}
+
+body[data-theme="cat-night"] .search-element {
+  border-radius: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+body[data-theme="cat-night"] .search-element:focus {
+  transform: scale(1.02);
+  box-shadow: 0 0 20px rgba(129, 140, 248, 0.4);
+}
+
+body[data-theme="cat-night"] .preview-item {
+  border-radius: 1.2rem;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+body[data-theme="cat-night"] .preview-item:hover {
+  transform: translateX(5px) scale(1.02);
+  box-shadow: 0 0 15px rgba(129, 140, 248, 0.3);
+}
+
+body[data-theme="cat-night"] .settings-save-btn,
+body[data-theme="cat-night"] .settings-reset-btn,
+body[data-theme="cat-night"] .settings-select-all-btn,
+body[data-theme="cat-night"] .settings-deselect-all-btn {
+  border-radius: 1.5rem;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+body[data-theme="cat-night"] .settings-save-btn:hover,
+body[data-theme="cat-night"] .settings-reset-btn:hover,
+body[data-theme="cat-night"] .settings-select-all-btn:hover,
+body[data-theme="cat-night"] .settings-deselect-all-btn:hover {
+  transform: scale(1.08) rotate(-1deg);
+  box-shadow: 0 0 20px rgba(129, 140, 248, 0.4);
+}
+
+body[data-theme="cat-night"] .pattern-section {
+  border-radius: 1.5rem;
+}
+
+body[data-theme="cat-night"] .checkbox-label {
+  border-radius: 1rem;
+  position: relative;
+}
+
+body[data-theme="cat-night"] .checkbox-label:hover {
+  box-shadow: 0 0 15px rgba(129, 140, 248, 0.3);
+}
+
+/* Cute rounded buttons and elements for cats theme */
+body[data-theme="cats"] .search-execute-btn {
+  border-radius: 2rem;
+  box-shadow: 0 4px 15px rgba(255, 153, 51, 0.4);
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+body[data-theme="cats"] .search-execute-btn:hover {
+  transform: translateY(-5px) scale(1.05);
+  animation: purr 0.6s ease-in-out;
+  box-shadow: 0 8px 25px rgba(255, 153, 51, 0.6);
+}
+
+@keyframes purr {
+  0%, 100% { transform: translateY(-5px) scale(1.05); }
+  25% { transform: translateY(-5px) scale(1.05) rotate(-1deg); }
+  75% { transform: translateY(-5px) scale(1.05) rotate(1deg); }
+}
+
+body[data-theme="cats"] .sidebar-btn {
+  border-radius: 1.5rem;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+body[data-theme="cats"] .sidebar-btn:hover {
+  transform: scale(1.08) rotate(-2deg);
+}
+
+body[data-theme="cats"] .sidebar-btn.active {
+  animation: meowWiggle 0.5s ease-in-out;
+}
+
+@keyframes meowWiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-5deg) scale(1.05); }
+  75% { transform: rotate(5deg) scale(1.05); }
+}
+
+body[data-theme="cats"] .search-element {
+  border-radius: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+body[data-theme="cats"] .search-element:focus {
+  transform: scale(1.02);
+  box-shadow: 0 0 20px rgba(255, 153, 51, 0.4);
+}
+
+body[data-theme="cats"] .preview-item {
+  border-radius: 1.2rem;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+body[data-theme="cats"] .preview-item:hover {
+  transform: translateX(5px) scale(1.02);
+}
+
+
+body[data-theme="cats"] .settings-save-btn,
+body[data-theme="cats"] .settings-reset-btn,
+body[data-theme="cats"] .settings-select-all-btn,
+body[data-theme="cats"] .settings-deselect-all-btn {
+  border-radius: 1.5rem;
+  transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+body[data-theme="cats"] .settings-save-btn:hover,
+body[data-theme="cats"] .settings-reset-btn:hover,
+body[data-theme="cats"] .settings-select-all-btn:hover,
+body[data-theme="cats"] .settings-deselect-all-btn:hover {
+  transform: scale(1.08) rotate(-1deg);
+}
+
+body[data-theme="cats"] .pattern-section {
+  border-radius: 1.5rem;
+}
+
+body[data-theme="cats"] .checkbox-label {
+  border-radius: 1rem;
+}
+
+body[data-theme="cats"] .checkbox-label {
+  position: relative;
+}
+
+body[data-theme="cats"] .checkbox-label:hover {
+  box-shadow: 0 0 15px rgba(255, 153, 51, 0.3);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -126,6 +471,29 @@ body {
   background: var(--accent);
   border-color: var(--accent);
   transform: scale(1.05);
+  box-shadow: 0 0 20px var(--accent-glow);
+}
+
+.settings-link-btn {
+  margin-left: auto;
+  background: var(--surface-bg);
+  border: 2px solid var(--border);
+  color: var(--accent);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-sm);
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-link-btn:hover {
+  background: var(--accent);
+  color: var(--primary-bg);
+  transform: rotate(90deg) scale(1.1);
+  border-color: var(--accent);
   box-shadow: 0 0 20px var(--accent-glow);
 }
 

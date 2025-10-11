@@ -5,7 +5,12 @@
    "content_scripts": [
       {
          "matches": ["<all_urls>"],
-         "js": ["content.js"],
+         "js": ["content.js", "imdb-cast-copy.js"],
+         "run_at": "document_end"
+      },
+      {
+         "matches": ["https://www.cbfcindia.gov.in/cbfcAdmin/search-film.php*"],
+         "js": ["cbfc-fix.js"],
          "run_at": "document_end"
       }
    ],
@@ -29,5 +34,5 @@
       "default_width": 300
    },
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "0.642"
+   "version": "0.700"
 }

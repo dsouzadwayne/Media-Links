@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Media Links - Settings</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <div class="container">
+    <header class="settings-header">
+      <div class="header-content">
+        <h1>⚙️ Settings</h1>
+        <button id="close-btn" class="icon-btn" title="Close">✕</button>
+      </div>
+    </header>
+
+    <div class="settings-content">
+      <!-- Theme Settings Section -->
+      <section class="settings-section">
+        <div class="section-header">
+          <h2>🎨 Appearance</h2>
+          <p class="section-description">Customize the look and feel of the extension</p>
+        </div>
+
+        <div class="setting-item">
+          <label for="theme-select" class="setting-label">
+            <span class="label-text">Theme</span>
+            <span class="label-description">Choose your preferred color scheme</span>
+          </label>
+          <select id="theme-select" class="setting-input">
+            <option value="light">Light</option>
+            <option value="dark">Dark</option>
+            <option value="catppuccin-mocha">Catppuccin Mocha</option>
+            <option value="cats">Cats</option>
+            <option value="cat-night">Cat Night</option>
+          </select>
+        </div>
+
+        <div class="theme-preview" id="theme-preview">
+          <div class="preview-card">
+            <div class="preview-header">Preview</div>
+            <div class="preview-content">
+              <button class="preview-button">Button</button>
+              <input type="text" class="preview-input" placeholder="Input field" readonly>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Search Settings Section -->
+      <section class="settings-section">
+        <div class="section-header">
+          <h2>🔍 Search & Query</h2>
+          <p class="section-description">Configure default search behavior and patterns</p>
+        </div>
+
+        <div class="setting-item">
+          <label for="default-profile" class="setting-label">
+            <span class="label-text">Default Profile</span>
+            <span class="label-description">Select which profile loads by default in search</span>
+          </label>
+          <select id="default-profile" class="setting-input">
+            <option value="">No default (load last used)</option>
+          </select>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">
+            <span class="label-text">Auto-Open Search Results</span>
+            <span class="label-description">Automatically open search results in new tabs</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="auto-open-results">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item">
+          <label for="tab-delay" class="setting-label">
+            <span class="label-text">Tab Opening Delay (ms)</span>
+            <span class="label-description">Delay between opening multiple tabs</span>
+          </label>
+          <input type="number" id="tab-delay" class="setting-input" min="0" max="5000" step="50" value="150">
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">
+            <span class="label-text">Show Query Preview</span>
+            <span class="label-description">Display generated query URLs before opening</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="show-preview" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </section>
+
+      <!-- IMDb Copy Settings Section -->
+      <section class="settings-section">
+        <div class="section-header">
+          <h2>📋 IMDb Cast Copy</h2>
+          <p class="section-description">Default settings for copying cast information</p>
+        </div>
+
+        <div class="setting-item">
+          <label for="default-cast-count" class="setting-label">
+            <span class="label-text">Default Number of Cast Members</span>
+            <span class="label-description">How many members to copy by default</span>
+          </label>
+          <input type="number" id="default-cast-count" class="setting-input" min="1" max="1000" value="5">
+        </div>
+
+        <div class="setting-item">
+          <label for="default-content-format" class="setting-label">
+            <span class="label-text">Default Content Format</span>
+            <span class="label-description">What to include in the copy</span>
+          </label>
+          <select id="default-content-format" class="setting-input">
+            <option value="name-role">Name + Role/Character</option>
+            <option value="name-only">Name Only</option>
+            <option value="role-only">Role/Character Only</option>
+          </select>
+        </div>
+
+        <div class="setting-item">
+          <label for="default-output-format" class="setting-label">
+            <span class="label-text">Default Output Format</span>
+            <span class="label-description">How to format the copied text</span>
+          </label>
+          <select id="default-output-format" class="setting-input">
+            <option value="newline">Line by line (Name - Role)</option>
+            <option value="comma">Comma separated (Name:Role,Name:Role)</option>
+            <option value="csv">CSV (Name,Role per line)</option>
+            <option value="json">JSON Array</option>
+            <option value="table">Markdown Table</option>
+          </select>
+        </div>
+      </section>
+
+      <!-- Advanced Settings Section -->
+      <section class="settings-section">
+        <div class="section-header">
+          <h2>⚡ Advanced</h2>
+          <p class="section-description">Advanced configuration options</p>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">
+            <span class="label-text">Enable Debug Logging</span>
+            <span class="label-description">Show detailed logs in browser console</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="debug-mode">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-item danger-zone">
+          <button id="reset-btn" class="danger-button">Reset All Settings</button>
+          <p class="danger-description">This will reset all settings to their default values</p>
+        </div>
+      </section>
+    </div>
+
+    <footer class="settings-footer">
+      <div class="footer-content">
+        <button id="save-btn" class="primary-button">Save Changes</button>
+        <button id="cancel-btn" class="secondary-button">Cancel</button>
+      </div>
+      <div class="save-status" id="save-status"></div>
+    </footer>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>

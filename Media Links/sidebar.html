@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta charset="UTF-8">
   <title>Media Links</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -8,28 +9,16 @@
   <div id="custom-sidebar" class="open">
     <div class="sidebar-header">
       <h3>Media Links</h3>
+      <button id="close-sidebar" class="close-btn" title="Close sidebar">&times;</button>
     </div>
     <div class="tabs">
       <button class="tab-button active" data-tab="links">Links</button>
       <button id="search-button" class="tab-button search-button">Search</button>
-      <button class="tab-button" data-tab="settings">Settings</button>
+      <button id="settings-button" class="tab-button">⚙️ Settings</button>
     </div>
     <div class="tab-content">
       <div id="links-tab" class="tab-panel active">
         <div class="sidebar-content"></div>
-      </div>
-      <div id="settings-tab" class="tab-panel">
-        <div class="settings-content">
-          <h4>Extension Settings</h4>
-          <div class="theme-selector">
-            <label for="theme-select">Theme:</label>
-            <select id="theme-select">
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-              <option value="catppuccin-mocha">Catppuccin Mocha</option>
-            </select>
-          </div>
-        </div>
       </div>
     </div>
   </div>
