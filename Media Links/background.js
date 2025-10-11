@@ -174,6 +174,8 @@ chrome.runtime.onInstalled.addListener(() => {
   // Store current selection info for context menu
   let currentSelectionInfo = { words: [], wordCount: 0 };
   let menuUpdateTimeout = null;
+  let isUpdatingMenu = false;
+  let pendingUpdate = null;
 
   // Sanitize text for context menu display
   const sanitizeForContextMenu = (text) => {
@@ -182,11 +184,26 @@ chrome.runtime.onInstalled.addListener(() => {
     return text.replace(/[&<>"']/g, '').substring(0, 50);
   };
 
+  // Process any pending updates that came in while we were busy
+  const processPendingUpdate = () => {
+    if (pendingUpdate !== null) {
+      const textToUpdate = pendingUpdate;
+      pendingUpdate = null;
+      updateContextMenu(textToUpdate, true);
+    }
+  };
+
   // Update context menu when selection changes
   const updateContextMenu = (selectionText, immediate = false) => {
     clearTimeout(menuUpdateTimeout);
 
     const updateMenus = () => {
+      // If already updating, store this request and return
+      if (isUpdatingMenu) {
+        pendingUpdate = selectionText;
+        return;
+      }
+
       const words = selectionText.trim().split(/\s+/).slice(0, 4);
       const wordCount = words.length;
 
@@ -197,44 +214,93 @@ chrome.runtime.onInstalled.addListener(() => {
       const sanitizedWords = words.map(sanitizeForContextMenu);
       currentSelectionInfo = { words: sanitizedWords, wordCount };
 
+      // Mark that we're updating
+      isUpdatingMenu = true;
+
       // Remove all existing menus
       chrome.contextMenus.removeAll(() => {
+        // Check if menu removal failed
+        if (chrome.runtime.lastError) {
+          console.error('Failed to remove context menus:', chrome.runtime.lastError);
+          isUpdatingMenu = false;
+          processPendingUpdate();
+          return;
+        }
+
         try {
           // Recreate parent menu
           chrome.contextMenus.create({
             id: 'search-selection',
             title: 'Search with Media Links',
             contexts: ['selection']
-          });
-
-          // Create submenus based on word count
-          const patterns = groupingPatterns[wordCount] || [];
-          patterns.forEach(pattern => {
-            // Replace placeholders with sanitized words
-            let displayText = pattern.display;
-            sanitizedWords.forEach((word, index) => {
-              // Use replaceAll to handle all occurrences
-              displayText = displayText.replaceAll(`word${index + 1}`, word);
-            });
-
-            // Truncate menu title if too long (Chrome limit is ~50 chars)
-            if (displayText.length > 50) {
-              displayText = displayText.substring(0, 47) + '...';
+          }, () => {
+            if (chrome.runtime.lastError) {
+              console.error('Failed to create parent menu:', chrome.runtime.lastError);
+              isUpdatingMenu = false;
+              processPendingUpdate();
+              return;
             }
 
-            try {
-              chrome.contextMenus.create({
-                id: `grouping-${wordCount}-${pattern.id}`,
-                parentId: 'search-selection',
-                title: displayText,
-                contexts: ['selection']
+            // Create submenus based on word count
+            const patterns = groupingPatterns[wordCount] || [];
+            let createdCount = 0;
+            const totalPatterns = patterns.length;
+
+            if (totalPatterns === 0) {
+              isUpdatingMenu = false;
+              processPendingUpdate();
+              return;
+            }
+
+            patterns.forEach(pattern => {
+              // Replace placeholders with sanitized words
+              let displayText = pattern.display;
+              sanitizedWords.forEach((word, index) => {
+                // Use regex replace for compatibility
+                const regex = new RegExp(`word${index + 1}`, 'g');
+                displayText = displayText.replace(regex, word);
               });
-            } catch (error) {
-              console.error('Failed to create context menu item:', error, displayText);
-            }
+
+              // Truncate menu title if too long (Chrome limit is ~50 chars)
+              if (displayText.length > 50) {
+                displayText = displayText.substring(0, 47) + '...';
+              }
+
+              try {
+                chrome.contextMenus.create({
+                  id: `grouping-${wordCount}-${pattern.id}`,
+                  parentId: 'search-selection',
+                  title: displayText,
+                  contexts: ['selection']
+                }, () => {
+                  createdCount++;
+
+                  // If this was the last menu item, mark update as complete
+                  if (createdCount === totalPatterns) {
+                    isUpdatingMenu = false;
+                    processPendingUpdate();
+                  }
+
+                  if (chrome.runtime.lastError) {
+                    console.error('Failed to create context menu item:', chrome.runtime.lastError, displayText);
+                  }
+                });
+              } catch (error) {
+                console.error('Failed to create context menu item:', error, displayText);
+                createdCount++;
+
+                // Check if we're done even with errors
+                if (createdCount === totalPatterns) {
+                  isUpdatingMenu = false;
+                  processPendingUpdate();
+                }
+              }
+            });
           });
         } catch (error) {
           console.error('Failed to create context menu:', error);
+          isUpdatingMenu = false;
+          processPendingUpdate();
         }
       });
     };
@@ -244,7 +310,7 @@ chrome.runtime.onInstalled.addListener(() => {
     if (immediate) {
       updateMenus();
     } else {
-      menuUpdateTimeout = setTimeout(updateMenus, 50);
+      menuUpdateTimeout = setTimeout(updateMenus, 100);
     }
   };
 
