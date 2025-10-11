@@ -24,7 +24,6 @@
     // Add a new, permissive input handler that allows spaces and special characters
     newInput.addEventListener('input', function(e) {
       // Allow all characters - no restrictions
-      // You can optionally add custom validation here if needed
       console.log('CBFC Fix: Input allowed -', this.value);
     });
 

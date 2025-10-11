@@ -1,28 +1,31 @@
 // Wikipedia Cast Copy Functionality
 
-// EARLY EXIT: Only run on Wikipedia pages
-if (!window.location.hostname.includes('wikipedia.org')) {
-  // Exit immediately if not on Wikipedia
-  throw new Error('Not on Wikipedia, exiting');
-}
+(function() {
+  'use strict';
 
-// Check if extension context is still valid
-function isExtensionContextValid() {
-  try {
-    if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
+  // EARLY EXIT: Only run on Wikipedia pages
+  if (!window.location.hostname.includes('wikipedia.org')) {
+    // Exit silently if not on Wikipedia
+    return;
+  }
+
+  // Check if extension context is still valid
+  function isExtensionContextValid() {
+    try {
+      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
+        return false;
+      }
+      return true;
+    } catch (e) {
       return false;
     }
-    return true;
-  } catch (e) {
-    return false;
   }
-}
 
-// Early exit if extension context is invalid
-if (!isExtensionContextValid()) {
-  console.log('Extension context invalidated, skipping Wikipedia cast copy functionality');
-  throw new Error('Extension context invalidated');
-}
+  // Early exit if extension context is invalid
+  if (!isExtensionContextValid()) {
+    console.log('Extension context invalidated, skipping Wikipedia cast copy functionality');
+    return;
+  }
 
 function isWikipediaCastPage() {
   // IMPORTANT: Only run on Wikipedia, NOT on IMDb or other sites
@@ -1029,3 +1032,5 @@ if (isWikipediaCastPage()) {
     subtree: true
   });
 }
+
+})(); // End of IIFE

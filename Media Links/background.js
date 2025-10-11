@@ -1,3 +1,39 @@
+// Offscreen document management for Tesseract OCR
+let offscreenDocumentCreated = false;
+
+// Create offscreen document for OCR processing
+async function createOffscreenDocument() {
+  if (offscreenDocumentCreated) {
+    return;
+  }
+
+  try {
+    // Check if offscreen document already exists
+    const existingContexts = await chrome.runtime.getContexts({
+      contextTypes: ['OFFSCREEN_DOCUMENT']
+    });
+
+    if (existingContexts.length > 0) {
+      console.log('Background: Offscreen document already exists');
+      offscreenDocumentCreated = true;
+      return;
+    }
+
+    // Create new offscreen document
+    await chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['WORKERS'],
+      justification: 'OCR processing using Tesseract.js requires Web Workers'
+    });
+
+    offscreenDocumentCreated = true;
+    console.log('Background: Offscreen document created');
+  } catch (error) {
+    console.error('Background: Failed to create offscreen document:', error);
+    throw error;
+  }
+}
+
 chrome.runtime.onInstalled.addListener(() => {
     chrome.sidePanel.setPanelBehavior({
       openPanelOnActionClick: true
@@ -8,6 +44,11 @@ chrome.runtime.onInstalled.addListener(() => {
       id: 'search-selection',
       title: 'Search with Media Links',
       contexts: ['selection']
+    });
+
+    // Create offscreen document for Tesseract
+    createOffscreenDocument().catch(err => {
+      console.error('Failed to create offscreen document on install:', err);
     });
   });
 
@@ -314,12 +355,55 @@ chrome.runtime.onInstalled.addListener(() => {
     }
   };
 
-  // Listen for selection updates
+  // Listen for selection updates and OCR requests
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('Background: Received message:', message.type || message.action, 'from:', sender.tab?.id);
+
     if (message.type === 'selectionChanged' && message.text) {
       // Check if this is from a contextmenu event (immediate update needed)
       const isContextMenu = message.fromContextMenu || false;
       updateContextMenu(message.text, isContextMenu);
+    }
+
+    // Handle OCR requests from content script - forward to offscreen document
+    if (message.action === 'performOCR') {
+      console.log('Background: Received performOCR message from:', sender.tab?.id, sender.url);
+
+      (async () => {
+        try {
+          console.log('Background: Creating/ensuring offscreen document exists...');
+
+          // Ensure offscreen document is created
+          await createOffscreenDocument();
+
+          console.log('Background: Offscreen document ready, forwarding OCR request...');
+          console.log('Background: Image data length:', message.imageData?.length || 0);
+
+          // Forward the message to offscreen document
+          const response = await chrome.runtime.sendMessage({
+            action: 'performOCR',
+            imageData: message.imageData
+          });
+
+          console.log('Background: Received response from offscreen:', response);
+
+          if (!response) {
+            throw new Error('No response from offscreen document');
+          }
+
+          sendResponse(response);
+        } catch (error) {
+          console.error('Background: Error handling OCR request:', error);
+          console.error('Background: Error stack:', error.stack);
+          sendResponse({
+            success: false,
+            error: error.message || 'Failed to process OCR request'
+          });
+        }
+      })();
+
+      // Return true to indicate we'll send response asynchronously
+      return true;
     }
   });
 

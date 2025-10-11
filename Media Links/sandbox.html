@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Tesseract Sandbox</title>
+  <!-- Use CDN for sandbox - sandboxed pages are EXEMPT from remote code restrictions -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <script>
+    // Sandboxed page for Tesseract.js
+    // This page has relaxed CSP that allows WebAssembly and external scripts
+    // NOTE: Chrome Web Store policy ALLOWS external scripts in sandboxed pages
+
+    let tesseractWorker = null;
+
+    // Initialize Tesseract worker from CDN
+    async function initTesseractWorker() {
+      if (tesseractWorker) {
+        return tesseractWorker;
+      }
+
+      try {
+        console.log('Sandbox: Initializing Tesseract worker from CDN...');
+
+        // Use default CDN paths - much simpler and allowed in sandboxed pages
+        tesseractWorker = await Tesseract.createWorker('eng', 1, {
+          cacheMethod: 'none', // Disable IndexedDB caching
+          logger: m => console.log('Tesseract:', m)
+        });
+
+        // Configure for alphanumeric text recognition
+        await tesseractWorker.setParameters({
+          tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789',
+          tessedit_pageseg_mode: '7', // Single text line
+        });
+
+        console.log('Sandbox: Tesseract worker initialized successfully');
+        return tesseractWorker;
+      } catch (error) {
+        console.error('Sandbox: Failed to initialize Tesseract:', error);
+        console.error('Sandbox: Error details:', error.message, error.stack);
+        throw error;
+      }
+    }
+
+    // Listen for messages from parent (offscreen document)
+    window.addEventListener('message', async (event) => {
+      if (event.data.action === 'performOCR') {
+        console.log('Sandbox: Received OCR request');
+
+        try {
+          // Initialize worker if needed
+          const worker = await initTesseractWorker();
+
+          // Perform OCR
+          const result = await worker.recognize(event.data.imageData);
+
+          console.log('Sandbox: OCR completed:', result.data.text);
+          console.log('Sandbox: OCR confidence:', result.data.confidence);
+
+          // Send result back to parent
+          window.parent.postMessage({
+            success: true,
+            text: result.data.text,
+            confidence: result.data.confidence
+          }, '*');
+        } catch (error) {
+          console.error('Sandbox: OCR error:', error);
+          window.parent.postMessage({
+            success: false,
+            error: error.message || 'OCR failed'
+          }, '*');
+        }
+      }
+    });
+
+    console.log('Sandbox: Ready to receive OCR requests');
+  </script>
+</body>
+</html>

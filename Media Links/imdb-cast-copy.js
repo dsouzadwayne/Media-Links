@@ -1,23 +1,26 @@
 // IMDb Cast Copy Functionality
 // Separate file for better organization
 
-// Check if extension context is still valid
-function isExtensionContextValid() {
-  try {
-    if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
+(function() {
+  'use strict';
+
+  // Check if extension context is still valid
+  function isExtensionContextValid() {
+    try {
+      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
+        return false;
+      }
+      return true;
+    } catch (e) {
       return false;
     }
-    return true;
-  } catch (e) {
-    return false;
   }
-}
 
-// Early exit if extension context is invalid (e.g., extension was reloaded)
-if (!isExtensionContextValid()) {
-  console.log('Extension context invalidated, skipping IMDb cast copy functionality');
-  throw new Error('Extension context invalidated');
-}
+  // Early exit if extension context is invalid (e.g., extension was reloaded)
+  if (!isExtensionContextValid()) {
+    console.log('Extension context invalidated, skipping IMDb cast copy functionality');
+    return;
+  }
 
 function isIMDbCreditsPage() {
   return window.location.hostname === 'www.imdb.com' &&
@@ -846,3 +849,5 @@ if (isIMDbCreditsPage()) {
     subtree: true
   });
 }
+
+})(); // End of IIFE
