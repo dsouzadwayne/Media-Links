@@ -108,9 +108,13 @@ const updateLinks = () => {
             setActiveLink();
           } else {
             linksTab.style.display = 'none';
-            // If Links tab was active, switch to Search tab
+            // If Links tab was active, switch to Search button visually but don't click it
             if (linksTab.classList.contains('active')) {
-              document.getElementById('search-button').click();
+              linksTab.classList.remove('active');
+              const searchButton = document.getElementById('search-button');
+              if (searchButton) {
+                searchButton.classList.add('active');
+              }
             }
           }
         }
