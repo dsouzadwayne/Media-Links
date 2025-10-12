@@ -97,6 +97,42 @@ function getThemeColors() {
   });
 }
 
+function getCopyButtonSettings() {
+  // Get copy button visibility settings from storage
+  return new Promise((resolve) => {
+    const defaults = {
+      showWikiCast: true,
+      showWikiTables: true
+    };
+
+    try {
+      if (!isExtensionContextValid()) {
+        resolve(defaults);
+        return;
+      }
+
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+        chrome.storage.sync.get(['showWikiCast', 'showWikiTables'], (result) => {
+          if (chrome.runtime.lastError) {
+            console.warn('Error getting copy button settings:', chrome.runtime.lastError);
+            resolve(defaults);
+          } else {
+            resolve({
+              showWikiCast: result.showWikiCast !== undefined ? result.showWikiCast : defaults.showWikiCast,
+              showWikiTables: result.showWikiTables !== undefined ? result.showWikiTables : defaults.showWikiTables
+            });
+          }
+        });
+      } else {
+        resolve(defaults);
+      }
+    } catch (error) {
+      console.warn('Error accessing chrome.storage for copy button settings:', error);
+      resolve(defaults);
+    }
+  });
+}
+
 let isProcessingWikiButtons = false;
 
 async function addWikipediaCastButtons() {
@@ -108,13 +144,16 @@ async function addWikipediaCastButtons() {
 
   try {
     const colors = await getThemeColors();
+    const settings = await getCopyButtonSettings();
 
   // Find all cast list items (including "Cast and characters" for TV shows)
   const castSections = document.querySelectorAll('#Cast, #cast, #Cast_and_characters');
 
   castSections.forEach(castSection => {
-    // Add bulk copy button to the cast section heading
-    addBulkCopyButton(castSection, colors);
+    // Add bulk copy button to the cast section heading if cast is enabled
+    if (settings.showWikiCast) {
+      addBulkCopyButton(castSection, colors);
+    }
 
     // Get the parent element and find all lists after the Cast heading
     let currentElement = castSection.parentElement;
@@ -134,13 +173,13 @@ async function addWikipediaCastButtons() {
         }
       }
 
-      // Process ul elements
-      if (currentElement.tagName === 'UL') {
+      // Process ul elements if cast is enabled
+      if (currentElement.tagName === 'UL' && settings.showWikiCast) {
         processCastList(currentElement, colors);
       }
 
-      // Process table elements (infobox cast lists)
-      if (currentElement.tagName === 'TABLE') {
+      // Process table elements (infobox cast lists) if tables are enabled
+      if (currentElement.tagName === 'TABLE' && settings.showWikiTables) {
         processCastTable(currentElement, colors);
       }
 
@@ -151,11 +190,13 @@ async function addWikipediaCastButtons() {
     }
   });
 
-  // Also process all infobox tables anywhere on the page
-  const infoboxes = document.querySelectorAll('.infobox');
-  infoboxes.forEach(infobox => {
-    processCastTable(infobox, colors);
-  });
+  // Also process all infobox tables anywhere on the page if tables are enabled
+  if (settings.showWikiTables) {
+    const infoboxes = document.querySelectorAll('.infobox');
+    infoboxes.forEach(infobox => {
+      processCastTable(infobox, colors);
+    });
+  }
   } finally {
     // Reset flag when done
     isProcessingWikiButtons = false;
@@ -292,13 +333,81 @@ function processCastTable(tableElement, colors) {
           }
         });
       } else {
-        // If there are no wiki links, add a single copy button for the entire cell content
-        // Check if button already exists (check for both name and role button classes)
-        if (!td.querySelector('.media-links-wiki-name-copy-btn') &&
-            !td.querySelector('.media-links-wiki-role-copy-btn')) {
-          const copyBtn = createCopyButton(`Copy ${sectionName.toLowerCase()}`, () => tdText);
-          copyBtn.style.marginLeft = '8px';
-          td.appendChild(copyBtn);
+        // If there are no wiki links, check if there are list items
+        const listItems = td.querySelectorAll('li');
+
+        if (listItems.length > 0) {
+          // Add individual copy buttons for each list item
+          listItems.forEach(li => {
+            // Skip if already has a copy button
+            if (li.querySelector('.media-links-wiki-name-copy-btn') ||
+                li.querySelector('.media-links-wiki-role-copy-btn')) return;
+
+            // Clone to get clean text without buttons
+            const liClone = li.cloneNode(true);
+            liClone.querySelectorAll('.media-links-wiki-name-copy-btn, .media-links-wiki-role-copy-btn').forEach(btn => btn.remove());
+            const itemText = liClone.textContent.trim();
+
+            if (itemText) {
+              const copyBtn = createCopyButton(`Copy ${sectionName.toLowerCase()}`, () => itemText);
+              copyBtn.style.marginLeft = '4px';
+              li.appendChild(copyBtn);
+            }
+          });
+        } else {
+          // No links and no list items - check if there are <br> tags separating names
+          const brTags = td.querySelectorAll('br');
+
+          if (brTags.length > 0) {
+            // Plain text with <br> separators - parse individual names
+            // Clone to get clean text
+            const tdClone = td.cloneNode(true);
+            tdClone.querySelectorAll('.media-links-wiki-name-copy-btn, .media-links-wiki-role-copy-btn, .media-links-wiki-table-bulk-copy-btn').forEach(btn => btn.remove());
+
+            // Split by <br> tags to get individual names
+            const html = tdClone.innerHTML;
+            const names = html.split(/<br\s*\/?>/i)
+              .map(name => name.trim())
+              .filter(name => name && !name.match(/^<|>$/)); // Filter out HTML artifacts
+
+            if (names.length > 1) {
+              // Multiple names - insert buttons after each <br>
+              let insertPoint = td.firstChild;
+              names.forEach((name, index) => {
+                // Create a text node for the name if needed
+                const nameText = name.replace(/<[^>]*>/g, '').trim(); // Strip any remaining HTML
+                if (nameText) {
+                  const copyBtn = createCopyButton(`Copy ${sectionName.toLowerCase()}`, () => nameText);
+                  copyBtn.style.marginLeft = '4px';
+
+                  // Find the br tag and insert button after the text before it
+                  if (index < brTags.length) {
+                    brTags[index].insertAdjacentElement('beforebegin', copyBtn);
+                  } else {
+                    // Last item - append to end
+                    td.appendChild(copyBtn);
+                  }
+                }
+              });
+            } else {
+              // Single name or fallback - add one button for entire cell
+              if (!td.querySelector('.media-links-wiki-name-copy-btn') &&
+                  !td.querySelector('.media-links-wiki-role-copy-btn')) {
+                const copyBtn = createCopyButton(`Copy ${sectionName.toLowerCase()}`, () => tdText);
+                copyBtn.style.marginLeft = '8px';
+                td.appendChild(copyBtn);
+              }
+            }
+          } else {
+            // No links, no list items, no br tags - add a single copy button for the entire cell content
+            // Check if button already exists
+            if (!td.querySelector('.media-links-wiki-name-copy-btn') &&
+                !td.querySelector('.media-links-wiki-role-copy-btn')) {
+              const copyBtn = createCopyButton(`Copy ${sectionName.toLowerCase()}`, () => tdText);
+              copyBtn.style.marginLeft = '8px';
+              td.appendChild(copyBtn);
+            }
+          }
         }
       }
     }
@@ -656,11 +765,18 @@ async function showWikiCopyDialog(castSection, sectionName) {
   document.body.appendChild(backdrop);
   document.body.appendChild(dialog);
 
+  // Helper function to safely remove dialog
+  const closeDialog = () => {
+    if (dialog && dialog.parentNode) {
+      dialog.parentNode.removeChild(dialog);
+    }
+    if (backdrop && backdrop.parentNode) {
+      backdrop.parentNode.removeChild(backdrop);
+    }
+  };
+
   // Close on backdrop click
-  backdrop.addEventListener('click', () => {
-    document.body.removeChild(dialog);
-    document.body.removeChild(backdrop);
-  });
+  backdrop.addEventListener('click', closeDialog);
 
   // Handle copy
   dialog.querySelector('#wiki-copy-btn').addEventListener('click', () => {
@@ -668,15 +784,11 @@ async function showWikiCopyDialog(castSection, sectionName) {
     const content = dialog.querySelector('#wiki-copy-content').value;
     const outputFormat = dialog.querySelector('#wiki-output-format').value;
     copyWikiCastData(castMembers, count, content, outputFormat, sectionName);
-    document.body.removeChild(dialog);
-    document.body.removeChild(backdrop);
+    closeDialog();
   });
 
   // Handle cancel
-  dialog.querySelector('#wiki-cancel-btn').addEventListener('click', () => {
-    document.body.removeChild(dialog);
-    document.body.removeChild(backdrop);
-  });
+  dialog.querySelector('#wiki-cancel-btn').addEventListener('click', closeDialog);
 }
 
 function getDialogColors(buttonColors) {
@@ -913,26 +1025,29 @@ async function showTableCopyDialog(td, sectionName) {
   document.body.appendChild(backdrop);
   document.body.appendChild(dialog);
 
+  // Helper function to safely remove dialog
+  const closeDialog = () => {
+    if (dialog && dialog.parentNode) {
+      dialog.parentNode.removeChild(dialog);
+    }
+    if (backdrop && backdrop.parentNode) {
+      backdrop.parentNode.removeChild(backdrop);
+    }
+  };
+
   // Close on backdrop click
-  backdrop.addEventListener('click', () => {
-    document.body.removeChild(dialog);
-    document.body.removeChild(backdrop);
-  });
+  backdrop.addEventListener('click', closeDialog);
 
   // Handle copy
   dialog.querySelector('#wiki-table-copy-btn').addEventListener('click', () => {
     const count = parseInt(dialog.querySelector('#wiki-table-cast-count').value);
     const outputFormat = dialog.querySelector('#wiki-table-output-format').value;
     copyTableCastData(castMembers, count, outputFormat, sectionName);
-    document.body.removeChild(dialog);
-    document.body.removeChild(backdrop);
+    closeDialog();
   });
 
   // Handle cancel
-  dialog.querySelector('#wiki-table-cancel-btn').addEventListener('click', () => {
-    document.body.removeChild(dialog);
-    document.body.removeChild(backdrop);
-  });
+  dialog.querySelector('#wiki-table-cancel-btn').addEventListener('click', closeDialog);
 }
 
 function copyTableCastData(castMembers, count, outputFormat, sectionName) {
@@ -1007,15 +1122,28 @@ if (isWikipediaCastPage()) {
   // Watch for dynamic content loading
   const observer = new MutationObserver((mutations) => {
     // Check if any of the mutations actually added new content
+    // IMPORTANT: Ignore mutations that are just our own button additions
     const hasNewContent = mutations.some(mutation => {
       return mutation.addedNodes.length > 0 &&
-        Array.from(mutation.addedNodes).some(node =>
-          node.nodeType === 1 && // Element node
-          (node.querySelector && (
-            node.querySelector('a[href*="/wiki/"]') ||
-            node.matches('a[href*="/wiki/"]')
-          ))
-        );
+        Array.from(mutation.addedNodes).some(node => {
+          // Skip if this is just a button we added
+          if (node.nodeType === 1 &&
+              (node.classList && (
+                node.classList.contains('media-links-wiki-name-copy-btn') ||
+                node.classList.contains('media-links-wiki-role-copy-btn') ||
+                node.classList.contains('media-links-wiki-bulk-copy-btn') ||
+                node.classList.contains('media-links-wiki-table-bulk-copy-btn')
+              ))) {
+            return false;
+          }
+
+          // Check for actual new wiki content
+          return node.nodeType === 1 && // Element node
+            (node.querySelector && (
+              node.querySelector('a[href*="/wiki/"]') ||
+              node.matches('a[href*="/wiki/"]')
+            ));
+        });
     });
 
     // Only re-run if new wiki links were added
@@ -1030,6 +1158,18 @@ if (isWikipediaCastPage()) {
   observer.observe(document.body, {
     childList: true,
     subtree: true
+  });
+
+  // Clean up observer when page is unloaded or extension context is invalidated
+  window.addEventListener('beforeunload', () => {
+    observer.disconnect();
+    clearTimeout(debounceTimer);
+  });
+
+  // Also disconnect on navigation (for single-page apps)
+  window.addEventListener('pagehide', () => {
+    observer.disconnect();
+    clearTimeout(debounceTimer);
   });
 }
 

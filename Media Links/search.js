@@ -20,12 +20,6 @@ const loadDefaultSearchEngine = () => {
     if (engineSelect) {
       engineSelect.value = defaultEngine;
     }
-
-    // Set default search engine setting dropdown
-    const engineSetting = document.getElementById('default-search-engine-setting');
-    if (engineSetting) {
-      engineSetting.value = defaultEngine;
-    }
   });
 };
 
@@ -78,15 +72,32 @@ const defaultPatterns = {
     'plain': true,
     'all-quoted': true,
     'first-phrase': true,
+    'second-phrase': true,
     'full-phrase': true,
-    'and': true
+    'and': true,
+    'or': true,
+    'first-quoted': true,
+    'second-quoted': true,
+    'third-quoted': true,
+    'first-two-quoted': true,
+    'last-two-quoted': true
   },
   4: {
     'plain': true,
     'all-quoted': true,
     'paired': true,
     'full-phrase': true,
-    'and': true
+    'and': true,
+    'or': true,
+    'first-three-phrase': true,
+    'last-three-phrase': true,
+    'first-quoted': true,
+    'second-quoted': true,
+    'third-quoted': true,
+    'fourth-quoted': true,
+    'first-two-quoted': true,
+    'last-two-quoted': true,
+    'middle-pair': true
   }
 };
 
@@ -112,15 +123,32 @@ const patternDescriptions = {
     'plain': { template: '{0} {1} {2}', description: 'Plain' },
     'all-quoted': { template: '"{0}" "{1}" "{2}"', description: 'All quoted' },
     'first-phrase': { template: '"{0} {1}" {2}', description: 'First as phrase' },
+    'second-phrase': { template: '{0} "{1} {2}"', description: 'Second as phrase' },
     'full-phrase': { template: '"{0} {1} {2}"', description: 'Full phrase' },
-    'and': { template: '"{0}" AND "{1}" AND "{2}"', description: 'AND operator' }
+    'and': { template: '"{0}" AND "{1}" AND "{2}"', description: 'AND operator' },
+    'or': { template: '"{0}" OR "{1}" OR "{2}"', description: 'OR operator' },
+    'first-quoted': { template: '"{0}" {1} {2}', description: 'First quoted' },
+    'second-quoted': { template: '{0} "{1}" {2}', description: 'Second quoted' },
+    'third-quoted': { template: '{0} {1} "{2}"', description: 'Third quoted' },
+    'first-two-quoted': { template: '"{0}" "{1}" {2}', description: 'First two quoted' },
+    'last-two-quoted': { template: '{0} "{1}" "{2}"', description: 'Last two quoted' }
   },
   4: {
     'plain': { template: '{0} {1} {2} {3}', description: 'Plain' },
     'all-quoted': { template: '"{0}" "{1}" "{2}" "{3}"', description: 'All quoted' },
     'paired': { template: '"{0} {1}" "{2} {3}"', description: 'Paired phrases' },
     'full-phrase': { template: '"{0} {1} {2} {3}"', description: 'Full phrase' },
-    'and': { template: '"{0}" AND "{1}" AND "{2}" AND "{3}"', description: 'AND operator' }
+    'and': { template: '"{0}" AND "{1}" AND "{2}" AND "{3}"', description: 'AND operator' },
+    'or': { template: '"{0}" OR "{1}" OR "{2}" OR "{3}"', description: 'OR operator' },
+    'first-three-phrase': { template: '"{0} {1} {2}" {3}', description: 'First three as phrase' },
+    'last-three-phrase': { template: '{0} "{1} {2} {3}"', description: 'Last three as phrase' },
+    'first-quoted': { template: '"{0}" {1} {2} {3}', description: 'First quoted' },
+    'second-quoted': { template: '{0} "{1}" {2} {3}', description: 'Second quoted' },
+    'third-quoted': { template: '{0} {1} "{2}" {3}', description: 'Third quoted' },
+    'fourth-quoted': { template: '{0} {1} {2} "{3}"', description: 'Fourth quoted' },
+    'first-two-quoted': { template: '"{0}" "{1}" {2} {3}', description: 'First two quoted' },
+    'last-two-quoted': { template: '{0} {1} "{2}" "{3}"', description: 'Last two quoted' },
+    'middle-pair': { template: '{0} "{1} {2}" {3}', description: 'Middle pair' }
   }
 };
 
@@ -455,49 +483,10 @@ const updateSearchPreview = () => {
   }
 };
 
-// Navigation
-const initNavigation = () => {
-  const sidebarBtns = document.querySelectorAll('.sidebar-btn');
-  const sections = document.querySelectorAll('.section');
-  
-  sidebarBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const targetSection = btn.dataset.section;
-      
-      sidebarBtns.forEach(b => b.classList.remove('active'));
-      sections.forEach(s => s.classList.remove('active'));
-      
-      btn.classList.add('active');
-      document.getElementById(`${targetSection}-section`).classList.add('active');
-    });
-  });
-  
-  // Profile selector
-  const profileSelect = document.getElementById('profile-select');
-  if (profileSelect) {
-    profileSelect.addEventListener('change', (e) => {
-      currentProfile = parseInt(e.target.value);
-      document.querySelectorAll('.profile-content').forEach(p => p.classList.remove('active'));
-      document.getElementById(`profile${currentProfile}`).classList.add('active');
-    });
-  }
-  
-  // Sidebar toggle
-  const sidebarToggle = document.getElementById('sidebar-toggle');
-  const sidebar = document.getElementById('sidebar');
-  const content = document.getElementById('content');
-  
-  sidebarToggle.addEventListener('click', () => {
-    sidebar.classList.toggle('collapsed');
-    content.classList.toggle('expanded');
-  });
-};
-
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   loadSearchFromUrl();
   loadSettings();
-  initNavigation();
 
   // Settings button handler
   const appSettingsBtn = document.getElementById('app-settings-btn');
@@ -517,21 +506,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const searchInputs = document.querySelectorAll('.search-element');
   const executeBtn = document.querySelector('.search-execute-btn');
   const engineSelector = document.getElementById('search-engine');
-  
+
   searchInputs.forEach(input => {
     input.addEventListener('input', updateSearchPreview);
   });
-  
+
   executeBtn.addEventListener('click', () => {
     const elements = getCurrentElements();
-    
+
     if (elements.length === 0) {
       return;
     }
-    
+
     const queries = generateQueries(elements);
     const selectedEngine = engineSelector.value;
-    
+
     queries.forEach((query, index) => {
       setTimeout(() => {
         const url = getSearchUrl(query, selectedEngine);
@@ -539,28 +528,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }, index * 150);
     });
   });
-  
-  // Settings buttons
-  document.getElementById('save-btn').addEventListener('click', saveCurrentProfileSettings);
-  document.getElementById('reset-btn').addEventListener('click', resetCurrentProfileSettings);
-  document.getElementById('select-all-btn').addEventListener('click', selectAllInCurrentProfile);
-  document.getElementById('deselect-all-btn').addEventListener('click', deselectAllInCurrentProfile);
 
-  // Default search engine setting
-  const engineSetting = document.getElementById('default-search-engine-setting');
-  if (engineSetting) {
-    engineSetting.addEventListener('change', (e) => {
-      saveDefaultSearchEngine(e.target.value);
-    });
-  }
-
-  document.addEventListener('change', (e) => {
-    if (e.target.classList.contains('query-setting')) {
-      const profileNum = parseInt(e.target.dataset.profileNum);
-      const wordCount = parseInt(e.target.dataset.wordCount);
-      updateSectionStatus(profileNum, wordCount);
-    }
-  });
-  
   updateSearchPreview();
 });

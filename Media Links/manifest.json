@@ -5,7 +5,17 @@
    "content_scripts": [
       {
          "matches": ["<all_urls>"],
-         "js": ["content.js", "imdb-cast-copy.js", "wiki-cast-copy.js"],
+         "js": ["content.js"],
+         "run_at": "document_end"
+      },
+      {
+         "matches": ["*://www.imdb.com/*"],
+         "js": ["imdb-cast-copy.js"],
+         "run_at": "document_end"
+      },
+      {
+         "matches": ["*://*.wikipedia.org/*"],
+         "js": ["wiki-cast-copy.js"],
          "run_at": "document_end"
       },
       {
@@ -40,7 +50,7 @@
       "pages": ["sandbox.html"]
    },
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "0.715",
+   "version": "0.720",
    "web_accessible_resources": [
       {
          "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html"],

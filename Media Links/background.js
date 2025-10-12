@@ -117,23 +117,40 @@ chrome.runtime.onInstalled.addListener(() => {
       'plain': { template: '{0} {1} {2}' },
       'all-quoted': { template: '"{0}" "{1}" "{2}"' },
       'first-phrase': { template: '"{0} {1}" {2}' },
+      'second-phrase': { template: '{0} "{1} {2}"' },
       'full-phrase': { template: '"{0} {1} {2}"' },
-      'and': { template: '"{0}" AND "{1}" AND "{2}"' }
+      'and': { template: '"{0}" AND "{1}" AND "{2}"' },
+      'or': { template: '"{0}" OR "{1}" OR "{2}"' },
+      'first-quoted': { template: '"{0}" {1} {2}' },
+      'second-quoted': { template: '{0} "{1}" {2}' },
+      'third-quoted': { template: '{0} {1} "{2}"' },
+      'first-two-quoted': { template: '"{0}" "{1}" {2}' },
+      'last-two-quoted': { template: '{0} "{1}" "{2}"' }
     },
     4: {
       'plain': { template: '{0} {1} {2} {3}' },
       'all-quoted': { template: '"{0}" "{1}" "{2}" "{3}"' },
       'paired': { template: '"{0} {1}" "{2} {3}"' },
       'full-phrase': { template: '"{0} {1} {2} {3}"' },
-      'and': { template: '"{0}" AND "{1}" AND "{2}" AND "{3}"' }
+      'and': { template: '"{0}" AND "{1}" AND "{2}" AND "{3}"' },
+      'or': { template: '"{0}" OR "{1}" OR "{2}" OR "{3}"' },
+      'first-three-phrase': { template: '"{0} {1} {2}" {3}' },
+      'last-three-phrase': { template: '{0} "{1} {2} {3}"' },
+      'first-quoted': { template: '"{0}" {1} {2} {3}' },
+      'second-quoted': { template: '{0} "{1}" {2} {3}' },
+      'third-quoted': { template: '{0} {1} "{2}" {3}' },
+      'fourth-quoted': { template: '{0} {1} {2} "{3}"' },
+      'first-two-quoted': { template: '"{0}" "{1}" {2} {3}' },
+      'last-two-quoted': { template: '{0} {1} "{2}" "{3}"' },
+      'middle-pair': { template: '{0} "{1} {2}" {3}' }
     }
   };
 
   const defaultPatterns = {
     1: { 'plain': true, 'quoted': true, 'intitle': true, 'allintitle': true, 'intext': true },
     2: { 'plain': true, 'first-quoted': true, 'second-quoted': true, 'both-quoted': true, 'phrase': true, 'intitle': true, 'and': true, 'or': true },
-    3: { 'plain': true, 'all-quoted': true, 'first-phrase': true, 'full-phrase': true, 'and': true },
-    4: { 'plain': true, 'all-quoted': true, 'paired': true, 'full-phrase': true, 'and': true }
+    3: { 'plain': true, 'all-quoted': true, 'first-phrase': true, 'second-phrase': true, 'full-phrase': true, 'and': true, 'or': true, 'first-quoted': true, 'second-quoted': true, 'third-quoted': true, 'first-two-quoted': true, 'last-two-quoted': true },
+    4: { 'plain': true, 'all-quoted': true, 'paired': true, 'full-phrase': true, 'and': true, 'or': true, 'first-three-phrase': true, 'last-three-phrase': true, 'first-quoted': true, 'second-quoted': true, 'third-quoted': true, 'fourth-quoted': true, 'first-two-quoted': true, 'last-two-quoted': true, 'middle-pair': true }
   };
 
   // Generate search URL
@@ -216,7 +233,7 @@ chrome.runtime.onInstalled.addListener(() => {
   let currentSelectionInfo = { words: [], wordCount: 0 };
   let menuUpdateTimeout = null;
   let isUpdatingMenu = false;
-  let pendingUpdate = null;
+  let pendingUpdates = [];  // Changed to array to store all pending updates
 
   // Sanitize text for context menu display
   const sanitizeForContextMenu = (text) => {
@@ -227,9 +244,10 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Process any pending updates that came in while we were busy
   const processPendingUpdate = () => {
-    if (pendingUpdate !== null) {
-      const textToUpdate = pendingUpdate;
-      pendingUpdate = null;
+    if (pendingUpdates.length > 0) {
+      // Get the most recent update
+      const textToUpdate = pendingUpdates[pendingUpdates.length - 1];
+      pendingUpdates = [];  // Clear all pending updates
       updateContextMenu(textToUpdate, true);
     }
   };
@@ -241,7 +259,7 @@ chrome.runtime.onInstalled.addListener(() => {
     const updateMenus = () => {
       // If already updating, store this request and return
       if (isUpdatingMenu) {
-        pendingUpdate = selectionText;
+        pendingUpdates.push(selectionText);
         return;
       }
 

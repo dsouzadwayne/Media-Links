@@ -25,7 +25,13 @@
 function isIMDbCreditsPage() {
   return window.location.hostname === 'www.imdb.com' &&
          (window.location.pathname.includes('/fullcredits') ||
+          window.location.pathname.includes('/companycredits') ||
           window.location.pathname.match(/\/title\/tt\d+\/?$/));
+}
+
+function isIMDbAwardsPage() {
+  return window.location.hostname === 'www.imdb.com' &&
+         window.location.pathname.includes('/awards');
 }
 
 function getThemeColors() {
@@ -117,6 +123,46 @@ function getDialogColors(buttonColors) {
   }
 }
 
+function getCopyButtonSettings() {
+  // Get copy button visibility settings from storage
+  return new Promise((resolve) => {
+    const defaults = {
+      showImdbCast: true,
+      showImdbCompany: true,
+      showImdbAwards: true,
+      showImdbMain: true
+    };
+
+    try {
+      if (!isExtensionContextValid()) {
+        resolve(defaults);
+        return;
+      }
+
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+        chrome.storage.sync.get(['showImdbCast', 'showImdbCompany', 'showImdbAwards', 'showImdbMain'], (result) => {
+          if (chrome.runtime.lastError) {
+            console.warn('Error getting copy button settings:', chrome.runtime.lastError);
+            resolve(defaults);
+          } else {
+            resolve({
+              showImdbCast: result.showImdbCast !== undefined ? result.showImdbCast : defaults.showImdbCast,
+              showImdbCompany: result.showImdbCompany !== undefined ? result.showImdbCompany : defaults.showImdbCompany,
+              showImdbAwards: result.showImdbAwards !== undefined ? result.showImdbAwards : defaults.showImdbAwards,
+              showImdbMain: result.showImdbMain !== undefined ? result.showImdbMain : defaults.showImdbMain
+            });
+          }
+        });
+      } else {
+        resolve(defaults);
+      }
+    } catch (error) {
+      console.warn('Error accessing chrome.storage for copy button settings:', error);
+      resolve(defaults);
+    }
+  });
+}
+
 let isProcessingIMDbButtons = false;
 
 async function addCastCopyButtons() {
@@ -176,7 +222,12 @@ async function addCastCopyButtons() {
     button.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      showCopyDialog(section, sectionName);
+      // Use different dialog for company credits
+      if (window.location.pathname.includes('/companycredits')) {
+        showCompanyCopyDialog(section, sectionName);
+      } else {
+        showCopyDialog(section, sectionName);
+      }
     });
 
     // Add button to the title
@@ -200,8 +251,16 @@ async function addCastCopyButtons() {
 }
 
 async function addIndividualCopyButtons(section, colors) {
+  // Check if this is a company credits page
+  const isCompanyCredits = window.location.pathname.includes('/companycredits');
+
   // Find all list items in this section - try multiple selectors
-  const listItems = section.querySelectorAll('li[data-testid="name-credits-list-item"], li[data-testid="title-cast-item"], li.ipc-metadata-list-summary-item, li[class*="cast"], li[class*="crew"]');
+  let listItems;
+  if (isCompanyCredits) {
+    listItems = section.querySelectorAll('li.ipc-metadata-list__item');
+  } else {
+    listItems = section.querySelectorAll('li[data-testid="name-credits-list-item"], li[data-testid="title-cast-item"], li.ipc-metadata-list-summary-item, li[class*="cast"], li[class*="crew"]');
+  }
 
   listItems.forEach(item => {
     // Skip if already has copy buttons - check for BOTH IMDb and accidentally-added Wikipedia buttons
@@ -210,11 +269,17 @@ async function addIndividualCopyButtons(section, colors) {
         item.querySelector('.media-links-wiki-name-copy-btn') ||
         item.querySelector('.media-links-wiki-role-copy-btn')) return;
 
-    // Extract cast member data - try multiple selector patterns
-    const nameLink = item.querySelector('a.name-credits--title-text-big') ||
-                     item.querySelector('a.name-credits--title-text') ||
-                     item.querySelector('a[data-testid="title-cast-item__actor"]') ||
-                     item.querySelector('a[href*="/name/"]');
+    // Extract cast member or company data - try multiple selector patterns
+    let nameLink;
+    if (isCompanyCredits) {
+      nameLink = item.querySelector('a[href*="/company/"]') ||
+                 item.querySelector('a.ipc-metadata-list-item__label');
+    } else {
+      nameLink = item.querySelector('a.name-credits--title-text-big') ||
+                 item.querySelector('a.name-credits--title-text') ||
+                 item.querySelector('a[data-testid="title-cast-item__actor"]') ||
+                 item.querySelector('a[href*="/name/"]');
+    }
 
     if (!nameLink) return;
 
@@ -224,82 +289,106 @@ async function addIndividualCopyButtons(section, colors) {
     let role = '';
     let roleElement = null;  // Store the element that contains the role
 
-    // Method 1: Character link in cast section
-    const charLinkDiv = item.querySelector('div[class*="sc-2840b417-6"], div.gBAHic, div[data-testid="cast-item-characters-list"]');
-    if (charLinkDiv) {
-      const charLink = charLinkDiv.querySelector('a');
-      if (charLink) {
-        role = charLink.textContent.trim();
-        roleElement = charLinkDiv;
-      } else {
-        // Sometimes character is just text without a link
-        role = charLinkDiv.textContent.trim();
-        roleElement = charLinkDiv;
+    if (isCompanyCredits) {
+      // For company credits, extract the role/description (only exists for some sections like Distributors, Special Effects)
+      const roleSpan = item.querySelector('span.ipc-metadata-list-item__list-content-item');
+      if (roleSpan) {
+        role = roleSpan.textContent.trim();
+        roleElement = roleSpan.parentElement; // Use the parent ul as the roleElement
       }
-    }
+      // Note: Production Companies have no role, so role will remain empty - that's expected
+    } else {
+      // Method 1: Character link in cast section
+      const charLinkDiv = item.querySelector('div[class*="sc-2840b417-6"], div.gBAHic, div[data-testid="cast-item-characters-list"]');
+      if (charLinkDiv) {
+        const charLink = charLinkDiv.querySelector('a');
+        if (charLink) {
+          role = charLink.textContent.trim();
+          roleElement = charLinkDiv;
+        } else {
+          // Sometimes character is just text without a link
+          role = charLinkDiv.textContent.trim();
+          roleElement = charLinkDiv;
+        }
+      }
 
-    // Method 2: Role in crew section
-    if (!role) {
-      const roleDiv = item.querySelector('div[class*="sc-2840b417-7"]');
-      if (roleDiv) {
-        const roleSpan = roleDiv.querySelector('span');
-        if (roleSpan) {
-          let spanText = '';
-          roleSpan.childNodes.forEach(node => {
-            if (node.nodeType === Node.TEXT_NODE) {
-              spanText += node.textContent;
+      // Method 2: Role in crew section
+      if (!role) {
+        const roleDiv = item.querySelector('div[class*="sc-2840b417-7"]');
+        if (roleDiv) {
+          const roleSpan = roleDiv.querySelector('span');
+          if (roleSpan) {
+            let spanText = '';
+            roleSpan.childNodes.forEach(node => {
+              if (node.nodeType === Node.TEXT_NODE) {
+                spanText += node.textContent;
+              }
+            });
+            role = spanText.trim();
+            roleElement = roleDiv;
+          }
+        }
+      }
+
+      // Method 3: Character in main title page format
+      if (!role) {
+        const charElement = item.querySelector('[data-testid="title-cast-item__characters"]');
+        if (charElement) {
+          role = charElement.textContent.trim();
+          roleElement = charElement;
+        }
+      }
+
+      // Method 4: Generic metadata search
+      if (!role) {
+        const metadata = item.querySelector('.ipc-inline-list, [class*="metadata"]');
+        if (metadata) {
+          const allSpans = metadata.querySelectorAll('span');
+          allSpans.forEach(span => {
+            const text = span.textContent.trim();
+            if (text && text !== name && !text.includes('episode') && !text.match(/^\d{4}$/)) {
+              if (!role || text.length < role.length) {
+                role = text;
+                roleElement = metadata;
+              }
             }
           });
-          role = spanText.trim();
-          roleElement = roleDiv;
         }
       }
     }
 
-    // Method 3: Character in main title page format
-    if (!role) {
-      const charElement = item.querySelector('[data-testid="title-cast-item__characters"]');
-      if (charElement) {
-        role = charElement.textContent.trim();
-        roleElement = charElement;
-      }
-    }
-
-    // Method 4: Generic metadata search
-    if (!role) {
-      const metadata = item.querySelector('.ipc-inline-list, [class*="metadata"]');
-      if (metadata) {
-        const allSpans = metadata.querySelectorAll('span');
-        allSpans.forEach(span => {
-          const text = span.textContent.trim();
-          if (text && text !== name && !text.includes('episode') && !text.match(/^\d{4}$/)) {
-            if (!role || text.length < role.length) {
-              role = text;
-              roleElement = metadata;
-            }
-          }
-        });
-      }
-    }
-
     // Create copy name button and insert next to name
-    const copyNameBtn = createCopyButton('Copy name', () => name);
-    const nameParent = nameLink.parentElement;
-    if (nameParent) {
-      nameParent.style.display = 'inline-flex';
-      nameParent.style.alignItems = 'center';
-      nameParent.appendChild(copyNameBtn);
+    const nameLabel = isCompanyCredits ? 'Copy company name' : 'Copy name';
+    const copyNameBtn = createCopyButton(nameLabel, () => name);
+
+    if (isCompanyCredits) {
+      // For company credits, insert button directly inside the link element (right after text)
+      nameLink.style.display = 'inline-flex';
+      nameLink.style.alignItems = 'center';
+      nameLink.style.gap = '4px';
+      nameLink.appendChild(copyNameBtn);
+    } else {
+      // For cast/crew, insert after the link element
+      const nameParent = nameLink.parentElement;
+      if (nameParent) {
+        nameParent.style.display = 'inline-flex';
+        nameParent.style.alignItems = 'center';
+        nameParent.appendChild(copyNameBtn);
+      }
     }
 
     // Create copy role button and insert next to role (only if role exists)
     if (role && roleElement) {
-      const copyRoleBtn = createCopyButton('Copy role', () => role);
-      const roleParent = roleElement.parentElement;
-      if (roleParent) {
-        roleParent.style.display = 'inline-flex';
-        roleParent.style.alignItems = 'center';
-        roleParent.appendChild(copyRoleBtn);
-      }
+      const roleLabel = isCompanyCredits ? 'Copy company role' : 'Copy role';
+      const copyRoleBtn = createCopyButton(roleLabel, () => role);
+
+      // Style the role element to allow inline button
+      roleElement.style.display = 'inline-flex';
+      roleElement.style.alignItems = 'center';
+      roleElement.style.gap = '4px';
+
+      // Insert button right after the role element
+      roleElement.insertAdjacentElement('afterend', copyRoleBtn);
     }
   });
 }
@@ -544,11 +633,18 @@ async function showCopyDialog(section, sectionName) {
   document.body.appendChild(backdrop);
   document.body.appendChild(dialog);
 
+  // Helper function to safely remove dialog
+  const closeDialog = () => {
+    if (dialog && dialog.parentNode) {
+      dialog.parentNode.removeChild(dialog);
+    }
+    if (backdrop && backdrop.parentNode) {
+      backdrop.parentNode.removeChild(backdrop);
+    }
+  };
+
   // Close on backdrop click
-  backdrop.addEventListener('click', () => {
-    document.body.removeChild(dialog);
-    document.body.removeChild(backdrop);
-  });
+  backdrop.addEventListener('click', closeDialog);
 
   // Handle copy
   dialog.querySelector('#copy-btn').addEventListener('click', () => {
@@ -556,89 +652,114 @@ async function showCopyDialog(section, sectionName) {
     const content = dialog.querySelector('#copy-content').value;
     const outputFormat = dialog.querySelector('#output-format').value;
     copyCastData(section, count, content, outputFormat, sectionName);
-    document.body.removeChild(dialog);
-    document.body.removeChild(backdrop);
+    closeDialog();
   });
 
   // Handle cancel
-  dialog.querySelector('#cancel-btn').addEventListener('click', () => {
-    document.body.removeChild(dialog);
-    document.body.removeChild(backdrop);
-  });
+  dialog.querySelector('#cancel-btn').addEventListener('click', closeDialog);
 }
 
 function copyCastData(section, count, content, outputFormat, sectionName) {
-  // Extract cast members from the section
+  // Check if this is a company credits page
+  const isCompanyCredits = window.location.pathname.includes('/companycredits');
+
+  // Extract cast members or companies from the section
   const castMembers = [];
 
   // Find all list items in this section - use querySelectorAll from section
-  const listItems = section.querySelectorAll('li[data-testid="name-credits-list-item"]');
+  let listItems;
+  if (isCompanyCredits) {
+    // Company credits use different list item structure
+    listItems = section.querySelectorAll('li.ipc-metadata-list__item');
+  } else {
+    // Cast/crew credits
+    listItems = section.querySelectorAll('li[data-testid="name-credits-list-item"]');
+  }
 
   console.log('Found list items:', listItems.length); // Debug
 
   listItems.forEach((item, index) => {
     if (index >= count) return;
 
-    // Get name from the link (try multiple selectors)
-    const nameLink = item.querySelector('a.name-credits--title-text-big') ||
-                     item.querySelector('a.name-credits--title-text') ||
-                     item.querySelector('a[href*="/name/"]');
+    let name = '';
+    let nameLink = null;
+
+    if (isCompanyCredits) {
+      // For company credits, look for company name links
+      nameLink = item.querySelector('a[href*="/company/"]') ||
+                 item.querySelector('a.ipc-metadata-list-item__label');
+    } else {
+      // Get name from the link (try multiple selectors for cast/crew)
+      nameLink = item.querySelector('a.name-credits--title-text-big') ||
+                 item.querySelector('a.name-credits--title-text') ||
+                 item.querySelector('a[href*="/name/"]');
+    }
 
     if (!nameLink) {
       console.log('No name link found in item', index);
       return;
     }
 
-    const name = nameLink.textContent.trim();
+    name = nameLink.textContent.trim();
     console.log('Found name:', name); // Debug
 
     // Get role/character from the metadata
     let role = '';
 
-    // Method 1: Look for character name in Cast section (inside sc-2840b417-6 or gBAHic)
-    const charLinkDiv = item.querySelector('div[class*="sc-2840b417-6"], div.gBAHic');
-    if (charLinkDiv) {
-      const charLink = charLinkDiv.querySelector('a');
-      if (charLink) {
-        role = charLink.textContent.trim();
-        console.log('Found character name (Cast):', role);
+    if (isCompanyCredits) {
+      // For company credits, extract the role/description (only exists for some sections like Distributors, Special Effects)
+      const roleSpan = item.querySelector('span.ipc-metadata-list-item__list-content-item');
+      if (roleSpan) {
+        role = roleSpan.textContent.trim();
+        console.log('Found company role:', role);
       }
-    }
-
-    // Method 2: Look for role in crew section (span inside sc-2840b417-7)
-    if (!role) {
-      const roleDiv = item.querySelector('div[class*="sc-2840b417-7"]');
-      if (roleDiv) {
-        const roleSpan = roleDiv.querySelector('span');
-        if (roleSpan) {
-          // Get only the span content, not nested divs
-          let spanText = '';
-          roleSpan.childNodes.forEach(node => {
-            if (node.nodeType === Node.TEXT_NODE) {
-              spanText += node.textContent;
-            }
-          });
-          role = spanText.trim();
-          console.log('Found role (Crew):', role);
+      // Note: Production Companies have no role, so role will remain empty - that's expected
+    } else {
+      // Method 1: Look for character name in Cast section (inside sc-2840b417-6 or gBAHic)
+      const charLinkDiv = item.querySelector('div[class*="sc-2840b417-6"], div.gBAHic');
+      if (charLinkDiv) {
+        const charLink = charLinkDiv.querySelector('a');
+        if (charLink) {
+          role = charLink.textContent.trim();
+          console.log('Found character name (Cast):', role);
         }
       }
-    }
 
-    // Method 3: Fallback - look in metadata container
-    if (!role) {
-      const metadata = item.querySelector('.name-credits--crew-metadata');
-      if (metadata) {
-        const allDivs = metadata.querySelectorAll('div');
-        allDivs.forEach(div => {
-          const text = div.textContent.trim();
-          // Skip if it's the name, episodes, or year
-          if (text && text !== name && !text.includes('episode') && !text.match(/^\d{4}$/)) {
-            if (!role || text.length < role.length) {
-              role = text;
-            }
+      // Method 2: Look for role in crew section (span inside sc-2840b417-7)
+      if (!role) {
+        const roleDiv = item.querySelector('div[class*="sc-2840b417-7"]');
+        if (roleDiv) {
+          const roleSpan = roleDiv.querySelector('span');
+          if (roleSpan) {
+            // Get only the span content, not nested divs
+            let spanText = '';
+            roleSpan.childNodes.forEach(node => {
+              if (node.nodeType === Node.TEXT_NODE) {
+                spanText += node.textContent;
+              }
+            });
+            role = spanText.trim();
+            console.log('Found role (Crew):', role);
           }
-        });
-        console.log('Found role (Fallback):', role);
+        }
+      }
+
+      // Method 3: Fallback - look in metadata container
+      if (!role) {
+        const metadata = item.querySelector('.name-credits--crew-metadata');
+        if (metadata) {
+          const allDivs = metadata.querySelectorAll('div');
+          allDivs.forEach(div => {
+            const text = div.textContent.trim();
+            // Skip if it's the name, episodes, or year
+            if (text && text !== name && !text.includes('episode') && !text.match(/^\d{4}$/)) {
+              if (!role || text.length < role.length) {
+                role = text;
+              }
+            }
+          });
+          console.log('Found role (Fallback):', role);
+        }
       }
     }
 
@@ -723,6 +844,244 @@ function copyCastData(section, count, content, outputFormat, sectionName) {
   });
 }
 
+// Company Credits specific dialog
+async function showCompanyCopyDialog(section, sectionName) {
+  // Get theme colors
+  const colors = await getThemeColors();
+  const dialogColors = getDialogColors(colors);
+
+  // Get default settings
+  const defaults = await new Promise((resolve) => {
+    try {
+      if (!isExtensionContextValid()) {
+        resolve({ count: 5, output: 'newline' });
+        return;
+      }
+
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+        chrome.storage.sync.get(['defaultCastCount', 'defaultOutputFormat'], (result) => {
+          if (chrome.runtime.lastError) {
+            resolve({ count: 5, output: 'newline' });
+          } else {
+            resolve({
+              count: result.defaultCastCount || 5,
+              output: result.defaultOutputFormat || 'newline'
+            });
+          }
+        });
+      } else {
+        resolve({ count: 5, output: 'newline' });
+      }
+    } catch (error) {
+      resolve({ count: 5, output: 'newline' });
+    }
+  });
+
+  // Create backdrop
+  const backdrop = document.createElement('div');
+  backdrop.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    z-index: 9999;
+    backdrop-filter: blur(4px);
+    animation: fadeIn 0.2s ease-out;
+  `;
+
+  // Create dialog
+  const dialog = document.createElement('div');
+  dialog.style.cssText = `
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: ${dialogColors.background};
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    z-index: 10000;
+    min-width: 400px;
+    max-width: 500px;
+    border: 1px solid ${dialogColors.border};
+    animation: slideIn 0.3s ease-out;
+  `;
+
+  dialog.innerHTML = `
+    <h3 style="margin: 0 0 20px 0; color: ${dialogColors.text}; font-size: 20px; font-weight: 700; border-bottom: 2px solid ${colors.button}; padding-bottom: 10px;">
+      📋 Copy ${sectionName}
+    </h3>
+    <div style="margin-bottom: 18px;">
+      <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Number of companies:</label>
+      <input type="number" id="company-count" min="1" max="1000" value="${defaults.count}"
+        style="width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px; font-size: 14px;
+        background: ${dialogColors.inputBg}; color: ${dialogColors.text}; transition: all 0.2s;"
+        onfocus="this.style.borderColor='${colors.button}'; this.style.boxShadow='0 0 0 3px ${colors.button}33'"
+        onblur="this.style.borderColor='${dialogColors.inputBorder}'; this.style.boxShadow='none'">
+    </div>
+    <div style="margin-bottom: 18px;">
+      <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Include:</label>
+      <select id="company-content"
+        style="width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px; font-size: 14px;
+        background: ${dialogColors.inputBg}; color: ${dialogColors.text}; cursor: pointer; transition: all 0.2s;"
+        onfocus="this.style.borderColor='${colors.button}'; this.style.boxShadow='0 0 0 3px ${colors.button}33'"
+        onblur="this.style.borderColor='${dialogColors.inputBorder}'; this.style.boxShadow='none'">
+        <option value="name-only">Company Name Only</option>
+        <option value="name-description">Company Name + Description (if available)</option>
+      </select>
+    </div>
+    <div style="margin-bottom: 25px;">
+      <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Output Format:</label>
+      <select id="company-output-format"
+        style="width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px; font-size: 14px;
+        background: ${dialogColors.inputBg}; color: ${dialogColors.text}; cursor: pointer; transition: all 0.2s;"
+        onfocus="this.style.borderColor='${colors.button}'; this.style.boxShadow='0 0 0 3px ${colors.button}33'"
+        onblur="this.style.borderColor='${dialogColors.inputBorder}'; this.style.boxShadow='none'">
+        <option value="newline" ${defaults.output === 'newline' ? 'selected' : ''}>Line by line</option>
+        <option value="comma" ${defaults.output === 'comma' ? 'selected' : ''}>Comma separated</option>
+        <option value="csv" ${defaults.output === 'csv' ? 'selected' : ''}>CSV</option>
+        <option value="json" ${defaults.output === 'json' ? 'selected' : ''}>JSON Array</option>
+        <option value="table" ${defaults.output === 'table' ? 'selected' : ''}>Markdown Table</option>
+      </select>
+    </div>
+    <div style="display: flex; gap: 12px;">
+      <button id="company-copy-btn"
+        style="flex: 1; padding: 14px; background: ${colors.button}; border: none; border-radius: 8px; cursor: pointer;
+        font-weight: 700; font-size: 15px; color: ${colors.buttonText}; transition: all 0.2s; box-shadow: 0 2px 8px ${colors.button}44;"
+        onmouseover="this.style.background='${colors.buttonHover}'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px ${colors.button}66'"
+        onmouseout="this.style.background='${colors.button}'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px ${colors.button}44'">
+        Copy
+      </button>
+      <button id="company-cancel-btn"
+        style="flex: 1; padding: 14px; background: ${dialogColors.cancelBg}; border: none; border-radius: 8px; cursor: pointer;
+        font-weight: 600; font-size: 15px; color: ${dialogColors.cancelText}; transition: all 0.2s;"
+        onmouseover="this.style.background='${dialogColors.cancelHover}'; this.style.transform='translateY(-2px)'"
+        onmouseout="this.style.background='${dialogColors.cancelBg}'; this.style.transform='translateY(0)'">
+        Cancel
+      </button>
+    </div>
+  `;
+
+  document.body.appendChild(backdrop);
+  document.body.appendChild(dialog);
+
+  // Helper function to safely remove dialog
+  const closeDialog = () => {
+    if (dialog && dialog.parentNode) {
+      dialog.parentNode.removeChild(dialog);
+    }
+    if (backdrop && backdrop.parentNode) {
+      backdrop.parentNode.removeChild(backdrop);
+    }
+  };
+
+  // Close on backdrop click
+  backdrop.addEventListener('click', closeDialog);
+
+  // Handle copy
+  dialog.querySelector('#company-copy-btn').addEventListener('click', () => {
+    const count = parseInt(dialog.querySelector('#company-count').value);
+    const content = dialog.querySelector('#company-content').value;
+    const outputFormat = dialog.querySelector('#company-output-format').value;
+    copyCompanyData(section, count, content, outputFormat, sectionName);
+    closeDialog();
+  });
+
+  // Handle cancel
+  dialog.querySelector('#company-cancel-btn').addEventListener('click', closeDialog);
+}
+
+// Company Credits specific copy function
+function copyCompanyData(section, count, content, outputFormat, sectionName) {
+  const companies = [];
+
+  // Find all list items in this section
+  const listItems = section.querySelectorAll('li.ipc-metadata-list__item');
+
+  listItems.forEach((item, index) => {
+    if (index >= count) return;
+
+    // Get company name
+    const nameLink = item.querySelector('a[href*="/company/"]') ||
+                     item.querySelector('a.ipc-metadata-list-item__label');
+
+    if (!nameLink) return;
+
+    const name = nameLink.textContent.trim();
+
+    // Get description (if available)
+    let description = '';
+    const descSpan = item.querySelector('span.ipc-metadata-list-item__list-content-item');
+    if (descSpan) {
+      description = descSpan.textContent.trim();
+    }
+
+    companies.push({ name, description });
+  });
+
+  if (companies.length === 0) {
+    showNotification('No companies found!', true);
+    return;
+  }
+
+  // Format the output
+  let text = '';
+
+  switch(outputFormat) {
+    case 'newline':
+      text = companies.map(company => {
+        if (content === 'name-only') return company.name;
+        return company.description ? `${company.name} - ${company.description}` : company.name;
+      }).join('\n');
+      break;
+
+    case 'comma':
+      text = companies.map(company => {
+        if (content === 'name-only') return company.name;
+        return company.description ? `${company.name}:${company.description}` : company.name;
+      }).join(',');
+      break;
+
+    case 'csv':
+      if (content === 'name-only') {
+        text = 'Company\n' + companies.map(company => `"${company.name}"`).join('\n');
+      } else {
+        text = 'Company,Description\n' + companies.map(company =>
+          `"${company.name}","${company.description || ''}"`
+        ).join('\n');
+      }
+      break;
+
+    case 'json':
+      if (content === 'name-only') {
+        text = JSON.stringify(companies.map(c => c.name), null, 2);
+      } else {
+        text = JSON.stringify(companies, null, 2);
+      }
+      break;
+
+    case 'table':
+      if (content === 'name-only') {
+        text = '| Company |\n|------|\n' +
+               companies.map(company => `| ${company.name} |`).join('\n');
+      } else {
+        text = '| Company | Description |\n|------|------|\n' +
+               companies.map(company => `| ${company.name} | ${company.description || ''} |`).join('\n');
+      }
+      break;
+  }
+
+  // Copy to clipboard
+  navigator.clipboard.writeText(text).then(() => {
+    showNotification(`Copied ${companies.length} companies from ${sectionName}!`);
+  }).catch(err => {
+    console.error('Failed to copy:', err);
+    showNotification('Failed to copy to clipboard', true);
+  });
+}
+
 function showNotification(message, isError = false) {
   const notification = document.createElement('div');
   notification.textContent = message;
@@ -749,6 +1108,12 @@ function showNotification(message, isError = false) {
 }
 
 async function addMainPageCastButtons(colors) {
+  // Check settings first
+  const settings = await getCopyButtonSettings();
+  if (!settings.showImdbMain) {
+    return; // Don't add buttons if disabled
+  }
+
   // Add buttons for cast/crew on main title page
   // Look for cast cards that aren't in sections
   const castItems = document.querySelectorAll('[data-testid="title-cast-item"], [data-testid="title-pc-principal-credit"]');
@@ -788,11 +1153,73 @@ async function addMainPageCastButtons(colors) {
     // Create copy role button and insert next to role (only if role exists)
     if (role && charElement) {
       const copyRoleBtn = createCopyButton('Copy role', () => role);
-      const roleParent = charElement.parentElement;
-      if (roleParent) {
-        roleParent.style.display = 'inline-flex';
-        roleParent.style.alignItems = 'center';
-        roleParent.appendChild(copyRoleBtn);
+
+      // Style the character element to allow inline button
+      charElement.style.display = 'inline-flex';
+      charElement.style.alignItems = 'center';
+      charElement.style.gap = '4px';
+
+      // Insert button right after the character element
+      charElement.insertAdjacentElement('afterend', copyRoleBtn);
+    }
+  });
+}
+
+async function addAwardsCopyButtons() {
+  if (!isIMDbAwardsPage()) return;
+
+  const colors = await getThemeColors();
+
+  // Find all award list items
+  const awardItems = document.querySelectorAll('li[data-testid="list-item"].ipc-metadata-list-summary-item');
+
+  awardItems.forEach(item => {
+    // Skip if already has copy buttons
+    if (item.querySelector('.media-links-name-copy-btn') ||
+        item.querySelector('.media-links-role-copy-btn') ||
+        item.querySelector('.media-links-award-copy-btn')) return;
+
+    // Find the person name link (in the stl section)
+    const personLink = item.querySelector('.ipc-metadata-list-summary-item__stl a.ipc-metadata-list-summary-item__li--link');
+
+    if (personLink) {
+      const personName = personLink.textContent.trim();
+      const copyNameBtn = createCopyButton('Copy person name', () => personName);
+
+      // Insert the button after the person link within the same li
+      personLink.insertAdjacentElement('afterend', copyNameBtn);
+    }
+
+    // Find the award category (in the tl section)
+    const categorySpan = item.querySelector('.ipc-metadata-list-summary-item__tl span.awardCategoryName');
+
+    if (categorySpan) {
+      const categoryName = categorySpan.textContent.trim();
+      const copyCategoryBtn = createCopyButton('Copy award category', () => categoryName);
+
+      // Insert the button after the category span within the same li
+      categorySpan.insertAdjacentElement('afterend', copyCategoryBtn);
+    }
+
+    // Find the award body (e.g., "BAFTA TV Award", "Oscar", etc.)
+    const awardLink = item.querySelector('.ipc-metadata-list-summary-item__tc a.ipc-metadata-list-summary-item__t');
+
+    if (awardLink) {
+      // Extract award body from the span inside the link
+      const awardBodySpan = awardLink.querySelector('span.ipc-metadata-list-summary-item__tst');
+
+      if (awardBodySpan) {
+        const awardBody = awardBodySpan.textContent.trim();
+        const copyAwardBtn = createCopyButton('Copy award body', () => awardBody);
+        copyAwardBtn.classList.add('media-links-award-copy-btn');
+
+        // Style the link to allow inline button
+        awardLink.style.display = 'inline-flex';
+        awardLink.style.alignItems = 'center';
+        awardLink.style.gap = '4px';
+
+        // Insert the button inside the link, after the span
+        awardBodySpan.insertAdjacentElement('afterend', copyAwardBtn);
       }
     }
   });
@@ -800,8 +1227,18 @@ async function addMainPageCastButtons(colors) {
 
 // Initialize on page load and when content changes
 if (isIMDbCreditsPage()) {
-  // Initial load
-  setTimeout(addCastCopyButtons, 1000);
+  // Check settings before initializing
+  getCopyButtonSettings().then(settings => {
+    const isCompanyCredits = window.location.pathname.includes('/companycredits');
+    const shouldShow = isCompanyCredits ? settings.showImdbCompany : settings.showImdbCast;
+
+    if (!shouldShow) {
+      console.log('IMDb copy buttons disabled for this page type');
+      return;
+    }
+
+    // Initial load
+    setTimeout(addCastCopyButtons, 1000);
 
   // Debounce mechanism to prevent excessive calls
   let debounceTimer = null;
@@ -848,6 +1285,87 @@ if (isIMDbCreditsPage()) {
     childList: true,
     subtree: true
   });
+
+  // Clean up observer when page is unloaded or extension context is invalidated
+  window.addEventListener('beforeunload', () => {
+    observer.disconnect();
+    clearTimeout(debounceTimer);
+  });
+
+  // Also disconnect on navigation (for single-page apps)
+  window.addEventListener('pagehide', () => {
+    observer.disconnect();
+    clearTimeout(debounceTimer);
+  });
+  }); // End of getCopyButtonSettings().then()
+}
+
+// Initialize awards page functionality
+if (isIMDbAwardsPage()) {
+  // Check settings before initializing
+  getCopyButtonSettings().then(settings => {
+    if (!settings.showImdbAwards) {
+      console.log('IMDb awards copy buttons disabled');
+      return;
+    }
+
+    // Initial load
+    setTimeout(addAwardsCopyButtons, 1000);
+
+  // Debounce mechanism to prevent excessive calls
+  let debounceTimer = null;
+
+  // Watch for dynamic content loading (e.g., "See more" buttons expanding lists)
+  const observer = new MutationObserver((mutations) => {
+    // Check if any of the mutations actually added new award items
+    // IMPORTANT: Ignore mutations that are just our own button additions
+    const hasNewContent = mutations.some(mutation => {
+      return mutation.addedNodes.length > 0 &&
+        Array.from(mutation.addedNodes).some(node => {
+          // Skip if this is just a button we added
+          if (node.nodeType === 1 &&
+              (node.classList && (
+                node.classList.contains('media-links-name-copy-btn') ||
+                node.classList.contains('media-links-role-copy-btn')
+              ))) {
+            return false;
+          }
+
+          // Check for actual award-related content
+          return node.nodeType === 1 && // Element node
+            (node.querySelector && (
+              node.querySelector('li[data-testid="list-item"]') ||
+              node.matches('li[data-testid="list-item"]')
+            ));
+        });
+    });
+
+    // Only re-run if new award content was added
+    if (hasNewContent) {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        addAwardsCopyButtons();
+      }, 500);
+    }
+  });
+
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+
+  // Clean up observer when page is unloaded
+  window.addEventListener('beforeunload', () => {
+    observer.disconnect();
+    clearTimeout(debounceTimer);
+  });
+
+  // Also disconnect on navigation (for single-page apps)
+  window.addEventListener('pagehide', () => {
+    observer.disconnect();
+    clearTimeout(debounceTimer);
+  });
+  }); // End of getCopyButtonSettings().then()
 }
 
 })(); // End of IIFE

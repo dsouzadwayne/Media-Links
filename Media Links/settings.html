@@ -15,9 +15,23 @@
       </div>
     </header>
 
-    <div class="settings-content">
-      <!-- Theme Settings Section -->
-      <section class="settings-section">
+    <div class="settings-body">
+      <!-- Sidebar Navigation -->
+      <nav class="settings-sidebar">
+        <div class="sidebar-header">Sections</div>
+        <ul class="sidebar-nav">
+          <li><a href="#appearance" class="sidebar-link active" data-section="appearance">🎨 Appearance</a></li>
+          <li><a href="#search-query" class="sidebar-link" data-section="search-query">🔍 Search & Query</a></li>
+          <li><a href="#query-patterns" class="sidebar-link" data-section="query-patterns">🔗 Query Patterns</a></li>
+          <li><a href="#imdb-copy" class="sidebar-link" data-section="imdb-copy">📋 IMDb Cast Copy</a></li>
+          <li><a href="#copy-visibility" class="sidebar-link" data-section="copy-visibility">👁️ Copy Visibility</a></li>
+          <li><a href="#advanced" class="sidebar-link" data-section="advanced">⚡ Advanced</a></li>
+        </ul>
+      </nav>
+
+      <div class="settings-content">
+        <!-- Theme Settings Section -->
+        <section class="settings-section" id="appearance">
         <div class="section-header">
           <h2>🎨 Appearance</h2>
           <p class="section-description">Customize the look and feel of the extension</p>
@@ -49,10 +63,24 @@
       </section>
 
       <!-- Search Settings Section -->
-      <section class="settings-section">
+      <section class="settings-section" id="search-query">
         <div class="section-header">
           <h2>🔍 Search & Query</h2>
           <p class="section-description">Configure default search behavior and patterns</p>
+        </div>
+
+        <div class="setting-item">
+          <label for="default-search-engine" class="setting-label">
+            <span class="label-text">Default Search Engine</span>
+            <span class="label-description">Select which search engine to use by default</span>
+          </label>
+          <select id="default-search-engine" class="setting-input">
+            <option value="google">Google</option>
+            <option value="youtube">YouTube</option>
+            <option value="google-ai">Google AI Mode</option>
+            <option value="bing">Bing</option>
+            <option value="duckduckgo">DuckDuckGo</option>
+          </select>
         </div>
 
         <div class="setting-item">
@@ -96,8 +124,55 @@
         </div>
       </section>
 
+      <!-- Search Query Patterns Section -->
+      <section class="settings-section" id="query-patterns">
+        <div class="section-header">
+          <h2>🔗 Search Query Patterns</h2>
+          <p class="section-description">Configure which query patterns to use for different element combinations</p>
+        </div>
+
+        <div class="setting-item">
+          <label for="profile-select" class="setting-label">
+            <span class="label-text">Select Profile</span>
+            <span class="label-description">Choose number of elements to configure</span>
+          </label>
+          <select id="profile-select" class="setting-input">
+            <option value="1">1 Element</option>
+            <option value="2">2 Elements</option>
+            <option value="3">3 Elements</option>
+            <option value="4">4 Elements</option>
+          </select>
+        </div>
+
+        <div id="profile-container">
+          <div id="profile1" class="profile-content active">
+            <h3 class="profile-title">1 Element Profile</h3>
+            <div class="profile-settings" data-profile="1"></div>
+          </div>
+          <div id="profile2" class="profile-content">
+            <h3 class="profile-title">2 Elements Profile</h3>
+            <div class="profile-settings" data-profile="2"></div>
+          </div>
+          <div id="profile3" class="profile-content">
+            <h3 class="profile-title">3 Elements Profile</h3>
+            <div class="profile-settings" data-profile="3"></div>
+          </div>
+          <div id="profile4" class="profile-content">
+            <h3 class="profile-title">4 Elements Profile</h3>
+            <div class="profile-settings" data-profile="4"></div>
+          </div>
+        </div>
+
+        <div class="profile-actions">
+          <button id="save-profile-btn" class="primary-button">Save Profile</button>
+          <button id="reset-profile-btn" class="secondary-button">Reset Profile</button>
+          <button id="select-all-profile-btn" class="secondary-button">Select All</button>
+          <button id="deselect-all-profile-btn" class="secondary-button">Deselect All</button>
+        </div>
+      </section>
+
       <!-- IMDb Copy Settings Section -->
-      <section class="settings-section">
+      <section class="settings-section" id="imdb-copy">
         <div class="section-header">
           <h2>📋 IMDb Cast Copy</h2>
           <p class="section-description">Default settings for copying cast information</p>
@@ -138,8 +213,92 @@
         </div>
       </section>
 
+      <!-- Copy Button Visibility Section -->
+      <section class="settings-section" id="copy-visibility">
+        <div class="section-header">
+          <h2>👁️ Copy Button Visibility</h2>
+          <p class="section-description">Choose where to show copy buttons on IMDb and Wikipedia</p>
+        </div>
+
+        <!-- IMDb Settings -->
+        <div class="setting-group">
+          <h3 class="group-title">IMDb</h3>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Cast & Crew Pages (/fullcredits)</span>
+              <span class="label-description">Show copy buttons on full credits pages</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="show-imdb-cast" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Company Credits (/companycredits)</span>
+              <span class="label-description">Show copy buttons on company credits pages</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="show-imdb-company" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Awards Pages (/awards)</span>
+              <span class="label-description">Show copy buttons on awards pages</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="show-imdb-awards" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Main Title Page</span>
+              <span class="label-description">Show copy buttons on main title page cast section</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="show-imdb-main" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Wikipedia Settings -->
+        <div class="setting-group">
+          <h3 class="group-title">Wikipedia</h3>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Cast Lists</span>
+              <span class="label-description">Show copy buttons in cast sections</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="show-wiki-cast" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Tables</span>
+              <span class="label-description">Show copy buttons in tables (infoboxes, episode lists, etc.)</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="show-wiki-tables" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </section>
+
       <!-- Advanced Settings Section -->
-      <section class="settings-section">
+      <section class="settings-section" id="advanced">
         <div class="section-header">
           <h2>⚡ Advanced</h2>
           <p class="section-description">Advanced configuration options</p>
@@ -161,6 +320,7 @@
           <p class="danger-description">This will reset all settings to their default values</p>
         </div>
       </section>
+      </div>
     </div>
 
     <footer class="settings-footer">
