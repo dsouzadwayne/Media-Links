@@ -29,7 +29,7 @@ body {
   z-index: 200;
   background: var(--secondary-bg);
   border-bottom: 2px solid var(--border);
-  padding: 1.5rem 2rem;
+  padding: 1rem 1.5rem;
   box-shadow: var(--shadow);
 }
 
@@ -40,7 +40,7 @@ body {
 }
 
 .settings-header h1 {
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: var(--accent);
 }
@@ -49,13 +49,13 @@ body {
   background: transparent;
   border: none;
   color: var(--text-primary);
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   cursor: pointer;
-  padding: 0.5rem;
+  padding: 0.4rem;
   border-radius: 50%;
   transition: all 0.2s ease;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -77,13 +77,13 @@ body {
 
 /* Sidebar Navigation */
 .settings-sidebar {
-  width: 260px;
+  width: 220px;
   background: var(--surface-bg);
   border-right: 2px solid var(--border);
-  padding: 2rem 0;
+  padding: 1.5rem 0;
   position: sticky;
-  top: 80px;
-  height: calc(100vh - 80px);
+  top: 60px;
+  height: calc(100vh - 60px);
   overflow-y: auto;
   flex-shrink: 0;
   align-self: flex-start;
@@ -112,11 +112,11 @@ body {
 .sidebar-link {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem 1.5rem;
+  gap: 0.6rem;
+  padding: 0.7rem 1.25rem;
   color: var(--text-primary);
   text-decoration: none;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 500;
   transition: all 0.2s ease;
   border-left: 3px solid transparent;
@@ -149,16 +149,16 @@ body {
 /* Content */
 .settings-content {
   flex: 1;
-  padding: 2.5rem 3rem;
+  padding: 1.5rem 2rem;
   overflow: visible;
 }
 
 /* Sections */
 .settings-section {
   background: var(--surface-bg);
-  border-radius: 16px;
-  padding: 2.5rem;
-  margin-bottom: 2.5rem;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
   border: 1px solid var(--border);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
@@ -169,28 +169,28 @@ body {
 }
 
 .section-header {
-  margin-bottom: 2.5rem;
-  padding-bottom: 1.25rem;
-  border-bottom: 3px solid var(--accent);
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid var(--accent);
   position: relative;
 }
 
 .section-header::after {
   content: '';
   position: absolute;
-  bottom: -3px;
+  bottom: -2px;
   left: 0;
-  width: 80px;
-  height: 3px;
+  width: 60px;
+  height: 2px;
   background: var(--accent);
   opacity: 0.3;
 }
 
 .section-header h2 {
-  font-size: 1.75rem;
+  font-size: 1.35rem;
   font-weight: 700;
   color: var(--accent);
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -198,16 +198,16 @@ body {
 
 .section-description {
   color: var(--text-secondary);
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 
 /* Setting Groups */
 .setting-group {
-  margin-bottom: 2.5rem;
-  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
   background: var(--primary-bg);
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid var(--border);
 }
 
@@ -216,11 +216,11 @@ body {
 }
 
 .group-title {
-  font-size: 1.3rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: var(--accent);
-  margin-bottom: 1.5rem;
-  padding-bottom: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.6rem;
   border-bottom: 2px solid var(--border);
   display: flex;
   align-items: center;
@@ -229,10 +229,10 @@ body {
 
 /* Profile Content */
 #profile-container {
-  margin-top: 2rem;
-  padding: 1.5rem;
+  margin-top: 1.5rem;
+  padding: 1.25rem;
   background: var(--primary-bg);
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid var(--border);
 }
 
@@ -245,14 +245,14 @@ body {
 }
 
 .profile-title {
-  font-size: 1.2rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 1.5rem;
-  padding: 0.75rem 1rem;
+  margin-bottom: 1.25rem;
+  padding: 0.65rem 0.9rem;
   background: var(--surface-bg);
   border-radius: 8px;
-  border-left: 4px solid var(--accent);
+  border-left: 3px solid var(--accent);
 }
 
 .profile-settings {
@@ -276,7 +276,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem 0;
+  padding: 0.75rem 0;
   border-bottom: 1px solid var(--border);
   transition: all 0.2s ease;
 }
@@ -286,12 +286,12 @@ body {
 }
 
 .setting-item:hover {
-  padding-left: 0.5rem;
+  padding-left: 0.4rem;
 }
 
 /* Special styling for profile pattern items in grid */
 .profile-settings .setting-item {
-  padding: 1rem;
+  padding: 0.85rem;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface-bg);
@@ -303,7 +303,7 @@ body {
   border-color: var(--accent);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
-  padding: 1rem;
+  padding: 0.85rem;
 }
 
 .setting-label {
@@ -316,25 +316,25 @@ body {
 
 .label-text {
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   color: var(--text-primary);
   line-height: 1.4;
 }
 
 .label-description {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
   line-height: 1.4;
 }
 
 .setting-input {
-  width: 250px;
-  padding: 0.75rem 1rem;
+  width: 220px;
+  padding: 0.6rem 0.85rem;
   background: var(--primary-bg);
   border: 2px solid var(--border);
   border-radius: 8px;
   color: var(--text-primary);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   transition: all 0.2s ease;
 }
 
@@ -352,8 +352,8 @@ body {
 .toggle {
   position: relative;
   display: inline-block;
-  width: 60px;
-  height: 32px;
+  width: 52px;
+  height: 28px;
   cursor: pointer;
 }
 
@@ -370,7 +370,7 @@ body {
   right: 0;
   bottom: 0;
   background-color: var(--border);
-  border-radius: 34px;
+  border-radius: 28px;
   transition: all 0.3s ease;
   box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
 }
@@ -378,10 +378,10 @@ body {
 .toggle-slider:before {
   position: absolute;
   content: "";
-  height: 24px;
-  width: 24px;
-  left: 4px;
-  bottom: 4px;
+  height: 22px;
+  width: 22px;
+  left: 3px;
+  bottom: 3px;
   background-color: white;
   border-radius: 50%;
   transition: all 0.3s ease;
@@ -394,7 +394,7 @@ body {
 }
 
 .toggle input:checked + .toggle-slider:before {
-  transform: translateX(28px);
+  transform: translateX(24px);
 }
 
 .toggle:hover .toggle-slider {
@@ -418,8 +418,8 @@ body {
 
 /* Theme Preview */
 .theme-preview {
-  margin-top: 1.5rem;
-  padding: 1.5rem;
+  margin-top: 1.25rem;
+  padding: 1.25rem;
   background: var(--primary-bg);
   border-radius: 8px;
   border: 2px dashed var(--border);
@@ -428,25 +428,25 @@ body {
 .preview-card {
   background: var(--surface-bg);
   border-radius: 8px;
-  padding: 1.5rem;
+  padding: 1.25rem;
   border: 1px solid var(--border);
 }
 
 .preview-header {
   font-weight: 600;
-  font-size: 1.1rem;
-  margin-bottom: 1rem;
+  font-size: 1rem;
+  margin-bottom: 0.85rem;
   color: var(--accent);
 }
 
 .preview-content {
   display: flex;
-  gap: 1rem;
+  gap: 0.85rem;
   align-items: center;
 }
 
 .preview-button {
-  padding: 0.75rem 1.5rem;
+  padding: 0.6rem 1.25rem;
   background: var(--accent);
   color: var(--text-primary);
   border: none;
@@ -454,6 +454,7 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  font-size: 0.9rem;
 }
 
 .preview-button:hover {
@@ -463,26 +464,27 @@ body {
 
 .preview-input {
   flex: 1;
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 0.85rem;
   background: var(--primary-bg);
   border: 2px solid var(--border);
   border-radius: 6px;
   color: var(--text-primary);
+  font-size: 0.9rem;
 }
 
 /* Danger Zone */
 .danger-zone {
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 1.5rem;
+  gap: 0.65rem;
+  padding: 1.25rem;
   background: rgba(255, 100, 100, 0.1);
   border: 2px solid var(--danger);
   border-radius: 8px;
 }
 
 .danger-button {
-  padding: 0.75rem 1.5rem;
+  padding: 0.6rem 1.25rem;
   background: var(--danger);
   color: white;
   border: none;
@@ -490,6 +492,7 @@ body {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  font-size: 0.9rem;
 }
 
 .danger-button:hover {
@@ -499,7 +502,7 @@ body {
 
 .danger-description {
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 
 /* Footer */
@@ -508,25 +511,29 @@ body {
   bottom: 0;
   background: var(--secondary-bg);
   border-top: 2px solid var(--border);
-  padding: 1.5rem 2rem;
+  padding: 0;
   box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .footer-content {
   display: flex;
-  gap: 1rem;
+  gap: 0.85rem;
   justify-content: center;
-  margin-bottom: 0.75rem;
+  align-items: center;
+  padding: 1rem 1.5rem;
 }
 
 .primary-button {
-  padding: 0.875rem 2rem;
+  padding: 0.7rem 1.75rem;
   background: var(--accent);
   color: white;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 0.95rem;
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: 0 4px 12px var(--accent-glow);
@@ -563,13 +570,13 @@ body {
 }
 
 .secondary-button {
-  padding: 0.875rem 2rem;
+  padding: 0.7rem 1.75rem;
   background: var(--surface-bg);
   color: var(--text-primary);
   border: 2px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 0.95rem;
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
@@ -608,10 +615,10 @@ body {
 
 .save-status {
   text-align: center;
-  font-size: 0.9rem;
-  min-height: 1.5rem;
+  font-size: 0.85rem;
   font-weight: 600;
   transition: all 0.3s ease;
+  padding: 0 1.5rem 0.75rem 1.5rem;
 }
 
 .save-status.success {
@@ -716,6 +723,7 @@ body[data-theme="cat-night"] {
 /* Smooth scrolling */
 html {
   scroll-behavior: smooth;
+  scroll-padding-top: 80px;
 }
 
 html, body {
@@ -792,15 +800,15 @@ html, body {
   }
 
   .settings-content {
-    padding: 1.5rem;
+    padding: 1.25rem;
   }
 
   .settings-section {
-    padding: 1.5rem;
+    padding: 1.25rem;
   }
 
   .section-header h2 {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
   }
 
   .setting-item {

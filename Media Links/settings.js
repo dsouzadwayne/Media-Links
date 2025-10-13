@@ -446,6 +446,16 @@ function initializeSidebarNavigation() {
   function updateActiveLink() {
     const fromTop = window.scrollY + 100; // Offset for better UX
 
+    // Check if we're at the bottom of the page
+    const isAtBottom = (window.innerHeight + window.scrollY) >= document.documentElement.scrollHeight - 10;
+
+    if (isAtBottom) {
+      // Activate the last link when at bottom
+      sidebarLinks.forEach(link => link.classList.remove('active'));
+      sidebarLinks[sidebarLinks.length - 1].classList.add('active');
+      return;
+    }
+
     sidebarLinks.forEach(link => {
       const section = document.querySelector(link.hash);
 
