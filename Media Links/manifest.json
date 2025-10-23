@@ -50,7 +50,7 @@
       "pages": ["sandbox.html"]
    },
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "0.722",
+   "version": "0.723",
    "web_accessible_resources": [
       {
          "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html"],
