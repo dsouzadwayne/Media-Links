@@ -10,13 +10,15 @@ const DEFAULT_SETTINGS = {
   defaultContentFormat: 'name-role',
   defaultOutputFormat: 'newline',
   debugMode: false,
+  showCopyWebpageBtn: false,
   // Copy button visibility settings
   showImdbCast: true,
   showImdbCompany: true,
   showImdbAwards: true,
   showImdbMain: true,
   showWikiCast: true,
-  showWikiTables: true
+  showWikiTables: true,
+  showLetterboxdCast: true
 };
 
 let currentSettings = { ...DEFAULT_SETTINGS };
@@ -114,6 +116,7 @@ function applySettingsToUI() {
   document.getElementById('default-content-format').value = currentSettings.defaultContentFormat;
   document.getElementById('default-output-format').value = currentSettings.defaultOutputFormat;
   document.getElementById('debug-mode').checked = currentSettings.debugMode;
+  document.getElementById('show-copy-webpage-btn').checked = currentSettings.showCopyWebpageBtn;
 
   // Copy button visibility settings
   document.getElementById('show-imdb-cast').checked = currentSettings.showImdbCast;
@@ -122,6 +125,7 @@ function applySettingsToUI() {
   document.getElementById('show-imdb-main').checked = currentSettings.showImdbMain;
   document.getElementById('show-wiki-cast').checked = currentSettings.showWikiCast;
   document.getElementById('show-wiki-tables').checked = currentSettings.showWikiTables;
+  document.getElementById('show-letterboxd-cast').checked = currentSettings.showLetterboxdCast;
 
   hasUnsavedChanges = false;
 }
@@ -245,13 +249,15 @@ function saveSettings() {
     defaultContentFormat: document.getElementById('default-content-format').value,
     defaultOutputFormat: document.getElementById('default-output-format').value,
     debugMode: document.getElementById('debug-mode').checked,
+    showCopyWebpageBtn: document.getElementById('show-copy-webpage-btn').checked,
     // Copy button visibility settings
     showImdbCast: document.getElementById('show-imdb-cast').checked,
     showImdbCompany: document.getElementById('show-imdb-company').checked,
     showImdbAwards: document.getElementById('show-imdb-awards').checked,
     showImdbMain: document.getElementById('show-imdb-main').checked,
     showWikiCast: document.getElementById('show-wiki-cast').checked,
-    showWikiTables: document.getElementById('show-wiki-tables').checked
+    showWikiTables: document.getElementById('show-wiki-tables').checked,
+    showLetterboxdCast: document.getElementById('show-letterboxd-cast').checked
   };
 
   // Save to storage
