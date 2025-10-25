@@ -18,12 +18,21 @@ const DEFAULT_SETTINGS = {
   showImdbMain: true,
   showWikiCast: true,
   showWikiTables: true,
+  wikiOutputFormat: 'newline',
   showLetterboxdCast: true,
+  letterboxdCastCount: 10,
+  letterboxdOutputFormat: 'colon',
+  letterboxdIncludeRoles: true,
   showAppleTVCast: true,
   // Apple TV+ specific settings
   appleTVCastCount: 10,
   appleTVOutputFormat: 'colon',
-  appleTVIncludeRoles: true
+  appleTVIncludeRoles: true,
+  showBookMyShowCopy: true,
+  // BookMyShow specific settings
+  bookMyShowCastCount: 10,
+  bookMyShowOutputFormat: 'colon',
+  bookMyShowIncludeRoles: true
 };
 
 let currentSettings = { ...DEFAULT_SETTINGS };
@@ -148,14 +157,23 @@ function applySettingsToUI() {
   document.getElementById('show-imdb-main').checked = currentSettings.showImdbMain;
   document.getElementById('show-wiki-cast').checked = currentSettings.showWikiCast;
   document.getElementById('show-wiki-tables').checked = currentSettings.showWikiTables;
+  document.getElementById('wiki-output-format').value = currentSettings.wikiOutputFormat;
   document.getElementById('show-letterboxd-cast').checked = currentSettings.showLetterboxdCast;
+  document.getElementById('letterboxd-cast-count').value = currentSettings.letterboxdCastCount;
+  document.getElementById('letterboxd-output-format').value = currentSettings.letterboxdOutputFormat;
+  document.getElementById('letterboxd-include-roles').checked = currentSettings.letterboxdIncludeRoles;
   document.getElementById('show-appletv-cast').checked = currentSettings.showAppleTVCast;
-  document.getElementById('show-bookmyshow-copy').checked = currentSettings.showBookMyShowCopy !== false;
 
   // Apple TV+ specific settings
   document.getElementById('appletv-cast-count').value = currentSettings.appleTVCastCount;
   document.getElementById('appletv-output-format').value = currentSettings.appleTVOutputFormat;
   document.getElementById('appletv-include-roles').checked = currentSettings.appleTVIncludeRoles;
+
+  // BookMyShow specific settings
+  document.getElementById('show-bookmyshow-copy').checked = currentSettings.showBookMyShowCopy !== false;
+  document.getElementById('bookmyshow-cast-count').value = currentSettings.bookMyShowCastCount;
+  document.getElementById('bookmyshow-output-format').value = currentSettings.bookMyShowOutputFormat;
+  document.getElementById('bookmyshow-include-roles').checked = currentSettings.bookMyShowIncludeRoles;
 
   hasUnsavedChanges = false;
 }
@@ -294,13 +312,21 @@ function saveSettings() {
     showImdbMain: document.getElementById('show-imdb-main').checked,
     showWikiCast: document.getElementById('show-wiki-cast').checked,
     showWikiTables: document.getElementById('show-wiki-tables').checked,
+    wikiOutputFormat: document.getElementById('wiki-output-format').value,
     showLetterboxdCast: document.getElementById('show-letterboxd-cast').checked,
+    letterboxdCastCount: parseInt(document.getElementById('letterboxd-cast-count').value),
+    letterboxdOutputFormat: document.getElementById('letterboxd-output-format').value,
+    letterboxdIncludeRoles: document.getElementById('letterboxd-include-roles').checked,
     showAppleTVCast: document.getElementById('show-appletv-cast').checked,
-    showBookMyShowCopy: document.getElementById('show-bookmyshow-copy').checked,
     // Apple TV+ specific settings
     appleTVCastCount: parseInt(document.getElementById('appletv-cast-count').value),
     appleTVOutputFormat: document.getElementById('appletv-output-format').value,
-    appleTVIncludeRoles: document.getElementById('appletv-include-roles').checked
+    appleTVIncludeRoles: document.getElementById('appletv-include-roles').checked,
+    // BookMyShow specific settings
+    showBookMyShowCopy: document.getElementById('show-bookmyshow-copy').checked,
+    bookMyShowCastCount: parseInt(document.getElementById('bookmyshow-cast-count').value),
+    bookMyShowOutputFormat: document.getElementById('bookmyshow-output-format').value,
+    bookMyShowIncludeRoles: document.getElementById('bookmyshow-include-roles').checked
   };
 
   // Save to storage
