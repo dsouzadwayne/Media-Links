@@ -18,7 +18,12 @@ const DEFAULT_SETTINGS = {
   showImdbMain: true,
   showWikiCast: true,
   showWikiTables: true,
-  showLetterboxdCast: true
+  showLetterboxdCast: true,
+  showAppleTVCast: true,
+  // Apple TV+ specific settings
+  appleTVCastCount: 10,
+  appleTVOutputFormat: 'colon',
+  appleTVIncludeRoles: true
 };
 
 let currentSettings = { ...DEFAULT_SETTINGS };
@@ -126,6 +131,12 @@ function applySettingsToUI() {
   document.getElementById('show-wiki-cast').checked = currentSettings.showWikiCast;
   document.getElementById('show-wiki-tables').checked = currentSettings.showWikiTables;
   document.getElementById('show-letterboxd-cast').checked = currentSettings.showLetterboxdCast;
+  document.getElementById('show-appletv-cast').checked = currentSettings.showAppleTVCast;
+
+  // Apple TV+ specific settings
+  document.getElementById('appletv-cast-count').value = currentSettings.appleTVCastCount;
+  document.getElementById('appletv-output-format').value = currentSettings.appleTVOutputFormat;
+  document.getElementById('appletv-include-roles').checked = currentSettings.appleTVIncludeRoles;
 
   hasUnsavedChanges = false;
 }
@@ -257,7 +268,12 @@ function saveSettings() {
     showImdbMain: document.getElementById('show-imdb-main').checked,
     showWikiCast: document.getElementById('show-wiki-cast').checked,
     showWikiTables: document.getElementById('show-wiki-tables').checked,
-    showLetterboxdCast: document.getElementById('show-letterboxd-cast').checked
+    showLetterboxdCast: document.getElementById('show-letterboxd-cast').checked,
+    showAppleTVCast: document.getElementById('show-appletv-cast').checked,
+    // Apple TV+ specific settings
+    appleTVCastCount: parseInt(document.getElementById('appletv-cast-count').value),
+    appleTVOutputFormat: document.getElementById('appletv-output-format').value,
+    appleTVIncludeRoles: document.getElementById('appletv-include-roles').checked
   };
 
   // Save to storage

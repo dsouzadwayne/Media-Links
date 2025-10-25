@@ -54,6 +54,28 @@
             window.location.pathname.includes('/episode/'));
   }
 
+  function hasAppleTVCastAndCrew() {
+    // Detect if this is an Apple TV+ page (saved or live) with Cast & Crew section
+    const hasCastCrew = document.querySelector('[aria-label="Cast & Crew"]') !== null;
+    const hasPersonLockup = document.querySelector('.person-lockup') !== null;
+    const hasAppleTVStructure = document.querySelector('.content-logo') !== null;
+
+    // Works on both saved pages AND live Apple TV+ pages with Cast & Crew section
+    const hasAppleTVContent = hasCastCrew || hasPersonLockup || hasAppleTVStructure;
+
+    if (hasAppleTVContent) {
+      console.log('Detected Apple TV+ page with Cast & Crew:', {
+        hasCastCrew,
+        hasPersonLockup,
+        hasAppleTVStructure,
+        url: window.location.href,
+        isLive: isAppleTVShowPage()
+      });
+    }
+
+    return hasAppleTVContent;
+  }
+
   function getThemeColors() {
     // Get theme from storage
     return new Promise((resolve) => {
@@ -370,6 +392,387 @@
     });
   }
 
+  // SAVED PAGE PROCESSING FUNCTIONS
+  function processSavedPageCastAndCrew(colors) {
+    console.log('Processing saved page Cast & Crew...');
+
+    // Find the Cast & Crew section
+    const castCrewSection = document.querySelector('[aria-label="Cast & Crew"]');
+    if (!castCrewSection) {
+      console.log('Cast & Crew section not found');
+      return;
+    }
+
+    console.log('Cast & Crew section found:', castCrewSection);
+
+    // Find the section header - try multiple selectors
+    let sectionHeader = castCrewSection.querySelector('.header-title-wrapper h2');
+    if (!sectionHeader) {
+      sectionHeader = castCrewSection.querySelector('[data-testid="header-title"]');
+    }
+    if (!sectionHeader) {
+      sectionHeader = castCrewSection.querySelector('.title.title-link');
+    }
+
+    console.log('Section header found:', sectionHeader);
+
+    if (sectionHeader && !sectionHeader.querySelector('.media-links-appletv-bulk-copy-btn')) {
+      // Add bulk copy button to the header
+      const button = document.createElement('button');
+      button.className = 'media-links-appletv-bulk-copy-btn';
+      button.innerHTML = '📋 Copy All';
+      button.style.cssText = `
+        margin-left: 10px;
+        padding: 6px 12px;
+        background: ${colors.button};
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+        color: ${colors.buttonText};
+        transition: all 0.2s;
+        vertical-align: middle;
+      `;
+
+      button.addEventListener('mouseenter', () => {
+        button.style.background = colors.buttonHover;
+        button.style.transform = 'scale(1.05)';
+      });
+
+      button.addEventListener('mouseleave', () => {
+        button.style.background = colors.button;
+        button.style.transform = 'scale(1)';
+      });
+
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        showSavedPageCopyDialog(castCrewSection);
+      });
+
+      sectionHeader.style.display = 'inline-flex';
+      sectionHeader.style.alignItems = 'center';
+      sectionHeader.appendChild(button);
+    }
+
+    // Process individual person lockups
+    const personLockups = castCrewSection.querySelectorAll('.person-lockup');
+    console.log(`Found ${personLockups.length} person lockups`);
+
+    personLockups.forEach(lockup => {
+      if (lockup.dataset.appleTVCopyEnabled) return;
+      lockup.dataset.appleTVCopyEnabled = 'true';
+
+      const titleEl = lockup.querySelector('[data-testid="person-title"]');
+      const subtitleEl = lockup.querySelector('[data-testid="person-subtitle"]');
+
+      if (!titleEl) return;
+
+      const name = titleEl.textContent.trim();
+      const role = subtitleEl ? subtitleEl.textContent.trim() : '';
+      const fullText = role ? `${name}:${role}` : name;
+
+      // Make the entire lockup clickable for full name:role copy
+      lockup.style.cursor = 'pointer';
+      lockup.title = `Click to copy: ${fullText} (Ctrl/Cmd+Click to visit)`;
+
+      // Add individual copy handler for name (title)
+      if (!titleEl.dataset.appleTVIndividualCopy) {
+        titleEl.dataset.appleTVIndividualCopy = 'true';
+        titleEl.style.cursor = 'pointer';
+        titleEl.style.transition = 'all 0.2s';
+        titleEl.title = `Click to copy: ${name}`;
+
+        titleEl.addEventListener('click', (e) => {
+          // Allow Ctrl/Cmd+Click to navigate
+          if (e.ctrlKey || e.metaKey) {
+            return;
+          }
+
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+
+          navigator.clipboard.writeText(name).then(() => {
+            showCopyNotification(titleEl, name);
+          }).catch(err => {
+            console.error('Failed to copy:', err);
+            showCopyNotification(titleEl, name, true);
+          });
+        }, true);
+
+        // Add hover effect for name
+        titleEl.addEventListener('mouseenter', () => {
+          titleEl.style.textDecoration = 'underline';
+        });
+        titleEl.addEventListener('mouseleave', () => {
+          titleEl.style.textDecoration = 'none';
+        });
+      }
+
+      // Add individual copy handler for role (subtitle)
+      if (subtitleEl && role && !subtitleEl.dataset.appleTVIndividualCopy) {
+        subtitleEl.dataset.appleTVIndividualCopy = 'true';
+        subtitleEl.style.cursor = 'pointer';
+        subtitleEl.style.transition = 'all 0.2s';
+        subtitleEl.title = `Click to copy: ${role}`;
+
+        subtitleEl.addEventListener('click', (e) => {
+          // Allow Ctrl/Cmd+Click to navigate
+          if (e.ctrlKey || e.metaKey) {
+            return;
+          }
+
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+
+          navigator.clipboard.writeText(role).then(() => {
+            showCopyNotification(subtitleEl, role);
+          }).catch(err => {
+            console.error('Failed to copy:', err);
+            showCopyNotification(subtitleEl, role, true);
+          });
+        }, true);
+
+        // Add hover effect for role
+        subtitleEl.addEventListener('mouseenter', () => {
+          subtitleEl.style.textDecoration = 'underline';
+        });
+        subtitleEl.addEventListener('mouseleave', () => {
+          subtitleEl.style.textDecoration = 'none';
+        });
+      }
+
+      // Add click handler for the lockup (background/image area) - copies full text
+      lockup.addEventListener('click', (e) => {
+        // Allow Ctrl/Cmd+Click to navigate
+        if (e.ctrlKey || e.metaKey) {
+          return;
+        }
+
+        // Only copy full text if clicking on the lockup itself, not on title or subtitle
+        if (e.target === titleEl || e.target === subtitleEl ||
+            titleEl.contains(e.target) || (subtitleEl && subtitleEl.contains(e.target))) {
+          return; // Let the individual handlers take care of it
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        navigator.clipboard.writeText(fullText).then(() => {
+          showCopyNotification(lockup, fullText);
+        }).catch(err => {
+          console.error('Failed to copy:', err);
+          showCopyNotification(lockup, fullText, true);
+        });
+      }, true);
+    });
+  }
+
+  async function showSavedPageCopyDialog(container) {
+    const colors = await getThemeColors();
+    const dialogColors = getDialogColors(colors);
+
+    // Get default settings
+    const defaults = await new Promise((resolve) => {
+      try {
+        if (!isExtensionContextValid()) {
+          resolve({ count: 10, output: 'colon', includeRoles: true });
+          return;
+        }
+
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+          chrome.storage.sync.get(['appleTVCastCount', 'appleTVOutputFormat', 'appleTVIncludeRoles'], (result) => {
+            if (chrome.runtime.lastError) {
+              resolve({ count: 10, output: 'colon', includeRoles: true });
+            } else {
+              resolve({
+                count: result.appleTVCastCount || 10,
+                output: result.appleTVOutputFormat || 'colon',
+                includeRoles: result.appleTVIncludeRoles !== undefined ? result.appleTVIncludeRoles : true
+              });
+            }
+          });
+        } else {
+          resolve({ count: 10, output: 'colon', includeRoles: true });
+        }
+      } catch (error) {
+        resolve({ count: 10, output: 'colon', includeRoles: true });
+      }
+    });
+
+    // Collect cast and crew data
+    const items = [];
+    const personLockups = container.querySelectorAll('.person-lockup');
+
+    personLockups.forEach(lockup => {
+      const titleEl = lockup.querySelector('[data-testid="person-title"]');
+      const subtitleEl = lockup.querySelector('[data-testid="person-subtitle"]');
+
+      if (titleEl) {
+        const name = titleEl.textContent.trim();
+        const role = subtitleEl ? subtitleEl.textContent.trim() : '';
+        items.push({ name, role });
+      }
+    });
+
+    if (items.length === 0) {
+      showNotification('No cast & crew found!', true);
+      return;
+    }
+
+    // Create backdrop
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      z-index: 99999;
+      backdrop-filter: blur(4px);
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    // Create dialog
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: ${dialogColors.background};
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+      z-index: 100000;
+      min-width: 400px;
+      max-width: 500px;
+      border: 1px solid ${dialogColors.border};
+      animation: slideIn 0.3s ease-out;
+    `;
+
+    dialog.innerHTML = `
+      <h3 style="margin: 0 0 20px 0; color: ${dialogColors.text}; font-size: 20px; font-weight: 700; border-bottom: 2px solid ${colors.button}; padding-bottom: 10px;">
+        📋 Copy Cast & Crew
+      </h3>
+      <div style="margin-bottom: 18px;">
+        <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Number of items:</label>
+        <input type="number" id="appletv-saved-item-count" min="1" max="1000" value="${Math.min(defaults.count, items.length)}"
+          style="width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px; font-size: 14px;
+          background: ${dialogColors.inputBg}; color: ${dialogColors.text}; transition: all 0.2s;"
+          onfocus="this.style.borderColor='${colors.button}'; this.style.boxShadow='0 0 0 3px ${colors.button}33'"
+          onblur="this.style.borderColor='${dialogColors.inputBorder}'; this.style.boxShadow='none'">
+      </div>
+      <div style="margin-bottom: 18px;">
+        <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Include Roles:</label>
+        <label style="display: flex; align-items: center; cursor: pointer;">
+          <input type="checkbox" id="appletv-saved-include-roles" ${defaults.includeRoles ? 'checked' : ''}
+            style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;">
+          <span style="color: ${dialogColors.text};">Include character/role names</span>
+        </label>
+      </div>
+      <div style="margin-bottom: 25px;">
+        <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Output Format:</label>
+        <select id="appletv-saved-output-format"
+          style="width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px; font-size: 14px;
+          background: ${dialogColors.inputBg}; color: ${dialogColors.text}; cursor: pointer; transition: all 0.2s;"
+          onfocus="this.style.borderColor='${colors.button}'; this.style.boxShadow='0 0 0 3px ${colors.button}33'"
+          onblur="this.style.borderColor='${dialogColors.inputBorder}'; this.style.boxShadow='none'">
+          <option value="newline" ${defaults.output === 'newline' ? 'selected' : ''}>Line by line</option>
+          <option value="comma" ${defaults.output === 'comma' ? 'selected' : ''}>Comma separated</option>
+          <option value="colon" ${defaults.output === 'colon' ? 'selected' : ''}>Name:Role format</option>
+          <option value="json" ${defaults.output === 'json' ? 'selected' : ''}>JSON Array</option>
+        </select>
+      </div>
+      <div style="display: flex; gap: 12px;">
+        <button id="appletv-saved-copy-btn"
+          style="flex: 1; padding: 14px; background: ${colors.button}; border: none; border-radius: 8px; cursor: pointer;
+          font-weight: 700; font-size: 15px; color: ${colors.buttonText}; transition: all 0.2s; box-shadow: 0 2px 8px ${colors.button}44;"
+          onmouseover="this.style.background='${colors.buttonHover}'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px ${colors.button}66'"
+          onmouseout="this.style.background='${colors.button}'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px ${colors.button}44'">
+          Copy
+        </button>
+        <button id="appletv-saved-cancel-btn"
+          style="flex: 1; padding: 14px; background: ${dialogColors.cancelBg}; border: none; border-radius: 8px; cursor: pointer;
+          font-weight: 600; font-size: 15px; color: ${dialogColors.cancelText}; transition: all 0.2s;"
+          onmouseover="this.style.background='${dialogColors.cancelHover}'; this.style.transform='translateY(-2px)'"
+          onmouseout="this.style.background='${dialogColors.cancelBg}'; this.style.transform='translateY(0)'">
+          Cancel
+        </button>
+      </div>
+    `;
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(dialog);
+
+    // Helper function to safely remove dialog
+    const closeDialog = () => {
+      if (dialog && dialog.parentNode) {
+        dialog.parentNode.removeChild(dialog);
+      }
+      if (backdrop && backdrop.parentNode) {
+        backdrop.parentNode.removeChild(backdrop);
+      }
+    };
+
+    // Close on backdrop click
+    backdrop.addEventListener('click', closeDialog);
+
+    // Handle copy
+    dialog.querySelector('#appletv-saved-copy-btn').addEventListener('click', () => {
+      const count = parseInt(dialog.querySelector('#appletv-saved-item-count').value);
+      const includeRoles = dialog.querySelector('#appletv-saved-include-roles').checked;
+      const outputFormat = dialog.querySelector('#appletv-saved-output-format').value;
+
+      const limitedItems = items.slice(0, count);
+      let text = '';
+
+      switch(outputFormat) {
+        case 'newline':
+          text = limitedItems.map(item => includeRoles && item.role ? `${item.name} - ${item.role}` : item.name).join('\n');
+          break;
+
+        case 'comma':
+          text = limitedItems.map(item => includeRoles && item.role ? `${item.name} (${item.role})` : item.name).join(', ');
+          break;
+
+        case 'colon':
+          // Format: "Actor:Role, Actor:Role, ..."
+          text = limitedItems.map(item => {
+            if (includeRoles && item.role) {
+              return `${item.name}:${item.role}`;
+            }
+            return item.name;
+          }).join(', ');
+          break;
+
+        case 'json':
+          if (includeRoles) {
+            text = JSON.stringify(limitedItems, null, 2);
+          } else {
+            text = JSON.stringify(limitedItems.map(item => item.name), null, 2);
+          }
+          break;
+      }
+
+      navigator.clipboard.writeText(text).then(() => {
+        showNotification(`Copied ${limitedItems.length} cast & crew members!`);
+        closeDialog();
+      }).catch(err => {
+        console.error('Failed to copy:', err);
+        showNotification('Failed to copy to clipboard', true);
+      });
+    });
+
+    // Handle cancel
+    dialog.querySelector('#appletv-saved-cancel-btn').addEventListener('click', closeDialog);
+  }
+
   function createInlineCopyButton(text, colors, label) {
     const button = document.createElement('button');
     button.className = 'media-links-appletv-inline-copy';
@@ -513,26 +916,26 @@
     const defaults = await new Promise((resolve) => {
       try {
         if (!isExtensionContextValid()) {
-          resolve({ count: 5, output: 'newline' });
+          resolve({ count: 10, output: 'colon' });
           return;
         }
 
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-          chrome.storage.sync.get(['defaultCastCount', 'defaultOutputFormat'], (result) => {
+          chrome.storage.sync.get(['appleTVCastCount', 'appleTVOutputFormat'], (result) => {
             if (chrome.runtime.lastError) {
-              resolve({ count: 5, output: 'newline' });
+              resolve({ count: 10, output: 'colon' });
             } else {
               resolve({
-                count: result.defaultCastCount || 5,
-                output: result.defaultOutputFormat || 'newline'
+                count: result.appleTVCastCount || 10,
+                output: result.appleTVOutputFormat || 'colon'
               });
             }
           });
         } else {
-          resolve({ count: 5, output: 'newline' });
+          resolve({ count: 10, output: 'colon' });
         }
       } catch (error) {
-        resolve({ count: 5, output: 'newline' });
+        resolve({ count: 10, output: 'colon' });
       }
     });
 
@@ -622,6 +1025,7 @@
           onblur="this.style.borderColor='${dialogColors.inputBorder}'; this.style.boxShadow='none'">
           <option value="newline" ${defaults.output === 'newline' ? 'selected' : ''}>Line by line</option>
           <option value="comma" ${defaults.output === 'comma' ? 'selected' : ''}>Comma separated</option>
+          <option value="colon" ${defaults.output === 'colon' ? 'selected' : ''}>Name:Role format</option>
           <option value="json" ${defaults.output === 'json' ? 'selected' : ''}>JSON Array</option>
         </select>
       </div>
@@ -690,6 +1094,11 @@
         text = limitedItems.join(', ');
         break;
 
+      case 'colon':
+        // For regular items (episodes, etc), just use comma separated
+        text = limitedItems.join(', ');
+        break;
+
       case 'json':
         text = JSON.stringify(limitedItems, null, 2);
         break;
@@ -738,8 +1147,99 @@
   // Initialize: Enable text selection immediately
   enableTextSelection();
 
-  // Initialize: Add copy buttons on page load and when content changes
-  if (isAppleTVShowPage()) {
+  console.log('AppleTV Cast Copy script loaded', {
+    url: window.location.href,
+    hostname: window.location.hostname,
+    protocol: window.location.protocol
+  });
+
+  // Initialize: Add copy buttons for pages with Cast & Crew
+  const hasCastAndCrew = hasAppleTVCastAndCrew(); // This works for both saved and live pages
+
+  if (hasCastAndCrew) {
+    console.log('✓ Detected Apple TV+ page with Cast & Crew, adding copy functionality');
+
+    getCopyButtonSettings().then(settings => {
+      console.log('Copy button settings:', settings);
+
+      if (!settings.showAppleTVCast) {
+        console.log('Apple TV+ copy buttons disabled in settings');
+        return;
+      }
+
+      const colors = getThemeColors();
+
+      // Initial processing with multiple delays to catch dynamic loading
+      colors.then(c => {
+        console.log('Got theme colors:', c);
+
+        // Process Cast & Crew
+        processSavedPageCastAndCrew(c);
+
+        // If on live Apple TV+, also process other elements
+        if (isAppleTVShowPage()) {
+          processTitle(c);
+          processPersonnel(c);
+          processDescription(c);
+          processMetadata(c);
+          processEpisodes(c);
+        }
+
+        // Try again after 1 second
+        setTimeout(() => {
+          processSavedPageCastAndCrew(c);
+          if (isAppleTVShowPage()) {
+            processTitle(c);
+            processPersonnel(c);
+            processDescription(c);
+            processMetadata(c);
+            processEpisodes(c);
+          }
+        }, 1000);
+
+        // Try again after 2 seconds
+        setTimeout(() => {
+          processSavedPageCastAndCrew(c);
+          if (isAppleTVShowPage()) {
+            processTitle(c);
+            processPersonnel(c);
+            processDescription(c);
+            processMetadata(c);
+            processEpisodes(c);
+          }
+        }, 2000);
+      });
+
+      // Watch for dynamic content loading
+      let debounceTimer = null;
+      const observer = new MutationObserver(() => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+          colors.then(c => {
+            processSavedPageCastAndCrew(c);
+            if (isAppleTVShowPage()) {
+              processTitle(c);
+              processPersonnel(c);
+              processDescription(c);
+              processMetadata(c);
+              processEpisodes(c);
+            }
+          });
+        }, 500);
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+    }).catch(err => {
+      console.error('Error getting copy button settings:', err);
+    });
+  }
+
+  // Initialize: Add copy buttons for other elements on live Apple TV+ pages
+  // Only run if we're on Apple TV+ but DON'T have Cast & Crew (to avoid conflicts)
+  if (isAppleTVShowPage() && !hasCastAndCrew) {
     getCopyButtonSettings().then(settings => {
       if (!settings.showAppleTVCast) {
         console.log('Apple TV+ copy buttons disabled');

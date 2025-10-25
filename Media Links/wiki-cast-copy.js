@@ -461,9 +461,10 @@ function processCastList(listElement, colors) {
 
     // Handle plain text items without links
     if (links.length === 0) {
-      // Clone item and remove any existing buttons to get clean text
+      // Clone item and remove any existing buttons and citations to get clean text
       const itemClone = item.cloneNode(true);
       itemClone.querySelectorAll('.media-links-wiki-name-copy-btn, .media-links-wiki-role-copy-btn').forEach(btn => btn.remove());
+      removeCitations(itemClone);
       const itemText = itemClone.textContent.trim();
       if (!itemText) return;
 
@@ -494,15 +495,17 @@ function processCastList(listElement, colors) {
 
     // First link is usually the actor
     const actorLink = links[0];
-    // Clone the link to get clean text without buttons
+    // Clone the link to get clean text without buttons and citations
     const actorLinkClone = actorLink.cloneNode(true);
     actorLinkClone.querySelectorAll('.media-links-wiki-name-copy-btn, .media-links-wiki-role-copy-btn').forEach(btn => btn.remove());
+    removeCitations(actorLinkClone);
     const actorName = removeNickname(actorLinkClone.textContent.trim());
 
     // Find "as" text and get character name (use clone to avoid button text)
     let characterName = '';
     const itemClone = item.cloneNode(true);
     itemClone.querySelectorAll('.media-links-wiki-name-copy-btn, .media-links-wiki-role-copy-btn').forEach(btn => btn.remove());
+    removeCitations(itemClone);
     const itemText = itemClone.textContent;
     const asIndex = itemText.indexOf(' as ');
 
@@ -510,9 +513,10 @@ function processCastList(listElement, colors) {
       // Extract text after " as "
       const afterAs = itemText.substring(asIndex + 4);
 
-      // Try to find character link (second link) - use clone to avoid button text
+      // Try to find character link (second link) - use clone to avoid button text and citations
       const itemCloneForChar = item.cloneNode(true);
       itemCloneForChar.querySelectorAll('.media-links-wiki-name-copy-btn, .media-links-wiki-role-copy-btn').forEach(btn => btn.remove());
+      removeCitations(itemCloneForChar);
       const linksInClone = itemCloneForChar.querySelectorAll('a');
 
       if (linksInClone.length > 1) {
@@ -567,6 +571,19 @@ function processCastList(listElement, colors) {
       }
     }
   });
+}
+
+// Helper function to remove citation references from cloned elements
+function removeCitations(clonedElement) {
+  if (!clonedElement) return clonedElement;
+
+  // Remove all <sup> elements with citation references (class="reference")
+  clonedElement.querySelectorAll('sup.reference, sup[id^="cite_ref"]').forEach(sup => sup.remove());
+
+  // Also remove edit section links
+  clonedElement.querySelectorAll('.mw-editsection').forEach(edit => edit.remove());
+
+  return clonedElement;
 }
 
 // Helper function to remove nicknames (text in quotes) from names
@@ -741,9 +758,10 @@ async function showWikiCopyDialog(castSection, sectionName) {
     ulElements.forEach(ulElement => {
       const items = ulElement.querySelectorAll('li');
       items.forEach(item => {
-        // Clone item to safely extract text without button artifacts
+        // Clone item to safely extract text without button artifacts and citations
         const itemClone = item.cloneNode(true);
         itemClone.querySelectorAll('.media-links-wiki-name-copy-btn, .media-links-wiki-role-copy-btn').forEach(btn => btn.remove());
+        removeCitations(itemClone);
 
         const links = itemClone.querySelectorAll('a');
         if (links.length > 0) {
@@ -1015,9 +1033,10 @@ async function showTableCopyDialog(td, sectionName) {
   if (listItems.length > 0) {
     // Process each list item individually
     listItems.forEach((li, index) => {
-      // Clone to get clean text without buttons
+      // Clone to get clean text without buttons and citations
       const liClone = li.cloneNode(true);
       liClone.querySelectorAll('.media-links-wiki-name-copy-btn, .media-links-wiki-role-copy-btn').forEach(btn => btn.remove());
+      removeCitations(liClone);
 
       // Check if there's a wiki link in this list item
       const link = li.querySelector('a[href*="/wiki/"]');
@@ -1026,6 +1045,7 @@ async function showTableCopyDialog(td, sectionName) {
         // Get text from the link
         const linkClone = link.cloneNode(true);
         linkClone.querySelectorAll('.media-links-wiki-name-copy-btn, .media-links-wiki-role-copy-btn').forEach(btn => btn.remove());
+        removeCitations(linkClone);
         const name = linkClone.textContent.trim();
         console.log(`[Wiki Cast Copy] Item ${index}: Found link with text "${name}"`);
         if (name) {
@@ -1047,22 +1067,24 @@ async function showTableCopyDialog(td, sectionName) {
     const links = td.querySelectorAll('a[href*="/wiki/"]');
 
     if (links.length > 0) {
-      // If there are wiki links, collect each link's text (exclude button content)
+      // If there are wiki links, collect each link's text (exclude button content and citations)
       links.forEach(link => {
-        // Clone the link to safely extract text without button artifacts
+        // Clone the link to safely extract text without button artifacts and citations
         const linkClone = link.cloneNode(true);
         // Remove any copy buttons that might be inside
         linkClone.querySelectorAll('.media-links-wiki-name-copy-btn, .media-links-wiki-role-copy-btn').forEach(btn => btn.remove());
+        removeCitations(linkClone);
         const name = linkClone.textContent.trim();
         if (name) {
           castMembers.push({ name, role: '' });
         }
       });
     } else {
-      // If no wiki links, use the entire cell's text content (exclude button content)
+      // If no wiki links, use the entire cell's text content (exclude button content and citations)
       const tdClone = td.cloneNode(true);
       // Remove all copy buttons before extracting text
       tdClone.querySelectorAll('.media-links-wiki-name-copy-btn, .media-links-wiki-role-copy-btn, .media-links-wiki-table-bulk-copy-btn').forEach(btn => btn.remove());
+      removeCitations(tdClone);
       const cellText = tdClone.textContent.trim();
       if (cellText) {
         // Split by common separators if present

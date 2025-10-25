@@ -23,7 +23,6 @@
           <li><a href="#appearance" class="sidebar-link active" data-section="appearance">🎨 Appearance</a></li>
           <li><a href="#search-query" class="sidebar-link" data-section="search-query">🔍 Search & Query</a></li>
           <li><a href="#query-patterns" class="sidebar-link" data-section="query-patterns">🔗 Query Patterns</a></li>
-          <li><a href="#imdb-copy" class="sidebar-link" data-section="imdb-copy">📋 IMDb Cast Copy</a></li>
           <li><a href="#copy-visibility" class="sidebar-link" data-section="copy-visibility">👁️ Copy Visibility</a></li>
           <li><a href="#advanced" class="sidebar-link" data-section="advanced">⚡ Advanced</a></li>
         </ul>
@@ -171,53 +170,11 @@
         </div>
       </section>
 
-      <!-- IMDb Copy Settings Section -->
-      <section class="settings-section" id="imdb-copy">
-        <div class="section-header">
-          <h2>📋 IMDb Cast Copy</h2>
-          <p class="section-description">Default settings for copying cast information</p>
-        </div>
-
-        <div class="setting-item">
-          <label for="default-cast-count" class="setting-label">
-            <span class="label-text">Default Number of Cast Members</span>
-            <span class="label-description">How many members to copy by default</span>
-          </label>
-          <input type="number" id="default-cast-count" class="setting-input" min="1" max="1000" value="5">
-        </div>
-
-        <div class="setting-item">
-          <label for="default-content-format" class="setting-label">
-            <span class="label-text">Default Content Format</span>
-            <span class="label-description">What to include in the copy</span>
-          </label>
-          <select id="default-content-format" class="setting-input">
-            <option value="name-role">Name + Role/Character</option>
-            <option value="name-only">Name Only</option>
-            <option value="role-only">Role/Character Only</option>
-          </select>
-        </div>
-
-        <div class="setting-item">
-          <label for="default-output-format" class="setting-label">
-            <span class="label-text">Default Output Format</span>
-            <span class="label-description">How to format the copied text</span>
-          </label>
-          <select id="default-output-format" class="setting-input">
-            <option value="newline">Line by line (Name - Role)</option>
-            <option value="comma">Comma separated (Name:Role,Name:Role)</option>
-            <option value="csv">CSV (Name,Role per line)</option>
-            <option value="json">JSON Array</option>
-            <option value="table">Markdown Table</option>
-          </select>
-        </div>
-      </section>
-
       <!-- Copy Button Visibility Section -->
       <section class="settings-section" id="copy-visibility">
         <div class="section-header">
           <h2>👁️ Copy Button Visibility</h2>
-          <p class="section-description">Choose where to show copy buttons on IMDb and Wikipedia</p>
+          <p class="section-description">Configure copy buttons for IMDb, Wikipedia, Letterboxd, and Apple TV+</p>
         </div>
 
         <!-- IMDb Settings -->
@@ -267,6 +224,43 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
+
+          <!-- IMDb Sub-settings -->
+          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color, #e0e0e0);">
+            <div class="setting-item">
+              <label for="default-cast-count" class="setting-label">
+                <span class="label-text">Default Number of Cast Members</span>
+                <span class="label-description">How many members to copy by default</span>
+              </label>
+              <input type="number" id="default-cast-count" class="setting-input" min="1" max="1000" value="5" style="max-width: 150px;">
+            </div>
+
+            <div class="setting-item">
+              <label for="default-content-format" class="setting-label">
+                <span class="label-text">Default Content Format</span>
+                <span class="label-description">What to include in the copy</span>
+              </label>
+              <select id="default-content-format" class="setting-input">
+                <option value="name-role">Name + Role/Character</option>
+                <option value="name-only">Name Only</option>
+                <option value="role-only">Role/Character Only</option>
+              </select>
+            </div>
+
+            <div class="setting-item">
+              <label for="default-output-format" class="setting-label">
+                <span class="label-text">Default Output Format</span>
+                <span class="label-description">How to format the copied text</span>
+              </label>
+              <select id="default-output-format" class="setting-input">
+                <option value="newline">Line by line (Name - Role)</option>
+                <option value="comma">Comma separated (Name:Role,Name:Role)</option>
+                <option value="csv">CSV (Name,Role per line)</option>
+                <option value="json">JSON Array</option>
+                <option value="table">Markdown Table</option>
+              </select>
+            </div>
+          </div>
         </div>
 
         <!-- Wikipedia Settings -->
@@ -309,6 +303,57 @@
               <input type="checkbox" id="show-letterboxd-cast" checked>
               <span class="toggle-slider"></span>
             </label>
+          </div>
+        </div>
+
+        <!-- Apple TV+ Settings -->
+        <div class="setting-group">
+          <h3 class="group-title">Apple TV+</h3>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Show/Movie Pages</span>
+              <span class="label-description">Enable copy buttons on show/movie pages</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="show-appletv-cast" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <!-- Apple TV+ Sub-settings -->
+          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color, #e0e0e0);">
+            <div class="setting-item">
+              <label for="appletv-cast-count" class="setting-label">
+                <span class="label-text">Default Number of Cast & Crew</span>
+                <span class="label-description">How many members to copy by default</span>
+              </label>
+              <input type="number" id="appletv-cast-count" class="setting-input" min="1" max="1000" value="10" style="max-width: 150px;">
+            </div>
+
+            <div class="setting-item">
+              <label for="appletv-output-format" class="setting-label">
+                <span class="label-text">Default Output Format</span>
+                <span class="label-description">How to format the copied text</span>
+              </label>
+              <select id="appletv-output-format" class="setting-input">
+                <option value="colon">Name:Role format (Actor:Character, Actor:Character)</option>
+                <option value="newline">Line by line (Name - Role)</option>
+                <option value="comma">Comma separated (Name (Role), Name (Role))</option>
+                <option value="json">JSON Array</option>
+              </select>
+            </div>
+
+            <div class="setting-item">
+              <label class="setting-label">
+                <span class="label-text">Include Roles by Default</span>
+                <span class="label-description">Include character/role names when copying cast & crew</span>
+              </label>
+              <label class="toggle">
+                <input type="checkbox" id="appletv-include-roles" checked>
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
         </div>
       </section>
