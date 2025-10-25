@@ -28,6 +28,26 @@
     });
 
     console.log('CBFC Fix: Space input restriction removed successfully!');
+
+    // Check if there's a search term to auto-fill
+    chrome.storage.local.get(['cbfcSearchTerm'], (result) => {
+      if (result.cbfcSearchTerm) {
+        // Auto-fill the search term
+        newInput.value = result.cbfcSearchTerm;
+
+        // Trigger input event to ensure the site recognizes the value
+        const inputEvent = new Event('input', { bubbles: true });
+        newInput.dispatchEvent(inputEvent);
+
+        // Focus the input field
+        newInput.focus();
+
+        console.log('CBFC Fix: Auto-filled search term -', result.cbfcSearchTerm);
+
+        // Clear the stored search term after using it
+        chrome.storage.local.remove('cbfcSearchTerm');
+      }
+    });
   }
 
   // Start the fix when DOM is ready

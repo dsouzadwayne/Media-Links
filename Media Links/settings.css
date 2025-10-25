@@ -5,12 +5,16 @@
   box-sizing: border-box;
 }
 
+html {
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   background: var(--primary-bg);
   color: var(--text-primary);
   line-height: 1.6;
-  transition: all 0.3s ease;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Container */
@@ -640,8 +644,11 @@ body[data-theme="light"] {
   --accent: #f5c518;
   --accent-hover: #e6b614;
   --accent-glow: rgba(245, 197, 24, 0.3);
+  --accent-glow-strong: rgba(245, 197, 24, 0.6);
   --success: #28a745;
+  --success-hover: #218838;
   --danger: #f87171;
+  --danger-hover: #f05555;
   --warning: #ffc107;
   --border: #dee2e6;
   --hover-color: #e9ecef;
@@ -658,8 +665,11 @@ body[data-theme="dark"] {
   --accent: #8b5cf6;
   --accent-hover: #7c3aed;
   --accent-glow: rgba(139, 92, 246, 0.3);
+  --accent-glow-strong: rgba(139, 92, 246, 0.6);
   --success: #34d399;
+  --success-hover: #24b381;
   --danger: #f87171;
+  --danger-hover: #f05555;
   --warning: #fbbf24;
   --border: #404040;
   --hover-color: #3d3d3d;
@@ -676,8 +686,11 @@ body[data-theme="catppuccin-mocha"] {
   --accent: #cba6f7;
   --accent-hover: #b4a1e8;
   --accent-glow: rgba(203, 166, 247, 0.3);
+  --accent-glow-strong: rgba(203, 166, 247, 0.6);
   --success: #a6e3a1;
+  --success-hover: #94d890;
   --danger: #f38ba8;
+  --danger-hover: #f07a99;
   --warning: #fab387;
   --border: #45475a;
   --hover-color: #45475a;
@@ -694,8 +707,11 @@ body[data-theme="cats"] {
   --accent: #ff9933;
   --accent-hover: #ff7700;
   --accent-glow: rgba(255, 153, 51, 0.3);
+  --accent-glow-strong: rgba(255, 153, 51, 0.6);
   --success: #8bc34a;
+  --success-hover: #7cb342;
   --danger: #ff6b6b;
+  --danger-hover: #ff5555;
   --warning: #ffd93d;
   --border: #5d4a3f;
   --hover-color: #4d3b33;
@@ -712,8 +728,11 @@ body[data-theme="cat-night"] {
   --accent: #818cf8;
   --accent-hover: #6366f1;
   --accent-glow: rgba(129, 140, 248, 0.3);
+  --accent-glow-strong: rgba(129, 140, 248, 0.6);
   --success: #34d399;
+  --success-hover: #24b381;
   --danger: #f87171;
+  --danger-hover: #f05555;
   --warning: #fbbf24;
   --border: #1e2749;
   --hover-color: #1e2749;

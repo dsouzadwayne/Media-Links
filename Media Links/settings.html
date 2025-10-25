@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -321,6 +321,22 @@
             </label>
           </div>
 
+          <!-- BookMyShow Settings -->
+        <div class="setting-group">
+          <h3 class="group-title">BookMyShow</h3>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Movie Pages</span>
+              <span class="label-description">Enable copy buttons on movie pages (cast, crew, info, synopsis)</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="show-bookmyshow-copy" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
           <!-- Apple TV+ Sub-settings -->
           <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color, #e0e0e0);">
             <div class="setting-item">
@@ -374,6 +390,47 @@
             <input type="checkbox" id="show-copy-webpage-btn">
             <span class="toggle-slider"></span>
           </label>
+        </div>
+
+        <!-- Copy Webpage Format Sub-settings -->
+        <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color, #e0e0e0);">
+          <h4 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; color: var(--text-primary, #333);">Multi-Tab Copy Settings</h4>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Include Page Title</span>
+              <span class="label-description">Include the page title when copying from tabs</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="copy-include-title" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Include Page URL</span>
+              <span class="label-description">Include the page URL when copying from tabs</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="copy-include-url" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <label for="copy-separator" class="setting-label">
+              <span class="label-text">Tab Separator</span>
+              <span class="label-description">Text used to separate content from different tabs</span>
+            </label>
+            <select id="copy-separator" class="setting-input">
+              <option value="\n\n---\n\n">Horizontal Line (---)</option>
+              <option value="\n\n===\n\n">Double Line (===)</option>
+              <option value="\n\n">Double Newline</option>
+              <option value="\n\n***\n\n">Asterisks (***)</option>
+              <option value="\n\n========================================\n\n">Long Line</option>
+            </select>
+          </div>
         </div>
 
         <div class="setting-item">

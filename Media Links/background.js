@@ -46,6 +46,14 @@ chrome.runtime.onInstalled.addListener(() => {
       contexts: ['selection']
     });
 
+    // Create CBFC India search submenu
+    chrome.contextMenus.create({
+      id: 'cbfc-search',
+      parentId: 'search-selection',
+      title: 'Search on CBFC India',
+      contexts: ['selection']
+    });
+
     // Create offscreen document for Tesseract
     createOffscreenDocument().catch(err => {
       console.error('Failed to create offscreen document on install:', err);
@@ -233,7 +241,7 @@ chrome.runtime.onInstalled.addListener(() => {
   let currentSelectionInfo = { words: [], wordCount: 0 };
   let menuUpdateTimeout = null;
   let isUpdatingMenu = false;
-  let pendingUpdates = [];  // Changed to array to store all pending updates
+  let pendingUpdate = null;  // Store only the most recent pending update
 
   // Sanitize text for context menu display
   const sanitizeForContextMenu = (text) => {
@@ -242,12 +250,12 @@ chrome.runtime.onInstalled.addListener(() => {
     return text.replace(/[&<>"']/g, '').substring(0, 50);
   };
 
-  // Process any pending updates that came in while we were busy
+  // Process any pending update that came in while we were busy
   const processPendingUpdate = () => {
-    if (pendingUpdates.length > 0) {
+    if (pendingUpdate !== null) {
       // Get the most recent update
-      const textToUpdate = pendingUpdates[pendingUpdates.length - 1];
-      pendingUpdates = [];  // Clear all pending updates
+      const textToUpdate = pendingUpdate;
+      pendingUpdate = null;  // Clear the pending update
       updateContextMenu(textToUpdate, true);
     }
   };
@@ -259,7 +267,7 @@ chrome.runtime.onInstalled.addListener(() => {
     const updateMenus = () => {
       // If already updating, store this request and return
       if (isUpdatingMenu) {
-        pendingUpdates.push(selectionText);
+        pendingUpdate = selectionText;
         return;
       }
 
@@ -299,6 +307,22 @@ chrome.runtime.onInstalled.addListener(() => {
               processPendingUpdate();
               return;
             }
+
+            // Always add CBFC India search option
+            chrome.contextMenus.create({
+              id: 'cbfc-search',
+              parentId: 'search-selection',
+              title: 'Search on CBFC India',
+              contexts: ['selection']
+            });
+
+            // Add separator between CBFC and regular search options
+            chrome.contextMenus.create({
+              id: 'cbfc-separator',
+              parentId: 'search-selection',
+              type: 'separator',
+              contexts: ['selection']
+            });
 
             // Create submenus based on word count
             const patterns = groupingPatterns[wordCount] || [];
@@ -365,22 +389,130 @@ chrome.runtime.onInstalled.addListener(() => {
     };
 
     // If immediate update requested (from contextmenu), update right away
-    // Otherwise use debouncing for other events
+    // Otherwise use minimal debouncing for other events
     if (immediate) {
       updateMenus();
     } else {
-      menuUpdateTimeout = setTimeout(updateMenus, 100);
+      menuUpdateTimeout = setTimeout(updateMenus, 20);
     }
+  };
+
+  // Broadcast theme change to all pages
+  const broadcastThemeChange = (theme) => {
+    // Send to all tabs
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'themeChanged',
+          theme: theme
+        }).catch(() => {
+          // Silently catch errors for tabs that don't have content script
+        });
+      });
+    });
+
+    // Send to offscreen document
+    chrome.runtime.sendMessage({
+      type: 'themeChanged',
+      theme: theme
+    }).catch(() => {
+      // Silently catch errors if offscreen document isn't loaded
+    });
   };
 
   // Listen for selection updates and OCR requests
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('Background: Received message:', message.type || message.action, 'from:', sender.tab?.id);
 
+    // Handle theme change broadcasts from settings page
+    if (message.type === 'themeChanged' && message.theme) {
+      console.log('Background: Broadcasting theme change to all pages:', message.theme);
+      broadcastThemeChange(message.theme);
+      return;
+    }
+
     if (message.type === 'selectionChanged' && message.text) {
       // Check if this is from a contextmenu event (immediate update needed)
       const isContextMenu = message.fromContextMenu || false;
       updateContextMenu(message.text, isContextMenu);
+    }
+
+    // Handle getTabs request
+    if (message.type === 'getTabs') {
+      chrome.tabs.query({}, (tabs) => {
+        sendResponse({ tabs: tabs });
+      });
+      return true; // Keep channel open for async response
+    }
+
+    // Handle copyMultipleTabs request
+    if (message.type === 'copyMultipleTabs') {
+      (async () => {
+        try {
+          const results = [];
+
+          // Get copy format settings
+          const settings = await chrome.storage.sync.get(['copyFormats']);
+          const copyFormats = settings.copyFormats || {
+            includeTitle: true,
+            includeURL: true,
+            separator: '\\n\\n---\\n\\n'
+          };
+
+          // Convert escaped newlines to actual newlines
+          const separator = copyFormats.separator.replace(/\\n/g, '\n');
+
+          // Get content from each selected tab
+          for (const tabId of message.tabIds) {
+            try {
+              const response = await chrome.tabs.sendMessage(tabId, { type: 'copyPageContent' });
+              if (response && response.success) {
+                results.push({
+                  content: response.content,
+                  title: response.title,
+                  url: response.url,
+                  tabId: tabId
+                });
+              }
+            } catch (error) {
+              console.error(`Failed to get content from tab ${tabId}:`, error);
+            }
+          }
+
+          if (results.length > 0) {
+            // Format the combined content based on settings
+            let combinedText = '';
+            results.forEach((result, index) => {
+              if (index > 0) {
+                combinedText += separator;
+              }
+
+              // Add the actual page content
+              combinedText += result.content;
+
+              // Optionally add title and URL after the content
+              if (copyFormats.includeTitle || copyFormats.includeURL) {
+                combinedText += '\n\n';
+                if (copyFormats.includeTitle) {
+                  combinedText += result.title + '\n';
+                }
+                if (copyFormats.includeURL) {
+                  combinedText += result.url;
+                }
+              }
+            });
+
+            // Send combined text back to sender tab to copy
+            sendResponse({ success: true, count: results.length, combinedText: combinedText });
+          } else {
+            sendResponse({ success: false, error: 'No content copied' });
+          }
+        } catch (error) {
+          console.error('Error copying multiple tabs:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true; // Keep channel open for async response
     }
 
     // Handle OCR requests from content script - forward to offscreen document
@@ -427,6 +559,26 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Handle context menu click
   chrome.contextMenus.onClicked.addListener((info, tab) => {
+    // Handle CBFC India search
+    if (info.menuItemId === 'cbfc-search') {
+      if (!info.selectionText) {
+        console.warn('CBFC search clicked without selection text');
+        return;
+      }
+
+      const searchTerm = info.selectionText.trim();
+
+      // Store the search term in chrome.storage for the CBFC page to read
+      chrome.storage.local.set({ cbfcSearchTerm: searchTerm }, () => {
+        // Open the CBFC search page
+        chrome.tabs.create({
+          url: 'https://www.cbfcindia.gov.in/cbfcAdmin/search-film.php',
+          active: true
+        });
+      });
+      return;
+    }
+
     if (info.menuItemId.startsWith('grouping-')) {
       // Validate selection text exists
       if (!info.selectionText) {

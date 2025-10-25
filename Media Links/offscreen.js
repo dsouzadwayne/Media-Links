@@ -4,8 +4,33 @@
 let pendingRequests = new Map();
 let requestId = 0;
 
+// Load and apply theme
+const loadTheme = () => {
+  try {
+    // Check if chrome and chrome.storage are available
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+      chrome.storage.sync.get(['theme'], (result) => {
+        const theme = result.theme || 'light';
+        document.body.setAttribute('data-theme', theme);
+        document.documentElement.setAttribute('data-theme', theme);
+      });
+    } else {
+      // Fallback if chrome.storage is not available
+      document.body.setAttribute('data-theme', 'light');
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  } catch (error) {
+    console.warn('Offscreen: Could not load theme:', error);
+    document.body.setAttribute('data-theme', 'light');
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+};
+
 // Get reference to sandboxed iframe
 const sandboxFrame = document.getElementById('sandbox');
+
+// Load theme on script load
+loadTheme();
 
 // Wait for sandbox to load
 sandboxFrame.addEventListener('load', () => {
@@ -31,35 +56,46 @@ window.addEventListener('message', (event) => {
 });
 
 // Listen for messages from background script
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'performOCR') {
-    console.log('Offscreen: Received OCR request from background');
-
-    // Wait for iframe to be ready
-    if (!sandboxFrame.contentWindow) {
-      console.error('Offscreen: Sandbox iframe not ready');
-      sendResponse({
-        success: false,
-        error: 'Sandbox iframe not loaded'
-      });
-      return false;
+if (typeof chrome !== 'undefined' && chrome.runtime) {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    // Handle theme changes
+    if (message.type === 'themeChanged') {
+      document.body.setAttribute('data-theme', message.theme);
+      document.documentElement.setAttribute('data-theme', message.theme);
+      return;
     }
 
-    // Store the sendResponse callback
-    const id = requestId++;
-    pendingRequests.set(id, { sendResponse });
+    if (message.action === 'performOCR') {
+      console.log('Offscreen: Received OCR request from background');
 
-    console.log('Offscreen: Forwarding OCR request to sandbox iframe');
+      // Wait for iframe to be ready
+      if (!sandboxFrame.contentWindow) {
+        console.error('Offscreen: Sandbox iframe not ready');
+        sendResponse({
+          success: false,
+          error: 'Sandbox iframe not loaded'
+        });
+        return false;
+      }
 
-    // Forward message to sandboxed iframe
-    sandboxFrame.contentWindow.postMessage({
-      action: 'performOCR',
-      imageData: message.imageData
-    }, '*');
+      // Store the sendResponse callback
+      const id = requestId++;
+      pendingRequests.set(id, { sendResponse });
 
-    // Return true to indicate async response
-    return true;
-  }
-});
+      console.log('Offscreen: Forwarding OCR request to sandbox iframe');
+
+      // Forward message to sandboxed iframe
+      sandboxFrame.contentWindow.postMessage({
+        action: 'performOCR',
+        imageData: message.imageData
+      }, '*');
+
+      // Return true to indicate async response
+      return true;
+    }
+  });
+} else {
+  console.warn('Offscreen: chrome.runtime not available');
+}
 
 console.log('Offscreen: Document loaded and ready');

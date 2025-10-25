@@ -98,6 +98,18 @@ document.addEventListener('DOMContentLoaded', () => {
   loadProfiles();
   loadProfileSettings();
   initializeSidebarNavigation();
+
+  // Listen for theme changes from other pages
+  chrome.runtime.onMessage.addListener((message) => {
+    if (message.type === 'themeChanged') {
+      applyTheme(message.theme);
+      // Update theme dropdown if it's not the source
+      const themeSelect = document.getElementById('theme-select');
+      if (themeSelect && themeSelect.value !== message.theme) {
+        themeSelect.value = message.theme;
+      }
+    }
+  });
 });
 
 // Load settings from storage
@@ -123,6 +135,12 @@ function applySettingsToUI() {
   document.getElementById('debug-mode').checked = currentSettings.debugMode;
   document.getElementById('show-copy-webpage-btn').checked = currentSettings.showCopyWebpageBtn;
 
+  // Copy webpage format settings
+  const copyFormats = currentSettings.copyFormats || {};
+  document.getElementById('copy-include-title').checked = copyFormats.includeTitle !== false;
+  document.getElementById('copy-include-url').checked = copyFormats.includeURL !== false;
+  document.getElementById('copy-separator').value = copyFormats.separator || '\\n\\n---\\n\\n';
+
   // Copy button visibility settings
   document.getElementById('show-imdb-cast').checked = currentSettings.showImdbCast;
   document.getElementById('show-imdb-company').checked = currentSettings.showImdbCompany;
@@ -132,6 +150,7 @@ function applySettingsToUI() {
   document.getElementById('show-wiki-tables').checked = currentSettings.showWikiTables;
   document.getElementById('show-letterboxd-cast').checked = currentSettings.showLetterboxdCast;
   document.getElementById('show-appletv-cast').checked = currentSettings.showAppleTVCast;
+  document.getElementById('show-bookmyshow-copy').checked = currentSettings.showBookMyShowCopy !== false;
 
   // Apple TV+ specific settings
   document.getElementById('appletv-cast-count').value = currentSettings.appleTVCastCount;
@@ -166,6 +185,7 @@ function loadProfiles() {
 // Apply theme
 function applyTheme(theme) {
   document.body.setAttribute('data-theme', theme);
+  document.documentElement.setAttribute('data-theme', theme);
 }
 
 // Attach event listeners
@@ -261,6 +281,12 @@ function saveSettings() {
     defaultOutputFormat: document.getElementById('default-output-format').value,
     debugMode: document.getElementById('debug-mode').checked,
     showCopyWebpageBtn: document.getElementById('show-copy-webpage-btn').checked,
+    // Copy webpage format settings
+    copyFormats: {
+      includeTitle: document.getElementById('copy-include-title').checked,
+      includeURL: document.getElementById('copy-include-url').checked,
+      separator: document.getElementById('copy-separator').value
+    },
     // Copy button visibility settings
     showImdbCast: document.getElementById('show-imdb-cast').checked,
     showImdbCompany: document.getElementById('show-imdb-company').checked,
@@ -270,6 +296,7 @@ function saveSettings() {
     showWikiTables: document.getElementById('show-wiki-tables').checked,
     showLetterboxdCast: document.getElementById('show-letterboxd-cast').checked,
     showAppleTVCast: document.getElementById('show-appletv-cast').checked,
+    showBookMyShowCopy: document.getElementById('show-bookmyshow-copy').checked,
     // Apple TV+ specific settings
     appleTVCastCount: parseInt(document.getElementById('appletv-cast-count').value),
     appleTVOutputFormat: document.getElementById('appletv-output-format').value,

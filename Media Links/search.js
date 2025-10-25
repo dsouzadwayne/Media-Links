@@ -7,6 +7,7 @@ const loadTheme = () => {
   chrome.storage.sync.get(['theme'], (result) => {
     const theme = result.theme || 'light';
     document.body.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-theme', theme);
   });
 };
 
@@ -500,6 +501,7 @@ document.addEventListener('DOMContentLoaded', () => {
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'themeChanged') {
       document.body.setAttribute('data-theme', message.theme);
+      document.documentElement.setAttribute('data-theme', message.theme);
     }
   });
 
