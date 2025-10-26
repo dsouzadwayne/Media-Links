@@ -7,6 +7,8 @@
 <body>
   <!-- Load sandboxed iframe for Tesseract -->
   <iframe id="sandbox" src="sandbox.html" style="display: none;"></iframe>
+  <!-- Theme manager must load before offscreen.js -->
+  <script src="theme-manager.js"></script>
   <script src="offscreen.js"></script>
 </body>
 </html>

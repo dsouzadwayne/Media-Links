@@ -101,8 +101,9 @@ let profileSettings = {};
 let currentProfile = 1;
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  loadSettings();
+document.addEventListener('DOMContentLoaded', async () => {
+  // Load settings asynchronously
+  await loadSettings();
   attachEventListeners();
   loadProfiles();
   loadProfileSettings();
@@ -122,12 +123,27 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Load settings from storage
-function loadSettings() {
-  chrome.storage.sync.get(DEFAULT_SETTINGS, (result) => {
-    currentSettings = { ...DEFAULT_SETTINGS, ...result };
-    applySettingsToUI();
-    applyTheme(currentSettings.theme);
-  });
+async function loadSettings() {
+  try {
+    if (typeof window.SettingsUtils !== 'undefined') {
+      currentSettings = await window.SettingsUtils.loadSettings();
+      console.log('Settings loaded via SettingsUtils');
+    } else {
+      // Fallback to direct chrome.storage if SettingsUtils not available
+      return new Promise((resolve) => {
+        chrome.storage.sync.get(DEFAULT_SETTINGS, (result) => {
+          currentSettings = { ...DEFAULT_SETTINGS, ...result };
+          resolve();
+        });
+      });
+    }
+  } catch (error) {
+    console.error('Error loading settings:', error);
+    currentSettings = { ...DEFAULT_SETTINGS };
+  }
+
+  applySettingsToUI();
+  applyTheme(currentSettings.theme);
 }
 
 // Apply settings to UI elements
@@ -148,7 +164,7 @@ function applySettingsToUI() {
   const copyFormats = currentSettings.copyFormats || {};
   document.getElementById('copy-include-title').checked = copyFormats.includeTitle !== false;
   document.getElementById('copy-include-url').checked = copyFormats.includeURL !== false;
-  document.getElementById('copy-separator').value = copyFormats.separator || '\\n\\n---\\n\\n';
+  document.getElementById('copy-separator').value = copyFormats.separator || '\n\n---\n\n';
 
   // Copy button visibility settings
   document.getElementById('show-imdb-cast').checked = currentSettings.showImdbCast;
@@ -329,43 +345,68 @@ function saveSettings() {
     bookMyShowIncludeRoles: document.getElementById('bookmyshow-include-roles').checked
   };
 
-  // Save to storage
-  chrome.storage.sync.set(newSettings, () => {
-    if (chrome.runtime.lastError) {
-      showStatus('Error saving settings: ' + chrome.runtime.lastError.message, 'error');
-    } else {
-      currentSettings = { ...newSettings };
-      hasUnsavedChanges = false;
-      showStatus('✓ Settings saved successfully!', 'success');
-
-      // Notify other pages about theme change
-      chrome.runtime.sendMessage({
-        type: 'themeChanged',
-        theme: newSettings.theme
-      });
-    }
-  });
-}
-
-// Reset settings
-function resetSettings() {
-  if (confirm('Are you sure you want to reset all settings to their default values? This cannot be undone.')) {
-    chrome.storage.sync.set(DEFAULT_SETTINGS, () => {
-      if (chrome.runtime.lastError) {
-        showStatus('Error resetting settings: ' + chrome.runtime.lastError.message, 'error');
-      } else {
-        currentSettings = { ...DEFAULT_SETTINGS };
-        applySettingsToUI();
-        applyTheme(DEFAULT_SETTINGS.theme);
-        showStatus('✓ Settings reset to defaults', 'success');
+  // Save to storage using SettingsUtils with validation
+  if (typeof window.SettingsUtils !== 'undefined') {
+    window.SettingsUtils.saveSettings(newSettings)
+      .then((validated) => {
+        currentSettings = { ...validated };
+        hasUnsavedChanges = false;
+        showStatus('✓ Settings saved successfully!', 'success');
 
         // Notify other pages about theme change
         chrome.runtime.sendMessage({
           type: 'themeChanged',
-          theme: DEFAULT_SETTINGS.theme
+          theme: validated.theme
+        });
+      })
+      .catch((error) => {
+        showStatus('Error saving settings: ' + error.message, 'error');
+      });
+  } else {
+    // Fallback to direct chrome.storage if SettingsUtils not available
+    chrome.storage.sync.set(newSettings, () => {
+      if (chrome.runtime.lastError) {
+        showStatus('Error saving settings: ' + chrome.runtime.lastError.message, 'error');
+      } else {
+        currentSettings = { ...newSettings };
+        hasUnsavedChanges = false;
+        showStatus('✓ Settings saved successfully!', 'success');
+
+        chrome.runtime.sendMessage({
+          type: 'themeChanged',
+          theme: newSettings.theme
         });
       }
     });
+  }
+}
+
+// Reset settings
+async function resetSettings() {
+  if (confirm('Are you sure you want to reset all settings to their default values? This cannot be undone.')) {
+    try {
+      if (typeof window.SettingsUtils !== 'undefined') {
+        await window.SettingsUtils.resetSettings();
+        currentSettings = { ...window.SettingsUtils.getDefaultSettings() };
+      } else {
+        // Fallback to direct chrome.storage
+        chrome.storage.sync.clear(() => {
+          currentSettings = { ...DEFAULT_SETTINGS };
+        });
+      }
+
+      applySettingsToUI();
+      applyTheme(DEFAULT_SETTINGS.theme);
+      showStatus('✓ Settings reset to defaults', 'success');
+
+      // Notify other pages about theme change
+      chrome.runtime.sendMessage({
+        type: 'themeChanged',
+        theme: DEFAULT_SETTINGS.theme
+      });
+    } catch (error) {
+      showStatus('Error resetting settings: ' + error.message, 'error');
+    }
   }
 }
 

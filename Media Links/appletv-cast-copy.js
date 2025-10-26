@@ -77,58 +77,27 @@
   }
 
   function getThemeColors() {
-    // Get theme from storage
+    // Use ThemeManager if available, fallback to default colors
     return new Promise((resolve) => {
-      const themeColors = {
-        light: {
-          button: '#00c030',
-          buttonHover: '#00a028',
-          buttonText: '#fff'
-        },
-        dark: {
-          button: '#8b5cf6',
-          buttonHover: '#7c3aed',
-          buttonText: '#fff'
-        },
-        'catppuccin-mocha': {
-          button: '#cba6f7',
-          buttonHover: '#b4a1e8',
-          buttonText: '#000'
-        },
-        cats: {
-          button: '#ff9933',
-          buttonHover: '#ff7700',
-          buttonText: '#000'
-        },
-        'cat-night': {
-          button: '#818cf8',
-          buttonHover: '#6366f1',
-          buttonText: '#fff'
-        }
-      };
-
       try {
-        if (!isExtensionContextValid()) {
-          resolve(themeColors.light);
-          return;
-        }
-
-        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-          chrome.storage.sync.get(['theme'], (result) => {
-            if (chrome.runtime.lastError) {
-              console.warn('Error getting theme:', chrome.runtime.lastError);
-              resolve(themeColors.light);
-            } else {
-              const theme = result.theme || 'light';
-              resolve(themeColors[theme] || themeColors.light);
-            }
-          });
+        if (typeof ThemeManager !== 'undefined') {
+          const colors = ThemeManager.getThemeColors();
+          resolve(colors);
         } else {
-          resolve(themeColors.light);
+          // Fallback: return default light theme colors
+          resolve({
+            button: '#6366f1',
+            buttonHover: '#4f46e5',
+            buttonText: '#fff'
+          });
         }
       } catch (error) {
-        console.warn('Error accessing chrome.storage:', error);
-        resolve(themeColors.light);
+        console.warn('Error getting theme colors:', error);
+        resolve({
+          button: '#6366f1',
+          buttonHover: '#4f46e5',
+          buttonText: '#fff'
+        });
       }
     });
   }

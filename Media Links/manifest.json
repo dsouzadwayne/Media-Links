@@ -5,8 +5,8 @@
    "content_scripts": [
       {
          "matches": ["<all_urls>"],
-         "js": ["content.js"],
-         "run_at": "document_end"
+         "js": ["theme-manager.js", "settings-utils.js", "content.js"],
+         "run_at": "document_start"
       },
       {
          "matches": ["*://www.imdb.com/*"],
@@ -68,7 +68,7 @@
    "version": "0.730",
    "web_accessible_resources": [
       {
-         "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html"],
+         "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html", "offscreen.html"],
          "matches": ["<all_urls>"],
          "use_dynamic_url": true
       }

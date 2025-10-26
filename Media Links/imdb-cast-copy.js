@@ -35,65 +35,42 @@ function isIMDbAwardsPage() {
 }
 
 function getThemeColors() {
-  // Get theme from storage
+  // Use ThemeManager if available, fallback to default colors
   return new Promise((resolve) => {
-    const themeColors = {
-      light: {
-        button: '#f5c518',
-        buttonHover: '#e6b614',
-        buttonText: '#000'
-      },
-      dark: {
-        button: '#8b5cf6',
-        buttonHover: '#7c3aed',
-        buttonText: '#fff'
-      },
-      'catppuccin-mocha': {
-        button: '#cba6f7',
-        buttonHover: '#b4a1e8',
-        buttonText: '#000'
-      },
-      cats: {
-        button: '#ff9933',
-        buttonHover: '#ff7700',
-        buttonText: '#000'
-      },
-      'cat-night': {
-        button: '#818cf8',
-        buttonHover: '#6366f1',
-        buttonText: '#fff'
-      }
-    };
-
     try {
-      if (!isExtensionContextValid()) {
-        resolve(themeColors.light);
-        return;
-      }
-
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-        chrome.storage.sync.get(['theme'], (result) => {
-          if (chrome.runtime.lastError) {
-            console.warn('Error getting theme:', chrome.runtime.lastError);
-            resolve(themeColors.light);
-          } else {
-            const theme = result.theme || 'light';
-            resolve(themeColors[theme] || themeColors.light);
-          }
-        });
+      if (typeof ThemeManager !== 'undefined') {
+        const colors = ThemeManager.getThemeColors();
+        resolve(colors);
       } else {
-        // Fallback if chrome.storage is not available
-        resolve(themeColors.light);
+        // Fallback: return default light theme colors
+        resolve({
+          button: '#6366f1',
+          buttonHover: '#4f46e5',
+          buttonText: '#fff'
+        });
       }
     } catch (error) {
-      console.warn('Error accessing chrome.storage:', error);
-      resolve(themeColors.light);
+      console.warn('Error getting theme colors:', error);
+      resolve({
+        button: '#6366f1',
+        buttonHover: '#4f46e5',
+        buttonText: '#fff'
+      });
     }
   });
 }
 
 function getDialogColors(buttonColors) {
-  // Determine if button color is dark or light
+  // Use ThemeManager if available for consistent dialog colors
+  try {
+    if (typeof ThemeManager !== 'undefined') {
+      return ThemeManager.getDialogColors(buttonColors.buttonText);
+    }
+  } catch (error) {
+    console.warn('Error getting dialog colors from ThemeManager:', error);
+  }
+
+  // Fallback: determine if button color is dark or light
   const isDark = buttonColors.buttonText === '#fff';
 
   if (isDark) {

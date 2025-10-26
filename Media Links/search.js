@@ -2,40 +2,39 @@
 let profileSettings = {};
 let currentProfile = 1;
 
-// Load and apply theme
-const loadTheme = () => {
-  chrome.storage.sync.get(['theme'], (result) => {
-    const theme = result.theme || 'light';
-    document.body.setAttribute('data-theme', theme);
-    document.documentElement.setAttribute('data-theme', theme);
-  });
-};
-
 // Load and apply default search engine
-const loadDefaultSearchEngine = () => {
-  chrome.storage.sync.get(['defaultSearchEngine'], (result) => {
-    const defaultEngine = result.defaultSearchEngine || 'google';
-
-    // Set search engine dropdown
-    const engineSelect = document.getElementById('search-engine');
-    if (engineSelect) {
-      engineSelect.value = defaultEngine;
+const loadDefaultSearchEngine = async () => {
+  try {
+    if (typeof SettingsUtils !== 'undefined') {
+      const engine = await SettingsUtils.getSetting('defaultSearchEngine');
+      // Set search engine dropdown
+      const engineSelect = document.getElementById('search-engine');
+      if (engineSelect) {
+        engineSelect.value = engine;
+      }
     }
-  });
+  } catch (error) {
+    console.error('Search: Error loading default search engine:', error);
+  }
 };
 
 // Save default search engine
-const saveDefaultSearchEngine = (engine) => {
-  chrome.storage.sync.set({ defaultSearchEngine: engine }, () => {
-    // Update the search engine dropdown to match
-    const engineSelect = document.getElementById('search-engine');
-    if (engineSelect) {
-      engineSelect.value = engine;
+const saveDefaultSearchEngine = async (engine) => {
+  try {
+    if (typeof SettingsUtils !== 'undefined') {
+      await SettingsUtils.saveSetting('defaultSearchEngine', engine);
+      // Update the search engine dropdown to match
+      const engineSelect = document.getElementById('search-engine');
+      if (engineSelect) {
+        engineSelect.value = engine;
+      }
     }
-  });
+  } catch (error) {
+    console.error('Search: Error saving default search engine:', error);
+  }
 };
 
-loadTheme();
+// Initialize theme (will be loaded via ThemeManager in DOMContentLoaded)
 loadDefaultSearchEngine();
 
 // Load search elements from URL parameters
@@ -485,7 +484,19 @@ const updateSearchPreview = () => {
 };
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    // Initialize ThemeManager and load theme
+    if (typeof ThemeManager !== 'undefined') {
+      await ThemeManager.initialize();
+      console.log('Search: Theme initialized via ThemeManager');
+    } else {
+      console.warn('Search: ThemeManager not available');
+    }
+  } catch (error) {
+    console.error('Search: Error initializing ThemeManager:', error);
+  }
+
   loadSearchFromUrl();
   loadSettings();
 
@@ -497,11 +508,16 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Listen for theme changes
+  // Listen for theme changes via ThemeManager or fallback to direct message handling
   chrome.runtime.onMessage.addListener((message) => {
-    if (message.type === 'themeChanged') {
-      document.body.setAttribute('data-theme', message.theme);
-      document.documentElement.setAttribute('data-theme', message.theme);
+    if (message.type === 'themeChanged' && message.theme) {
+      if (typeof ThemeManager !== 'undefined') {
+        ThemeManager.setTheme(message.theme);
+      } else {
+        // Fallback if ThemeManager not available
+        document.body.setAttribute('data-theme', message.theme);
+        document.documentElement.setAttribute('data-theme', message.theme);
+      }
     }
   });
 

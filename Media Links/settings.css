@@ -637,21 +637,21 @@ body {
 /* Light Theme */
 body[data-theme="light"] {
   --primary-bg: #ffffff;
-  --secondary-bg: #f8f9fa;
-  --surface-bg: #ffffff;
-  --text-primary: #212529;
-  --text-secondary: #6c757d;
-  --accent: #f5c518;
-  --accent-hover: #e6b614;
-  --accent-glow: rgba(245, 197, 24, 0.3);
-  --accent-glow-strong: rgba(245, 197, 24, 0.6);
-  --success: #28a745;
-  --success-hover: #218838;
-  --danger: #f87171;
-  --danger-hover: #f05555;
-  --warning: #ffc107;
-  --border: #dee2e6;
-  --hover-color: #e9ecef;
+  --secondary-bg: #f9fafb;
+  --surface-bg: #f3f4f6;
+  --text-primary: #1f2937;
+  --text-secondary: #4b5563;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --accent-glow: rgba(99, 102, 241, 0.2);
+  --accent-glow-strong: rgba(99, 102, 241, 0.6);
+  --success: #10b981;
+  --success-hover: #059669;
+  --danger: #ef4444;
+  --danger-hover: #dc2626;
+  --warning: #f59e0b;
+  --border: #e5e7eb;
+  --hover-color: #e0e0e0;
   --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 

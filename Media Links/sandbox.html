@@ -47,9 +47,26 @@
     // Listen for messages from parent (offscreen document)
     window.addEventListener('message', async (event) => {
       if (event.data.action === 'performOCR') {
-        console.log('Sandbox: Received OCR request');
+        const requestId = event.data.requestId;
+        console.log('Sandbox: Received OCR request', requestId);
+
+        // Validate that requestId is provided
+        if (!requestId) {
+          console.error('Sandbox: OCR request missing requestId');
+          window.parent.postMessage({
+            success: false,
+            error: 'OCR request missing requestId',
+            requestId: requestId
+          }, '*');
+          return;
+        }
 
         try {
+          // Validate image data
+          if (!event.data.imageData) {
+            throw new Error('No image data provided');
+          }
+
           // Initialize worker if needed
           const worker = await initTesseractWorker();
 
@@ -59,17 +76,19 @@
           console.log('Sandbox: OCR completed:', result.data.text);
           console.log('Sandbox: OCR confidence:', result.data.confidence);
 
-          // Send result back to parent
+          // Send result back to parent with requestId for tracking
           window.parent.postMessage({
             success: true,
             text: result.data.text,
-            confidence: result.data.confidence
+            confidence: result.data.confidence,
+            requestId: requestId  // IMPORTANT: return requestId for request matching
           }, '*');
         } catch (error) {
           console.error('Sandbox: OCR error:', error);
           window.parent.postMessage({
             success: false,
-            error: error.message || 'OCR failed'
+            error: error.message || 'OCR failed',
+            requestId: requestId  // IMPORTANT: return requestId even on error
           }, '*');
         }
       }

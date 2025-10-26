@@ -27,49 +27,69 @@
   }
 
   function getThemeColors() {
+    // Use ThemeManager if available, fallback to default colors
     return new Promise((resolve) => {
-      const themeColors = {
-        light: {
-          button: '#dc2626',
-          buttonHover: '#b91c1c',
-          buttonText: '#fff'
-        },
-        dark: {
-          button: '#ef4444',
-          buttonHover: '#dc2626',
-          buttonText: '#fff'
-        },
-        'catppuccin-mocha': {
-          button: '#f38ba8',
-          buttonHover: '#eba0ac',
-          buttonText: '#000'
-        },
-        cats: {
-          button: '#ff9933',
-          buttonHover: '#ff7700',
-          buttonText: '#fff'
-        },
-        'cat-night': {
+      try {
+        if (typeof ThemeManager !== 'undefined') {
+          const colors = ThemeManager.getThemeColors();
+          resolve(colors);
+        } else {
+          // Fallback: return default light theme colors
+          resolve({
+            button: '#6366f1',
+            buttonHover: '#4f46e5',
+            buttonText: '#fff'
+          });
+        }
+      } catch (error) {
+        console.warn('Error getting theme colors:', error);
+        resolve({
           button: '#6366f1',
           buttonHover: '#4f46e5',
           buttonText: '#fff'
-        }
-      };
-
-      if (!isExtensionContextValid()) {
-        resolve(themeColors.light);
-        return;
-      }
-
-      try {
-        chrome.storage.sync.get(['theme'], (result) => {
-          const theme = result.theme || 'light';
-          resolve(themeColors[theme] || themeColors.light);
         });
-      } catch (e) {
-        resolve(themeColors.light);
       }
     });
+  }
+
+  function getDialogColors(buttonColors) {
+    // Use ThemeManager if available for consistent dialog colors
+    try {
+      if (typeof window.ThemeManager !== 'undefined') {
+        return window.ThemeManager.getDialogColors(buttonColors.buttonText);
+      }
+    } catch (error) {
+      console.warn('Error getting dialog colors from ThemeManager:', error);
+    }
+
+    // Fallback: determine if button color is dark or light
+    const isDark = buttonColors.buttonText === '#fff';
+
+    if (isDark) {
+      // Dark theme dialogs
+      return {
+        background: '#1a1a2e',
+        text: '#e0e7ff',
+        border: '#2d2d44',
+        inputBg: '#252540',
+        inputBorder: '#3d3d5c',
+        cancelBg: '#2d2d44',
+        cancelHover: '#3d3d5c',
+        cancelText: '#c7d2fe'
+      };
+    } else {
+      // Light theme dialogs
+      return {
+        background: '#ffffff',
+        text: '#1a1a1a',
+        border: '#e0e0e0',
+        inputBg: '#f8f8f8',
+        inputBorder: '#d0d0d0',
+        cancelBg: '#e5e5e5',
+        cancelHover: '#d5d5d5',
+        cancelText: '#333333'
+      };
+    }
   }
 
   function getCopyButtonSettings() {
@@ -216,6 +236,9 @@
   }
 
   function createBulkCopyDialog(members, colors, sectionName) {
+    // Get theme-aware dialog colors
+    const dialogColors = getDialogColors(colors);
+
     // Create dialog overlay
     const overlay = document.createElement('div');
     overlay.className = 'media-links-bms-dialog-overlay';
@@ -236,46 +259,48 @@
     const dialog = document.createElement('div');
     dialog.className = 'media-links-bms-dialog';
     Object.assign(dialog.style, {
-      backgroundColor: '#fff',
+      backgroundColor: dialogColors.background,
       borderRadius: '12px',
       padding: '24px',
       maxWidth: '500px',
       width: '90%',
       maxHeight: '80vh',
       overflowY: 'auto',
-      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)'
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+      border: `1px solid ${dialogColors.border}`,
+      color: dialogColors.text
     });
 
     dialog.innerHTML = `
-      <h3 style="margin: 0 0 16px 0; font-size: 20px; color: #333;">Copy ${sectionName}</h3>
-      <div style="margin-bottom: 20px; padding: 12px; background: #f5f5f5; border-radius: 6px;">
-        <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: #333;">Number of ${sectionName.toLowerCase()} to copy:</label>
-        <input type="number" id="bms-cast-count" min="1" max="${members.length}" value="5" style="width: 100%; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
-        <div style="margin-top: 8px; font-size: 12px; color: #666;">Selected: <span id="bms-count-display">5</span> / ${members.length}</div>
+      <h3 style="margin: 0 0 16px 0; font-size: 20px; color: ${dialogColors.text};">Copy ${sectionName}</h3>
+      <div style="margin-bottom: 20px; padding: 12px; background: ${dialogColors.inputBg}; border-radius: 6px; border: 1px solid ${dialogColors.inputBorder};">
+        <label style="display: block; margin-bottom: 8px; font-size: 13px; font-weight: 600; color: ${dialogColors.text};">Number of ${sectionName.toLowerCase()} to copy:</label>
+        <input type="number" id="bms-cast-count" min="1" max="${members.length}" value="5" style="width: 100%; padding: 8px 12px; border: 1px solid ${dialogColors.inputBorder}; background: ${dialogColors.background}; color: ${dialogColors.text}; border-radius: 6px; font-size: 14px;">
+        <div style="margin-top: 8px; font-size: 12px; color: ${dialogColors.text}; opacity: 0.8;">Selected: <span id="bms-count-display">5</span> / ${members.length}</div>
       </div>
       <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
-        <button class="bms-copy-format" data-format="name-role" style="padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; text-align: left; font-size: 14px; transition: all 0.2s;">
+        <button class="bms-copy-format" data-format="name-role" style="padding: 12px; border: 1px solid ${dialogColors.inputBorder}; border-radius: 6px; background: ${dialogColors.background}; color: ${dialogColors.text}; cursor: pointer; text-align: left; font-size: 14px; transition: all 0.2s;">
           <strong>Name + Role</strong><br>
-          <span style="font-size: 12px; color: #666;">Harshvardhan Rane (Actor)</span>
+          <span style="font-size: 12px; color: ${dialogColors.text}; opacity: 0.7;">Harshvardhan Rane (Actor)</span>
         </button>
-        <button class="bms-copy-format" data-format="name-only" style="padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; text-align: left; font-size: 14px; transition: all 0.2s;">
+        <button class="bms-copy-format" data-format="name-only" style="padding: 12px; border: 1px solid ${dialogColors.inputBorder}; border-radius: 6px; background: ${dialogColors.background}; color: ${dialogColors.text}; cursor: pointer; text-align: left; font-size: 14px; transition: all 0.2s;">
           <strong>Names Only</strong><br>
-          <span style="font-size: 12px; color: #666;">Harshvardhan Rane, Sonam Bajwa, ...</span>
+          <span style="font-size: 12px; color: ${dialogColors.text}; opacity: 0.7;">Harshvardhan Rane, Sonam Bajwa, ...</span>
         </button>
-        <button class="bms-copy-format" data-format="role-only" style="padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; text-align: left; font-size: 14px; transition: all 0.2s;">
+        <button class="bms-copy-format" data-format="role-only" style="padding: 12px; border: 1px solid ${dialogColors.inputBorder}; border-radius: 6px; background: ${dialogColors.background}; color: ${dialogColors.text}; cursor: pointer; text-align: left; font-size: 14px; transition: all 0.2s;">
           <strong>Roles Only</strong><br>
-          <span style="font-size: 12px; color: #666;">Actor, Actor, Director, ...</span>
+          <span style="font-size: 12px; color: ${dialogColors.text}; opacity: 0.7;">Actor, Actor, Director, ...</span>
         </button>
-        <button class="bms-copy-format" data-format="csv" style="padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; text-align: left; font-size: 14px; transition: all 0.2s;">
+        <button class="bms-copy-format" data-format="csv" style="padding: 12px; border: 1px solid ${dialogColors.inputBorder}; border-radius: 6px; background: ${dialogColors.background}; color: ${dialogColors.text}; cursor: pointer; text-align: left; font-size: 14px; transition: all 0.2s;">
           <strong>CSV Format</strong><br>
-          <span style="font-size: 12px; color: #666;">Name,Role (one per line)</span>
+          <span style="font-size: 12px; color: ${dialogColors.text}; opacity: 0.7;">Name,Role (one per line)</span>
         </button>
-        <button class="bms-copy-format" data-format="json" style="padding: 12px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; text-align: left; font-size: 14px; transition: all 0.2s;">
+        <button class="bms-copy-format" data-format="json" style="padding: 12px; border: 1px solid ${dialogColors.inputBorder}; border-radius: 6px; background: ${dialogColors.background}; color: ${dialogColors.text}; cursor: pointer; text-align: left; font-size: 14px; transition: all 0.2s;">
           <strong>JSON Format</strong><br>
-          <span style="font-size: 12px; color: #666;">[{"name": "...", "role": "..."}]</span>
+          <span style="font-size: 12px; color: ${dialogColors.text}; opacity: 0.7;">[{"name": "...", "role": "..."}]</span>
         </button>
       </div>
-      <button class="bms-dialog-close" style="width: 100%; padding: 12px; background: #e0e0e0; color: #333; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">
+      <button class="bms-dialog-close" style="width: 100%; padding: 12px; background: ${dialogColors.cancelBg}; color: ${dialogColors.cancelText}; border: 1px solid ${dialogColors.border}; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer;">
         Close
       </button>
     `;
@@ -295,12 +320,12 @@
     const formatButtons = dialog.querySelectorAll('.bms-copy-format');
     formatButtons.forEach(btn => {
       btn.addEventListener('mouseenter', () => {
-        btn.style.backgroundColor = '#f5f5f5';
+        btn.style.backgroundColor = dialogColors.inputBg;
         btn.style.borderColor = colors.button;
       });
       btn.addEventListener('mouseleave', () => {
-        btn.style.backgroundColor = '#fff';
-        btn.style.borderColor = '#ddd';
+        btn.style.backgroundColor = dialogColors.background;
+        btn.style.borderColor = dialogColors.inputBorder;
       });
 
       btn.addEventListener('click', async () => {
@@ -503,7 +528,7 @@
     const infoSelectors = [
       '[data-region="info"]',
       '.movie-info',
-      '__genre',
+      '.__genre',
       '[class*="movie-details"]'
     ];
 

@@ -12,7 +12,7 @@ const createLink = (url, text) => {
       }
       const currentUrl = new URL(tabs[0].url);
       // Construct safe URL using URL constructor
-      const newUrl = `${currentUrl.protocol}//${currentUrl.hostname}${url}`;
+      const newUrl = new URL(url, `${currentUrl.protocol}//${currentUrl.hostname}`).href;
       chrome.tabs.update(tabs[0].id, { url: newUrl });
     });
   });
@@ -132,17 +132,18 @@ const updateLinks = () => {
   });
 };
 
-const loadTheme = () => {
-  chrome.storage.sync.get(['theme'], (result) => {
-    const theme = result.theme || 'light';
-    document.body.setAttribute('data-theme', theme);
-    document.documentElement.setAttribute('data-theme', theme);
-  });
-};
-
-const init = () => {
-  // Load saved theme
-  loadTheme();
+const init = async () => {
+  try {
+    // Initialize ThemeManager and load theme
+    if (typeof ThemeManager !== 'undefined') {
+      await ThemeManager.initialize();
+      console.log('Sidebar: Theme initialized via ThemeManager');
+    } else {
+      console.warn('Sidebar: ThemeManager not available');
+    }
+  } catch (error) {
+    console.error('Sidebar: Error initializing ThemeManager:', error);
+  }
 
   // Initialize search button (opens in new tab)
   const searchButton = document.getElementById('search-button');
@@ -168,11 +169,16 @@ const init = () => {
     });
   }
 
-  // Listen for theme changes
+  // Listen for theme changes via ThemeManager or fallback to direct message handling
   chrome.runtime.onMessage.addListener((message) => {
-    if (message.type === 'themeChanged') {
-      document.body.setAttribute('data-theme', message.theme);
-      document.documentElement.setAttribute('data-theme', message.theme);
+    if (message.type === 'themeChanged' && message.theme) {
+      if (typeof ThemeManager !== 'undefined') {
+        ThemeManager.setTheme(message.theme);
+      } else {
+        // Fallback if ThemeManager not available
+        document.body.setAttribute('data-theme', message.theme);
+        document.documentElement.setAttribute('data-theme', message.theme);
+      }
     }
   });
 
