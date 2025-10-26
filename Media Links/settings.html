@@ -24,6 +24,7 @@
           <li><a href="#search-query" class="sidebar-link" data-section="search-query">🔍 Search & Query</a></li>
           <li><a href="#query-patterns" class="sidebar-link" data-section="query-patterns">🔗 Query Patterns</a></li>
           <li><a href="#copy-visibility" class="sidebar-link" data-section="copy-visibility">👁️ Copy Visibility</a></li>
+          <li><a href="#customized-view-pages" class="sidebar-link" data-section="customized-view-pages">📋 Customized View</a></li>
           <li><a href="#advanced" class="sidebar-link" data-section="advanced">⚡ Advanced</a></li>
         </ul>
       </nav>
@@ -227,6 +228,8 @@
 
           <!-- IMDb Sub-settings -->
           <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color, #e0e0e0);">
+            <h4 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; color: var(--text-primary, #333);">Copy Button Settings</h4>
+
             <div class="setting-item">
               <label for="default-cast-count" class="setting-label">
                 <span class="label-text">Default Number of Cast Members</span>
@@ -456,6 +459,73 @@
                 <input type="checkbox" id="bookmyshow-include-roles" checked>
                 <span class="toggle-slider"></span>
               </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Customized View Pages Section -->
+      <section class="settings-section" id="customized-view-pages">
+        <div class="section-header">
+          <h2>📋 Customized View Pages</h2>
+          <p class="section-description">Configure the customized cast and crew view feature for different sites</p>
+        </div>
+
+        <div class="setting-item">
+          <label for="customized-view-limit" class="setting-label">
+            <span class="label-text">Entry Limit per Section</span>
+            <span class="label-description">Maximum number of cast/crew members to display per section in customized view</span>
+          </label>
+          <input type="number" id="customized-view-limit" class="setting-input" min="1" max="1000" value="8" style="max-width: 150px;">
+        </div>
+
+        <!-- IMDb Customized View Settings -->
+        <div class="setting-group">
+          <h3 class="group-title">IMDb</h3>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Show "View Cast & Crew in New Tab" Button</span>
+              <span class="label-description">Display button on IMDb fullcredits pages to open interactive cast/crew view</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="show-customized-view-btn" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Auto-Open Customized View</span>
+              <span class="label-description">Automatically open the customized view in a new tab when clicking the button</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="auto-open-customized-view">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <!-- IMDb Sub-settings -->
+          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color, #e0e0e0);">
+            <div class="setting-item">
+              <label for="default-view-columns" class="setting-label">
+                <span class="label-text">Default Columns to Display</span>
+                <span class="label-description">Which columns to show in the customized view by default</span>
+              </label>
+              <div style="display: flex; gap: 15px; margin-top: 8px; flex-wrap: wrap;">
+                <label class="checkbox-label" style="flex: 0 1 auto; padding: 8px 0; background: transparent;">
+                  <input type="checkbox" class="view-column-checkbox" value="name" checked>
+                  <span>Name</span>
+                </label>
+                <label class="checkbox-label" style="flex: 0 1 auto; padding: 8px 0; background: transparent;">
+                  <input type="checkbox" class="view-column-checkbox" value="role" checked>
+                  <span>Role</span>
+                </label>
+                <label class="checkbox-label" style="flex: 0 1 auto; padding: 8px 0; background: transparent;">
+                  <input type="checkbox" class="view-column-checkbox" value="roleType" checked>
+                  <span>Role Type</span>
+                </label>
+              </div>
             </div>
           </div>
         </div>

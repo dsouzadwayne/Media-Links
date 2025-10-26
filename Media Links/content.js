@@ -373,18 +373,31 @@ function updateCopyWebpageButton(shouldShow) {
 
 // Initialize the button based on settings
 function initCopyWebpageButton() {
-  chrome.storage.sync.get(['showCopyWebpageBtn'], (result) => {
-    const shouldShow = result.showCopyWebpageBtn || false;
-    updateCopyWebpageButton(shouldShow);
-  });
+  try {
+    if (!chrome || !chrome.storage || !chrome.storage.sync) {
+      return;
+    }
+    chrome.storage.sync.get(['showCopyWebpageBtn'], (result) => {
+      const shouldShow = result.showCopyWebpageBtn || false;
+      updateCopyWebpageButton(shouldShow);
+    });
+  } catch (error) {
+    console.warn('Error initializing copy webpage button:', error);
+  }
 }
 
 // Listen for storage changes to update button visibility
-chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'sync' && changes.showCopyWebpageBtn) {
-    updateCopyWebpageButton(changes.showCopyWebpageBtn.newValue);
+try {
+  if (chrome && chrome.storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener((changes, namespace) => {
+      if (namespace === 'sync' && changes.showCopyWebpageBtn) {
+        updateCopyWebpageButton(changes.showCopyWebpageBtn.newValue);
+      }
+    });
   }
-});
+} catch (error) {
+  console.warn('Error setting up storage change listener:', error);
+}
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {

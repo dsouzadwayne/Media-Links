@@ -54,7 +54,20 @@ window.SettingsUtils = (() => {
     showBookMyShowCopy: true,
     bookMyShowCastCount: 10,
     bookMyShowOutputFormat: 'colon',
-    bookMyShowIncludeRoles: true
+    bookMyShowIncludeRoles: true,
+
+    // Customized View Settings
+    customizedViewLimit: 8,
+    showCustomizedViewBtn: true,
+    autoOpenCustomizedView: false,
+    defaultViewColumns: ['name', 'role', 'roleType'],
+
+    // Copy Webpage Settings
+    copyFormats: {
+      includeTitle: true,
+      includeURL: true,
+      separator: '\n\n---\n\n'
+    }
   };
 
   // Validation rules
@@ -196,6 +209,32 @@ window.SettingsUtils = (() => {
     bookMyShowIncludeRoles: {
       type: 'boolean',
       default: true
+    },
+    customizedViewLimit: {
+      type: 'number',
+      min: 1,
+      max: 1000,
+      default: 8
+    },
+    showCustomizedViewBtn: {
+      type: 'boolean',
+      default: true
+    },
+    autoOpenCustomizedView: {
+      type: 'boolean',
+      default: false
+    },
+    defaultViewColumns: {
+      type: 'object',
+      default: ['name', 'role', 'roleType']
+    },
+    copyFormats: {
+      type: 'object',
+      default: {
+        includeTitle: true,
+        includeURL: true,
+        separator: '\n\n---\n\n'
+      }
     }
   };
 

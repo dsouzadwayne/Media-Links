@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customized Cast & Crew View</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            background-color: var(--primary-bg, #f5f5f5);
+            color: var(--text-primary, #333);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        }
+
+        body {
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .view-page-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .view-page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            gap: 15px;
+            flex-wrap: wrap;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--accent, #6366f1);
+        }
+
+        .view-page-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .view-page-title h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text-primary, #333);
+        }
+
+        .page-source-info {
+            font-size: 12px;
+            color: var(--text-primary, #666);
+            opacity: 0.7;
+        }
+
+        .view-page-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            padding: 8px 16px;
+            background: var(--accent, #6366f1);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .action-btn.secondary {
+            background: var(--secondary-bg, #f0f0f0);
+            color: var(--text-primary, #333);
+            border: 2px solid var(--accent, #6366f1);
+        }
+
+        .action-btn.secondary:hover {
+            background: var(--hover-color, #e0e0e0);
+        }
+
+        .loading-message {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-primary, #666);
+            font-size: 16px;
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px 20px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #c62828;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-primary, #999);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .view-content {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="view-page-container">
+        <div class="view-page-header">
+            <div class="view-page-title">
+                <h1>📋 Cast & Crew View</h1>
+                <div class="page-source-info" id="source-info"></div>
+            </div>
+            <div class="view-page-actions">
+                <button class="action-btn" id="export-csv-btn">📥 Export CSV</button>
+                <button class="action-btn" id="export-json-btn">📥 Export JSON</button>
+                <button class="action-btn secondary" id="go-back-btn">← Back</button>
+            </div>
+        </div>
+
+        <div id="view-content" class="view-content">
+            <div class="loading-message">Loading cast & crew data...</div>
+        </div>
+    </div>
+
+    <script src="customized-views.js"></script>
+    <script src="theme-manager.js"></script>
+    <script src="settings-utils.js"></script>
+    <script src="customized-view-page.js"></script>
+</body>
+</html>

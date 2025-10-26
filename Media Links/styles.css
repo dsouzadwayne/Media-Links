@@ -971,3 +971,182 @@ body[data-theme="cat-night"] #custom-sidebar .sidebar-content {
   background-color: var(--primary-bg);
   color: var(--text-primary);
 }
+
+/* Customized Views Styling */
+.customized-view {
+  margin: 20px 0 !important;
+  border-radius: 8px !important;
+}
+
+.customized-view h2 {
+  margin: 0 !important;
+  font-size: 18px !important;
+  font-weight: 600 !important;
+  color: var(--text-primary) !important;
+}
+
+.view-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.view-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.view-search {
+  padding: 8px 12px !important;
+  border: 2px solid var(--hover-color) !important;
+  border-radius: 4px !important;
+  background: var(--primary-bg) !important;
+  color: var(--text-primary) !important;
+  font-size: 13px !important;
+  min-width: 200px;
+  transition: all 0.2s !important;
+}
+
+.view-search:focus {
+  outline: none !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent)33 !important;
+}
+
+.view-counter {
+  font-size: 12px !important;
+  color: var(--text-primary) !important;
+  margin-bottom: 15px !important;
+  opacity: 0.8;
+}
+
+.customized-view-table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  font-size: 13px !important;
+  color: var(--text-primary) !important;
+}
+
+.customized-view-table thead tr {
+  border-bottom: 2px solid var(--accent) !important;
+}
+
+.customized-view-table th {
+  padding: 12px !important;
+  text-align: left !important;
+  font-weight: 600 !important;
+  color: var(--accent) !important;
+  background-color: var(--secondary-bg) !important;
+}
+
+.customized-view-table tbody tr {
+  border-bottom: 1px solid var(--hover-color) !important;
+  transition: background-color 0.2s !important;
+}
+
+.customized-view-table tbody tr:hover {
+  background-color: var(--hover-color) !important;
+}
+
+.customized-view-table td {
+  padding: 10px 12px !important;
+  color: var(--text-primary) !important;
+}
+
+.role-filter-checkbox {
+  cursor: pointer !important;
+  margin-right: 3px !important;
+}
+
+/* Section Copy Dropdown */
+.copy-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.copy-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: var(--secondary-bg, #f5f5f5);
+  border: 2px solid var(--accent, #6366f1);
+  border-radius: 4px;
+  min-width: 200px;
+  display: none;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  margin-top: 5px;
+}
+
+.copy-dropdown-option {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  color: var(--text-primary, #333);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.copy-dropdown-option:hover {
+  background-color: var(--hover-color, #e0e0e0);
+}
+
+/* IMDb Customized View Button Wrapper */
+.imdb-title-wrapper {
+  display: flex !important;
+  align-items: center !important;
+  gap: 15px !important;
+  flex-wrap: wrap !important;
+  margin-bottom: 20px !important;
+}
+
+.imdb-title-wrapper h1 {
+  margin: 0 !important;
+  flex: 0 1 auto !important;
+}
+
+/* IMDb Customized View Button Styles */
+#open-customized-view-btn {
+  padding: 10px 16px !important;
+  background: var(--accent, #6366f1) !important;
+  border: none !important;
+  border-radius: 6px !important;
+  color: white !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  margin: 0 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif !important;
+  display: inline-block !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+  vertical-align: middle !important;
+  flex: 0 0 auto !important;
+}
+
+#open-customized-view-btn:hover {
+  background: #4f46e5 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+}
+
+#open-customized-view-btn:active {
+  transform: translateY(0) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15) !important;
+}
+
+#open-customized-view-btn:focus {
+  outline: 2px solid var(--accent, #6366f1) !important;
+  outline-offset: 2px !important;
+}

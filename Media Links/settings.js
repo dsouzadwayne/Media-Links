@@ -32,7 +32,12 @@ const DEFAULT_SETTINGS = {
   // BookMyShow specific settings
   bookMyShowCastCount: 10,
   bookMyShowOutputFormat: 'colon',
-  bookMyShowIncludeRoles: true
+  bookMyShowIncludeRoles: true,
+  // Customized view settings
+  customizedViewLimit: 8,
+  showCustomizedViewBtn: true,
+  autoOpenCustomizedView: false,
+  defaultViewColumns: ['name', 'role', 'roleType']
 };
 
 let currentSettings = { ...DEFAULT_SETTINGS };
@@ -159,6 +164,7 @@ function applySettingsToUI() {
   document.getElementById('default-output-format').value = currentSettings.defaultOutputFormat;
   document.getElementById('debug-mode').checked = currentSettings.debugMode;
   document.getElementById('show-copy-webpage-btn').checked = currentSettings.showCopyWebpageBtn;
+  document.getElementById('customized-view-limit').value = currentSettings.customizedViewLimit || 8;
 
   // Copy webpage format settings
   const copyFormats = currentSettings.copyFormats || {};
@@ -190,6 +196,16 @@ function applySettingsToUI() {
   document.getElementById('bookmyshow-cast-count').value = currentSettings.bookMyShowCastCount;
   document.getElementById('bookmyshow-output-format').value = currentSettings.bookMyShowOutputFormat;
   document.getElementById('bookmyshow-include-roles').checked = currentSettings.bookMyShowIncludeRoles;
+
+  // Customized view settings
+  document.getElementById('show-customized-view-btn').checked = currentSettings.showCustomizedViewBtn !== false;
+  document.getElementById('auto-open-customized-view').checked = currentSettings.autoOpenCustomizedView === true;
+
+  // Set default view columns
+  const defaultColumns = currentSettings.defaultViewColumns || ['name', 'role', 'roleType'];
+  document.querySelectorAll('.view-column-checkbox').forEach(checkbox => {
+    checkbox.checked = defaultColumns.includes(checkbox.value);
+  });
 
   hasUnsavedChanges = false;
 }
@@ -315,6 +331,7 @@ function saveSettings() {
     defaultOutputFormat: document.getElementById('default-output-format').value,
     debugMode: document.getElementById('debug-mode').checked,
     showCopyWebpageBtn: document.getElementById('show-copy-webpage-btn').checked,
+    customizedViewLimit: parseInt(document.getElementById('customized-view-limit').value) || 8,
     // Copy webpage format settings
     copyFormats: {
       includeTitle: document.getElementById('copy-include-title').checked,
@@ -342,7 +359,11 @@ function saveSettings() {
     showBookMyShowCopy: document.getElementById('show-bookmyshow-copy').checked,
     bookMyShowCastCount: parseInt(document.getElementById('bookmyshow-cast-count').value),
     bookMyShowOutputFormat: document.getElementById('bookmyshow-output-format').value,
-    bookMyShowIncludeRoles: document.getElementById('bookmyshow-include-roles').checked
+    bookMyShowIncludeRoles: document.getElementById('bookmyshow-include-roles').checked,
+    // Customized view settings
+    showCustomizedViewBtn: document.getElementById('show-customized-view-btn').checked,
+    autoOpenCustomizedView: document.getElementById('auto-open-customized-view').checked,
+    defaultViewColumns: Array.from(document.querySelectorAll('.view-column-checkbox:checked')).map(cb => cb.value)
   };
 
   // Save to storage using SettingsUtils with validation
