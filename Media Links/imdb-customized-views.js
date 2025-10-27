@@ -55,6 +55,14 @@
   }
 
   /**
+   * Check if we're on an IMDb title page (main page like /title/tt0234000/)
+   */
+  function isIMDbTitlePage() {
+    return window.location.hostname === 'www.imdb.com' &&
+           /\/title\/tt\d+\/?$/.test(window.location.pathname);
+  }
+
+  /**
    * Check if we're on an IMDb technical specs page
    */
   function isIMDbTechnicalPage() {
@@ -99,6 +107,7 @@
     // Director roles to exclude
     const excludedDirectorRoles = [
       'director of photography',
+      'casting director',
       'senior art director',
       'dneg',
       'supervising art director',
@@ -112,6 +121,11 @@
       if (!hasValidCreatorRole) {
         return true;
       }
+    }
+
+    // Exclude dialogue writers
+    if (roleLower.includes('writer') && roleLower.includes('dialogue')) {
+      return true;
     }
 
     // Check if it's an excluded director role
@@ -768,7 +782,8 @@
       const isExcludedSection =
         sectionNameLower.includes('assistant') ||
         sectionNameLower.includes('second unit') ||
-        sectionNameLower.includes('art director');
+        sectionNameLower.includes('art director') ||
+        sectionNameLower.includes('casting director');
 
       // Then check if allowed (using includes for flexibility with section titles like "Director (1)")
       const isAllowedSection =
@@ -1122,6 +1137,15 @@
       const movieId = pathMatch[1];
       console.log('Opening consolidated view for movie:', movieId);
 
+      // Get current tab ID to return focus later
+      chrome.runtime.sendMessage({ type: 'getCurrentTabId' }, (response) => {
+        const originalTabId = response && response.tabId ? response.tabId : null;
+        if (originalTabId) {
+          console.log('Current tab ID:', originalTabId);
+        } else {
+          console.warn('Could not get current tab ID');
+        }
+
       // Store movie ID and reset extraction flags
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         // First, clear any existing data including single view temp data
@@ -1184,7 +1208,18 @@
                     console.log(`Tracked tabs so far:`, openedTabIds.map(t => `${t.page.type}(${t.tabId})`).join(', '));
 
                     if (tabsOpenedCount === extractionPages.length) {
-                      // All tabs opened, show tab selector modal
+                      // All tabs opened, refocus the original tab
+                      if (originalTabId) {
+                        chrome.runtime.sendMessage({
+                          type: 'focusTab',
+                          tabId: originalTabId
+                        }, (response) => {
+                          if (response && response.success) {
+                            console.log('Refocused original tab:', originalTabId);
+                          }
+                        });
+                      }
+                      // Show tab selector modal after refocusing
                       setTimeout(() => showTabSelectorModal(), 1000);
                     }
                   }
@@ -1565,6 +1600,7 @@
           button.textContent = '🎬 Consolidated Overview';
         }
       }
+      }); // Close chrome.runtime.sendMessage callback
     } catch (error) {
       console.error('Error opening consolidated view:', error);
       showConsolidatedViewNotification('❌ Failed to open consolidated view: ' + error.message, 'error');
@@ -1586,14 +1622,15 @@
     const isAwards = isIMDbAwardsPage();
     const isReleaseInfo = isIMDbReleaseInfoPage();
     const isTechnical = isIMDbTechnicalPage();
+    const isTitle = isIMDbTitlePage();
 
-    if (!isFullCredits && !isCompanyCredits && !isAwards && !isReleaseInfo && !isTechnical) return;
+    if (!isFullCredits && !isCompanyCredits && !isAwards && !isReleaseInfo && !isTechnical && !isTitle) return;
 
     // Load customized view settings
     const settings = await loadCustomizedViewSettings();
 
-    // Check if the button should be shown
-    if (!settings.showBtn) {
+    // Check if the button should be shown (skip for title page since it only shows consolidated button)
+    if (!isTitle && !settings.showBtn) {
       console.log('Customized view button is disabled in settings');
       return;
     }
@@ -1610,7 +1647,11 @@
 
     // Extract data based on page type
     let viewData, title, buttonText;
-    if (isFullCredits) {
+
+    if (isTitle) {
+      // On title page, skip individual view button and only show consolidated overview
+      viewData = null;
+    } else if (isFullCredits) {
       viewData = extractCastData();
       title = '📋 Cast & Crew Overview';
       buttonText = '📋 View Cast & Crew in New Tab';
@@ -1632,12 +1673,14 @@
       buttonText = '⚙️ View Technical Specs in New Tab';
     }
 
-    if (viewData.length === 0) {
+    if (!isTitle && viewData && viewData.length === 0) {
       console.log('No data found for customized view');
       return;
     }
 
-    console.log(`Found ${viewData.length} items for ${title}`);
+    if (!isTitle) {
+      console.log(`Found ${viewData.length} items for ${title}`);
+    }
 
     // Determine columns based on page type
     let columns = settings.columns;
@@ -1650,51 +1693,65 @@
     }
 
     // Create a temporary view instance just to use the openInNewTab method
-    const view = new CustomizedView({
-      containerId: 'imdb-customized-view-temp',
-      data: viewData,
-      title: title,
-      columns: columns,
-      pagePath: window.location.pathname
-    });
+    let view = null;
+    if (!isTitle) {
+      view = new CustomizedView({
+        containerId: 'imdb-customized-view-temp',
+        data: viewData,
+        title: title,
+        columns: columns,
+        pagePath: window.location.pathname
+      });
 
-    // Load and apply saved preferences
-    const savedPrefs = await view.loadPreferences();
-    view.applyPreferences(savedPrefs);
-
-    // Create button
-    const button = document.createElement('button');
-    button.textContent = buttonText;
-    button.id = 'open-customized-view-btn';
-    if (isAwards) {
-      button.title = 'Open the awards overview in a new tab';
-    } else if (isCompanyCredits) {
-      button.title = 'Open the production companies overview in a new tab';
-    } else if (isReleaseInfo) {
-      button.title = 'Open the release dates overview in a new tab';
-    } else if (isTechnical) {
-      button.title = 'Open the technical specifications in a new tab';
-    } else {
-      button.title = 'Open the cast and crew overview in a new tab';
+      // Load and apply saved preferences
+      const savedPrefs = await view.loadPreferences();
+      view.applyPreferences(savedPrefs);
     }
 
-    button.addEventListener('click', async () => {
-      // Check settings to see if we should open in new tab
-      const autoOpen = settings.autoOpenIndividualView !== false; // Default to true
-      if (autoOpen) {
-        view.openInNewTab();
+    // Create button (skip for title page)
+    let button = null;
+    if (!isTitle) {
+      button = document.createElement('button');
+      button.textContent = buttonText;
+      button.id = 'open-customized-view-btn';
+
+      if (isAwards) {
+        button.title = 'Open the awards overview in a new tab';
+      } else if (isCompanyCredits) {
+        button.title = 'Open the production companies overview in a new tab';
+      } else if (isReleaseInfo) {
+        button.title = 'Open the release dates overview in a new tab';
+      } else if (isTechnical) {
+        button.title = 'Open the technical specifications in a new tab';
       } else {
-        // If not auto-opening, just show a message
-        alert('Individual view opening in new tab is disabled in settings. Enable it in the extension settings.');
+        button.title = 'Open the cast and crew overview in a new tab';
       }
-    });
+
+      button.addEventListener('click', async () => {
+        // Check settings to see if we should open in new tab
+        const autoOpen = settings.autoOpenIndividualView !== false; // Default to true
+        if (autoOpen) {
+          view.openInNewTab();
+        } else {
+          // If not auto-opening, just show a message
+          alert('Individual view opening in new tab is disabled in settings. Enable it in the extension settings.');
+        }
+      });
+    }
 
     // Create consolidated overview button (check settings first)
     const showConsolidatedBtn = settings.showConsolidatedViewBtn !== false; // Default to true
-    if (!showConsolidatedBtn) {
-      // Don't create the consolidated button if setting is disabled
-      container.appendChild(button);
-      targetElement.insertAdjacentElement('afterend', container);
+    if (!showConsolidatedBtn && !isTitle) {
+      // Don't create the consolidated button if setting is disabled (and not on title page)
+      if (button) {
+        container.appendChild(button);
+        targetElement.insertAdjacentElement('afterend', container);
+      }
+      return;
+    }
+
+    // On title page without consolidated button setting, just return
+    if (!showConsolidatedBtn && isTitle) {
       return;
     }
 
@@ -1759,9 +1816,11 @@
       }
 
       // Add buttons to wrapper
-      wrapper.appendChild(button);
+      if (button) {
+        wrapper.appendChild(button);
+      }
       wrapper.appendChild(consolidatedButton);
-      console.log('Open view button created successfully next to h1 title');
+      console.log('Consolidated overview button created successfully next to h1 title');
       inserted = true;
     }
 
@@ -1769,8 +1828,11 @@
     if (!inserted) {
       const pageHeader = document.querySelector('.sc-ab2f0a4f-4') || document.querySelector('[class*="title"]');
       if (pageHeader) {
-        pageHeader.appendChild(button);
-        console.log('Open view button created in page header');
+        if (button) {
+          pageHeader.appendChild(button);
+        }
+        pageHeader.appendChild(consolidatedButton);
+        console.log('Consolidated overview button created in page header');
         inserted = true;
       }
     }
@@ -1779,23 +1841,29 @@
     if (!inserted) {
       const mainContent = document.querySelector('main') || document.querySelector('[role="main"]');
       if (mainContent) {
-        mainContent.insertBefore(button, mainContent.firstChild);
-        console.log('Open view button created at top of content');
+        if (button) {
+          mainContent.insertBefore(button, mainContent.firstChild);
+        }
+        mainContent.insertBefore(consolidatedButton, mainContent.firstChild);
+        console.log('Consolidated overview button created at top of content');
         inserted = true;
       }
     }
 
     // Fallback 3: Just append to body if nothing else works
     if (!inserted) {
-      document.body.insertBefore(button, document.body.firstChild);
-      console.log('Open view button created at top of body');
+      if (button) {
+        document.body.insertBefore(button, document.body.firstChild);
+      }
+      document.body.insertBefore(consolidatedButton, document.body.firstChild);
+      console.log('Consolidated overview button created at top of body');
     }
   }
 
   /**
    * Initialize on page load
    */
-  if (isIMDbFullCreditsPage() || isIMDbCompanyCreditsPage() || isIMDbAwardsPage() || isIMDbReleaseInfoPage() || isIMDbTechnicalPage()) {
+  if (isIMDbFullCreditsPage() || isIMDbCompanyCreditsPage() || isIMDbAwardsPage() || isIMDbReleaseInfoPage() || isIMDbTechnicalPage() || isIMDbTitlePage()) {
     // Function to try initializing the view button
     const tryInitialize = async () => {
       // Check if this is a consolidated view extraction request

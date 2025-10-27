@@ -586,6 +586,27 @@ chrome.runtime.onInstalled.addListener(() => {
       return true; // Keep channel open for async response
     }
 
+    // Handle getCurrentTabId request
+    if (message.type === 'getCurrentTabId') {
+      sendResponse({ tabId: sender.tab.id });
+      return;
+    }
+
+    // Handle focusTab request
+    if (message.type === 'focusTab') {
+      const tabId = message.tabId;
+      chrome.tabs.update(tabId, { active: true }, () => {
+        if (chrome.runtime.lastError) {
+          console.warn(`Failed to focus tab ${tabId}:`, chrome.runtime.lastError);
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        } else {
+          console.log(`Successfully focused tab ${tabId}`);
+          sendResponse({ success: true });
+        }
+      });
+      return true; // Keep channel open for async response
+    }
+
     // Handle OCR requests from content script - forward to offscreen document
     if (message.action === 'performOCR') {
       console.log('Background: Received performOCR message from:', sender.tab?.id, sender.url);
