@@ -25,6 +25,7 @@
           <li><a href="#query-patterns" class="sidebar-link" data-section="query-patterns">🔗 Query Patterns</a></li>
           <li><a href="#copy-visibility" class="sidebar-link" data-section="copy-visibility">👁️ Copy Visibility</a></li>
           <li><a href="#customized-view-pages" class="sidebar-link" data-section="customized-view-pages">📋 Customized View</a></li>
+          <li><a href="#comparison-feature" class="sidebar-link" data-section="comparison-feature">⚔️ Comparison</a></li>
           <li><a href="#advanced" class="sidebar-link" data-section="advanced">⚡ Advanced</a></li>
         </ul>
       </nav>
@@ -549,6 +550,87 @@
                 </label>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Wikipedia Customized View Settings -->
+        <div class="setting-group">
+          <h3 class="group-title">Wikipedia</h3>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Show "View Cast & Crew in New Tab" Button</span>
+              <span class="label-description">Display button on Wikipedia movie/TV pages to open interactive view</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="show-wiki-customized-view-btn" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Open Wikipedia Views in New Tab</span>
+              <span class="label-description">Automatically open Wikipedia customized views in a new tab when clicking the view button</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="auto-open-wiki-view" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Comparison Feature Section -->
+      <section class="settings-section" id="comparison-feature">
+        <div class="section-header">
+          <h2>⚔️ Comparison Feature</h2>
+          <p class="section-description">Compare cast, crew, and production data between Wikipedia and IMDb</p>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">
+            <span class="label-text">Show Comparison Buttons</span>
+            <span class="label-description">Display "Compare with IMDb/Wikipedia" buttons on pages (feature always available, this only controls button visibility)</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="enable-comparison-feature">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-subsection" id="comparison-settings" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color); opacity: 0.5; pointer-events: none;">
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Show Button on Wikipedia Pages</span>
+              <span class="label-description">Display "Compare with IMDb" button on Wikipedia movie/TV pages</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="show-comparison-btn-wiki" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Show Button on IMDb Pages</span>
+              <span class="label-description">Display "Compare with Wikipedia" button on IMDb title pages</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="show-comparison-btn-imdb" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Auto-Open Comparison Page</span>
+              <span class="label-description">Automatically open comparison results in a new tab after data extraction completes</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="auto-open-comparison" checked>
+              <span class="toggle-slider"></span>
+            </label>
           </div>
         </div>
       </section>

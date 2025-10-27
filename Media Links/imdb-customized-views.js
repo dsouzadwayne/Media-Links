@@ -71,7 +71,7 @@
   }
 
   /**
-   * Normalize role text by removing "the" prefix and "(as ...)" suffix
+   * Normalize role text by removing "the" prefix and "(as ...)" suffix and location info
    */
   function normalizeRole(roleText) {
     let normalized = roleText.toLowerCase().trim();
@@ -81,6 +81,8 @@
     }
     // Remove "(as ...)" suffix if present
     normalized = normalized.replace(/\s*\(as\s+[^)]*\)\s*/g, '').trim();
+    // Remove location information (e.g., ": New York", ": London", etc.)
+    normalized = normalized.replace(/:\s+[A-Z][a-zA-Z\s]+$/i, '').trim();
     return normalized;
   }
 
@@ -101,7 +103,8 @@
       'music producer',
       'record producer',
       'associate producer',
-      'female producer'
+      'female producer',
+      'line producer'
     ];
 
     // Director roles to exclude
@@ -123,8 +126,26 @@
       }
     }
 
-    // Exclude dialogue writers
-    if (roleLower.includes('writer') && roleLower.includes('dialogue')) {
+    // Exclude dialogue writers - check for dialogue as sole credit
+    if (roleLower.includes('dialogue')) {
+      // Exclude if dialogue is the only role or if writer + dialogue
+      if (!hasMultipleRoles) {
+        // Singular role - exclude if it's dialogue-related
+        if (roleLower.includes('dialogue')) {
+          return true;
+        }
+      } else {
+        // Multiple roles - exclude if one of them is dialogue
+        const roles = roleText.split('/').map(r => normalizeRole(r));
+        const hasSoleDialogue = roles.some(role => role.includes('dialogue') && !role.includes('writer'));
+        if (hasSoleDialogue || (roleLower.includes('writer') && roleLower.includes('dialogue'))) {
+          return true;
+        }
+      }
+    }
+
+    // Exclude "story co-developed by" writer credits - only for singular roles
+    if (!hasMultipleRoles && roleLower.includes('story') && roleLower.includes('co-developed')) {
       return true;
     }
 
@@ -549,6 +570,73 @@
   }
 
   /**
+   * Extract description/plot from the main title page
+   */
+  function extractTitlePageDescription() {
+    let description = '';
+    let title = '';
+
+    // Try to get the title
+    const titleElement = document.querySelector('h1[data-testid="hero__pageTitle"]') ||
+                        document.querySelector('h1.sc-afe43def-0') ||
+                        document.querySelector('h1');
+    if (titleElement) {
+      title = titleElement.textContent.trim();
+    }
+
+    // Try to get the description/plot - multiple selectors for different IMDb layouts
+    const plotSelectors = [
+      '[data-testid="plot"] .sc-cd293e3c-0',  // New IMDb layout
+      '[data-testid="plot"] p',
+      '.plot_summary_wrapper .summary_text',  // Old IMDb layout
+      '[data-testid="storyline-plot-summary"]',
+      '.GenresAndPlot__TextContainerBreakpointXS-cum89p-0 span',
+      'span[data-testid="plot-xl"]',
+      'span[data-testid="plot-l"]'
+    ];
+
+    for (const selector of plotSelectors) {
+      const plotElement = document.querySelector(selector);
+      if (plotElement) {
+        description = plotElement.textContent.trim();
+        if (description) {
+          console.log('Found plot using selector:', selector);
+          break;
+        }
+      }
+    }
+
+    // If still no description, try alternate method - look for paragraph in hero section
+    if (!description) {
+      const heroSection = document.querySelector('[data-testid="hero-subnav-bar"]');
+      if (heroSection) {
+        const nextSection = heroSection.nextElementSibling;
+        if (nextSection) {
+          const paragraphs = nextSection.querySelectorAll('p');
+          for (const p of paragraphs) {
+            const text = p.textContent.trim();
+            if (text && text.length > 50) { // Assume description is substantial
+              description = text;
+              console.log('Found plot in hero section paragraph');
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    console.log('Title page extraction complete:', {
+      title: title ? 'Found' : 'Not found',
+      description: description ? `Found (${description.length} chars)` : 'Not found'
+    });
+
+    return {
+      title: title || 'Unknown Title',
+      description: description || ''
+    };
+  }
+
+  /**
    * Wait for technical specs DOM elements to be available (enterprise networks may block resources)
    */
   async function waitForTechnicalDOM(maxWaitTime = 15000) {
@@ -575,6 +663,56 @@
 
     const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`Technical specs DOM elements not found after ${elapsedSeconds}s (page may not have technical data)`);
+    return false;
+  }
+
+  /**
+   * Wait for title page DOM elements to be available (title and plot)
+   */
+  async function waitForTitleDOM(maxWaitTime = 15000) {
+    const startTime = Date.now();
+    const requiredSelectors = [
+      'h1[data-testid="hero__pageTitle"]',
+      'h1.sc-afe43def-0',
+      'h1'
+    ];
+
+    const plotSelectors = [
+      '[data-testid="plot"] .sc-cd293e3c-0',
+      '[data-testid="plot"] p',
+      'span[data-testid="plot-xl"]',
+      'span[data-testid="plot-l"]',
+      '[data-testid="storyline-plot-summary"]'
+    ];
+
+    while (Date.now() - startTime < maxWaitTime) {
+      // Check if title element exists
+      const hasTitle = requiredSelectors.some(selector =>
+        document.querySelector(selector) !== null
+      );
+
+      // Check if plot element exists
+      const hasPlot = plotSelectors.some(selector =>
+        document.querySelector(selector) !== null
+      );
+
+      // We need at least the title; plot is optional
+      if (hasTitle) {
+        console.log('Title page DOM elements found');
+        if (hasPlot) {
+          console.log('Plot/description found');
+        } else {
+          console.log('Title found but plot not available (may not have description)');
+        }
+        return true;
+      }
+
+      // Wait 500ms before checking again
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`Title page DOM elements not found after ${elapsedSeconds}s (page may not have loaded)`);
     return false;
   }
 
@@ -738,9 +876,21 @@
    * Store extracted data in chrome storage for consolidated view
    */
   function storeConsolidatedData(pageType, data) {
+    // Check if extension context is still valid before making API call
+    if (!isExtensionContextValid()) {
+      console.log('Extension context invalidated, cannot store consolidated data');
+      return;
+    }
+
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
       const storageKey = `consolidatedViewData_${pageType}`;
       chrome.storage.local.set({ [storageKey]: data }, () => {
+        // Check context again in the callback
+        if (!isExtensionContextValid()) {
+          console.log('Extension context invalidated in callback');
+          return;
+        }
+
         if (chrome.runtime.lastError) {
           console.error(`Error storing ${pageType} data:`, chrome.runtime.lastError);
         } else {
@@ -988,8 +1138,28 @@
   function loadCustomizedViewSettings() {
     return new Promise((resolve) => {
       try {
+        // Check if extension context is still valid before making API call
+        if (!isExtensionContextValid()) {
+          console.log('Extension context invalidated, using default settings');
+          resolve({
+            showBtn: true,
+            columns: ['name', 'role', 'roleType']
+          });
+          return;
+        }
+
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
           chrome.storage.sync.get(['showCustomizedViewBtn', 'defaultViewColumns'], (result) => {
+            // Check context again in the callback in case it was invalidated during the async operation
+            if (!isExtensionContextValid()) {
+              console.log('Extension context invalidated in callback, using default settings');
+              resolve({
+                showBtn: true,
+                columns: ['name', 'role', 'roleType']
+              });
+              return;
+            }
+
             if (chrome.runtime.lastError) {
               console.warn('Error loading customized view settings:', chrome.runtime.lastError);
               resolve({
@@ -1142,7 +1312,29 @@
       console.log('Opening consolidated view for movie:', movieId);
 
       // Get current tab ID to return focus later
+      if (!isExtensionContextValid()) {
+        showConsolidatedViewNotification('❌ Extension context invalidated. Please reload the page and try again.', 'error');
+        if (button) {
+          button.disabled = false;
+          button.style.opacity = '1';
+          button.style.cursor = 'pointer';
+          button.textContent = '🎬 Consolidated Overview';
+        }
+        return;
+      }
+
       chrome.runtime.sendMessage({ type: 'getCurrentTabId' }, (response) => {
+        if (!isExtensionContextValid()) {
+          showConsolidatedViewNotification('❌ Extension context invalidated. Please reload the page and try again.', 'error');
+          if (button) {
+            button.disabled = false;
+            button.style.opacity = '1';
+            button.style.cursor = 'pointer';
+            button.textContent = '🎬 Consolidated Overview';
+          }
+          return;
+        }
+
         const originalTabId = response && response.tabId ? response.tabId : null;
         if (originalTabId) {
           console.log('Current tab ID:', originalTabId);
@@ -1150,11 +1342,12 @@
           console.warn('Could not get current tab ID');
         }
 
-      // Store movie ID and reset extraction flags
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+        // Store movie ID and reset extraction flags
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         // First, clear any existing data including single view temp data
         chrome.storage.local.remove([
           'customized-view-temp',
+          'consolidatedViewData_title',
           'consolidatedViewData_fullcredits',
           'consolidatedViewData_companycredits',
           'consolidatedViewData_awards',
@@ -1164,6 +1357,7 @@
           // Then set the movie ID and extraction flags
           chrome.storage.local.set({
             'consolidatedViewMovieId': movieId,
+            'consolidatedViewExtractingTitle': false,
             'consolidatedViewExtractingFullcredits': false,
             'consolidatedViewExtractingCompanycredits': false,
             'consolidatedViewExtractingAwards': false,
@@ -1187,6 +1381,7 @@
 
           // Define extraction pages (without ?ref_=consolidatedView to prevent auto-extraction)
           const extractionPages = [
+            { url: `https://www.imdb.com/title/${movieId}/`, name: 'Title & Description', type: 'title' },
             { url: `https://www.imdb.com/title/${movieId}/fullcredits`, name: 'Cast & Crew', type: 'fullcredits' },
             { url: `https://www.imdb.com/title/${movieId}/companycredits`, name: 'Production Companies', type: 'companycredits' },
             { url: `https://www.imdb.com/title/${movieId}/awards`, name: 'Awards', type: 'awards' },
@@ -1594,16 +1789,16 @@
           openAllTabs();
           });
         });
-      } else {
-        console.error('Chrome storage API not available');
-        showConsolidatedViewNotification('❌ Chrome storage API not available. Please reload the extension.', 'error');
-        if (button) {
-          button.disabled = false;
-          button.style.opacity = '1';
-          button.style.cursor = 'pointer';
-          button.textContent = '🎬 Consolidated Overview';
+        } else {
+          console.error('Chrome storage API not available');
+          showConsolidatedViewNotification('❌ Chrome storage API not available. Please reload the extension.', 'error');
+          if (button) {
+            button.disabled = false;
+            button.style.opacity = '1';
+            button.style.cursor = 'pointer';
+            button.textContent = '🎬 Consolidated Overview';
+          }
         }
-      }
       }); // Close chrome.runtime.sendMessage callback
     } catch (error) {
       console.error('Error opening consolidated view:', error);
@@ -1883,7 +2078,14 @@
         let extractedData = null;
         let pageType = '';
 
-        if (isIMDbFullCreditsPage()) {
+        if (isIMDbTitlePage()) {
+          // Wait for title page DOM to load
+          await waitForTitleDOM();
+          // Extract title and description from main title page
+          const titleData = extractTitlePageDescription();
+          extractedData = [titleData]; // Wrap in array for consistency
+          pageType = 'title';
+        } else if (isIMDbFullCreditsPage()) {
           // Wait for cast/crew DOM to load (may be delayed due to network issues)
           await waitForCastDOM();
           extractedData = extractCastData();
@@ -1973,55 +2175,84 @@
   /**
    * Listen for extraction requests from the background/main script (tab selector mode)
    */
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    if (request.type === 'performConsolidatedExtraction') {
-      const pageType = request.pageType;
-      console.log(`Received extraction request for ${pageType}`);
+  // Register message listener with error handling
+  try {
+    if (isExtensionContextValid()) {
+      chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+        if (request.type === 'performConsolidatedExtraction') {
+          const pageType = request.pageType;
+          console.log(`Received extraction request for ${pageType}`);
 
-      (async () => {
-        try {
-          let extractedData = null;
+          (async () => {
+            try {
+              // Check context at the start of the async operation
+              if (!isExtensionContextValid()) {
+                console.warn('Extension context invalidated during extraction');
+                sendResponse({ success: false, error: 'Extension context invalidated' });
+                return;
+              }
 
-          // Wait for DOM to be ready first
-          await new Promise(resolve => setTimeout(resolve, 1000));
+              let extractedData = null;
 
-          // Perform extraction based on page type
-          if (pageType === 'fullcredits' && isIMDbFullCreditsPage()) {
-            await waitForCastDOM();
-            extractedData = extractCastData();
-          } else if (pageType === 'companycredits' && isIMDbCompanyCreditsPage()) {
-            await waitForCompanyDOM();
-            extractedData = extractCompanyData();
-          } else if (pageType === 'awards' && isIMDbAwardsPage()) {
-            await waitForAwardsDOM();
-            extractedData = await extractAwardsData();
-          } else if (pageType === 'releaseinfo' && isIMDbReleaseInfoPage()) {
-            await waitForReleaseDOM();
-            extractedData = await extractReleaseData();
-          } else if (pageType === 'technical' && isIMDbTechnicalPage()) {
-            await waitForTechnicalDOM();
-            extractedData = extractTechnicalData();
-          }
+              // Wait for DOM to be ready first
+              await new Promise(resolve => setTimeout(resolve, 1000));
 
-          // Store extracted data
-          if (extractedData) {
-            storeConsolidatedData(pageType, extractedData);
-            console.log(`✓ Extracted and stored ${pageType} data (${extractedData.length} items)`);
-          } else {
-            storeConsolidatedData(pageType, []);
-            console.log(`No data found for ${pageType}, stored empty array`);
-          }
+              // Perform extraction based on page type
+              if (pageType === 'title' && isIMDbTitlePage()) {
+                // Wait for title page DOM to load
+                await waitForTitleDOM();
+                // Extract title and description
+                const titleData = extractTitlePageDescription();
+                extractedData = [titleData]; // Wrap in array for consistency
+              } else if (pageType === 'fullcredits' && isIMDbFullCreditsPage()) {
+                await waitForCastDOM();
+                extractedData = extractCastData();
+              } else if (pageType === 'companycredits' && isIMDbCompanyCreditsPage()) {
+                await waitForCompanyDOM();
+                extractedData = extractCompanyData();
+              } else if (pageType === 'awards' && isIMDbAwardsPage()) {
+                await waitForAwardsDOM();
+                extractedData = await extractAwardsData();
+              } else if (pageType === 'releaseinfo' && isIMDbReleaseInfoPage()) {
+                await waitForReleaseDOM();
+                extractedData = await extractReleaseData();
+              } else if (pageType === 'technical' && isIMDbTechnicalPage()) {
+                await waitForTechnicalDOM();
+                extractedData = extractTechnicalData();
+              }
 
-          sendResponse({ success: true, pageType, itemsExtracted: extractedData ? extractedData.length : 0 });
-        } catch (error) {
-          console.error(`Error extracting ${pageType}:`, error);
-          storeConsolidatedData(pageType, []);
-          sendResponse({ success: false, error: error.message });
+              // Check context before storing data
+              if (!isExtensionContextValid()) {
+                console.warn('Extension context invalidated before storing data');
+                sendResponse({ success: false, error: 'Extension context invalidated' });
+                return;
+              }
+
+              // Store extracted data
+              if (extractedData) {
+                storeConsolidatedData(pageType, extractedData);
+                console.log(`✓ Extracted and stored ${pageType} data (${extractedData.length} items)`);
+              } else {
+                storeConsolidatedData(pageType, []);
+                console.log(`No data found for ${pageType}, stored empty array`);
+              }
+
+              sendResponse({ success: true, pageType, itemsExtracted: extractedData ? extractedData.length : 0 });
+            } catch (error) {
+              console.error(`Error extracting ${pageType}:`, error);
+              storeConsolidatedData(pageType, []);
+              sendResponse({ success: false, error: error.message });
+            }
+          })();
+
+          return true; // Keep channel open for async response
         }
-      })();
-
-      return true; // Keep channel open for async response
+      });
+    } else {
+      console.warn('Extension context invalid at startup, message listener not registered');
     }
-  });
+  } catch (error) {
+    console.warn('Error registering message listener:', error);
+  }
 
 })();

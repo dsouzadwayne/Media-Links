@@ -43,7 +43,7 @@
      * Define role type order
      */
     getRoleTypeOrder() {
-      return ['Creators', 'Directors', 'Producers', 'Writers', 'Writers Screenplay', 'Executive Producers', 'Cast'];
+      return ['Creators', 'Directors', 'Producers', 'Writers', 'Writers Screenplay', 'Executive Producers', 'Cast', 'Production Companies', 'Runtime', 'Countries', 'Languages', 'Release Date'];
     }
 
     /**

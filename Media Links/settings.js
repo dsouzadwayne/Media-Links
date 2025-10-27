@@ -36,8 +36,18 @@ const DEFAULT_SETTINGS = {
   // Customized view settings
   customizedViewLimit: 8,
   showCustomizedViewBtn: true,
-  autoOpenCustomizedView: false,
-  defaultViewColumns: ['name', 'role', 'roleType']
+  autoOpenIndividualView: true,
+  showConsolidatedViewBtn: true,
+  autoOpenConsolidatedView: true,
+  defaultViewColumns: ['name', 'role', 'roleType'],
+  // Wikipedia customized view settings
+  showWikiCustomizedViewBtn: true,
+  autoOpenWikiView: true,
+  // Comparison feature settings
+  enableComparisonFeature: false,
+  showComparisonBtnWiki: true,
+  showComparisonBtnImdb: true,
+  autoOpenComparison: true
 };
 
 let currentSettings = { ...DEFAULT_SETTINGS };
@@ -203,6 +213,19 @@ function applySettingsToUI() {
   document.getElementById('show-consolidated-view-btn').checked = currentSettings.showConsolidatedViewBtn !== false;
   document.getElementById('auto-open-consolidated-view').checked = currentSettings.autoOpenConsolidatedView !== false;
 
+  // Wikipedia customized view settings
+  document.getElementById('show-wiki-customized-view-btn').checked = currentSettings.showWikiCustomizedViewBtn !== false;
+  document.getElementById('auto-open-wiki-view').checked = currentSettings.autoOpenWikiView !== false;
+
+  // Comparison feature settings
+  document.getElementById('enable-comparison-feature').checked = currentSettings.enableComparisonFeature === true;
+  document.getElementById('show-comparison-btn-wiki').checked = currentSettings.showComparisonBtnWiki !== false;
+  document.getElementById('show-comparison-btn-imdb').checked = currentSettings.showComparisonBtnImdb !== false;
+  document.getElementById('auto-open-comparison').checked = currentSettings.autoOpenComparison !== false;
+
+  // Toggle comparison settings subsection based on enable state
+  toggleComparisonSettings(currentSettings.enableComparisonFeature === true);
+
   // Set default view columns
   const defaultColumns = currentSettings.defaultViewColumns || ['name', 'role', 'roleType'];
   document.querySelectorAll('.view-column-checkbox').forEach(checkbox => {
@@ -245,6 +268,12 @@ function attachEventListeners() {
   // Theme change
   document.getElementById('theme-select').addEventListener('change', (e) => {
     applyTheme(e.target.value);
+    markUnsaved();
+  });
+
+  // Comparison feature toggle
+  document.getElementById('enable-comparison-feature').addEventListener('change', (e) => {
+    toggleComparisonSettings(e.target.checked);
     markUnsaved();
   });
 
@@ -318,6 +347,20 @@ function markUnsaved() {
   showStatus('Unsaved changes', 'warning');
 }
 
+// Toggle comparison settings subsection visibility
+function toggleComparisonSettings(enabled) {
+  const subsection = document.getElementById('comparison-settings');
+  if (subsection) {
+    if (enabled) {
+      subsection.style.opacity = '1';
+      subsection.style.pointerEvents = 'auto';
+    } else {
+      subsection.style.opacity = '0.5';
+      subsection.style.pointerEvents = 'none';
+    }
+  }
+}
+
 // Save settings
 function saveSettings() {
   // Collect all settings
@@ -367,7 +410,15 @@ function saveSettings() {
     autoOpenIndividualView: document.getElementById('auto-open-individual-view').checked,
     showConsolidatedViewBtn: document.getElementById('show-consolidated-view-btn').checked,
     autoOpenConsolidatedView: document.getElementById('auto-open-consolidated-view').checked,
-    defaultViewColumns: Array.from(document.querySelectorAll('.view-column-checkbox:checked')).map(cb => cb.value)
+    defaultViewColumns: Array.from(document.querySelectorAll('.view-column-checkbox:checked')).map(cb => cb.value),
+    // Wikipedia customized view settings
+    showWikiCustomizedViewBtn: document.getElementById('show-wiki-customized-view-btn').checked,
+    autoOpenWikiView: document.getElementById('auto-open-wiki-view').checked,
+    // Comparison feature settings
+    enableComparisonFeature: document.getElementById('enable-comparison-feature').checked,
+    showComparisonBtnWiki: document.getElementById('show-comparison-btn-wiki').checked,
+    showComparisonBtnImdb: document.getElementById('show-comparison-btn-imdb').checked,
+    autoOpenComparison: document.getElementById('auto-open-comparison').checked
   };
 
   // Save to storage using SettingsUtils with validation

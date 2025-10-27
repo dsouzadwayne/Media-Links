@@ -6,6 +6,7 @@
 
   let viewMode = null; // 'single' or 'consolidated'
   let allData = {
+    titleDescription: null,
     castCrew: [],
     productionCompanies: [],
     awards: [],
@@ -43,13 +44,15 @@
 
         // Otherwise check for consolidated view data
         chrome.storage.local.get([
+          'consolidatedViewData_title',
           'consolidatedViewData_fullcredits',
           'consolidatedViewData_companycredits',
           'consolidatedViewData_awards',
           'consolidatedViewData_releaseinfo',
           'consolidatedViewData_technical'
         ], (consolidatedResult) => {
-          const hasConsolidatedData = consolidatedResult['consolidatedViewData_fullcredits'] ||
+          const hasConsolidatedData = consolidatedResult['consolidatedViewData_title'] ||
+                                      consolidatedResult['consolidatedViewData_fullcredits'] ||
                                       consolidatedResult['consolidatedViewData_companycredits'] ||
                                       consolidatedResult['consolidatedViewData_awards'] ||
                                       consolidatedResult['consolidatedViewData_releaseinfo'] ||
@@ -178,6 +181,7 @@
   async function loadConsolidatedData() {
     return new Promise((resolve) => {
       chrome.storage.local.get([
+        'consolidatedViewData_title',
         'consolidatedViewData_fullcredits',
         'consolidatedViewData_companycredits',
         'consolidatedViewData_awards',
@@ -185,6 +189,14 @@
         'consolidatedViewData_technical'
       ], (result) => {
         console.log('Retrieved consolidated data from storage:', result);
+
+        // Extract title and description from the title data
+        const titleData = result['consolidatedViewData_title'];
+        if (titleData && Array.isArray(titleData) && titleData.length > 0) {
+          allData.titleDescription = titleData[0]; // Get the first (and only) item
+        } else {
+          allData.titleDescription = null;
+        }
 
         allData.castCrew = result['consolidatedViewData_fullcredits'] || [];
         allData.productionCompanies = result['consolidatedViewData_companycredits'] || [];
@@ -305,10 +317,15 @@
     }
 
     // Add search controls for consolidated view (removed for now since each section has its own search)
+    // Count sections: arrays with items + titleDescription if it has description
+    const arraySectionCount = Object.keys(allData).filter(k => Array.isArray(allData[k]) && allData[k].length > 0).length;
+    const hasTitleDescription = allData.titleDescription && allData.titleDescription.description;
+    const totalSections = arraySectionCount + (hasTitleDescription ? 1 : 0);
+
     headerControls.innerHTML = `
       <div class="page-search">
         <div class="search-result-count" style="font-size: 14px; color: var(--text-primary);">
-          Showing ${Object.keys(allData).filter(k => Array.isArray(allData[k]) && allData[k].length > 0).length} sections
+          Showing ${totalSections} section${totalSections !== 1 ? 's' : ''}
         </div>
       </div>
     `;
@@ -317,11 +334,50 @@
 
     let hasData = false;
 
+    // Title and Description section (displayed at the top)
+    if (allData.titleDescription && allData.titleDescription.description) {
+      hasData = true;
+      const descriptionSection = document.createElement('div');
+      descriptionSection.className = 'section description-section';
+      descriptionSection.style.cssText = `
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 24px;
+        border-radius: 8px;
+        margin-bottom: 24px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      `;
+
+      const titleDiv = document.createElement('h2');
+      titleDiv.textContent = allData.titleDescription.title || 'Movie Overview';
+      titleDiv.style.cssText = `
+        margin: 0 0 16px 0;
+        font-size: 24px;
+        font-weight: 700;
+      `;
+
+      const descDiv = document.createElement('p');
+      descDiv.textContent = allData.titleDescription.description;
+      descDiv.style.cssText = `
+        margin: 0;
+        font-size: 16px;
+        line-height: 1.6;
+        opacity: 0.95;
+      `;
+
+      descriptionSection.appendChild(titleDiv);
+      descriptionSection.appendChild(descDiv);
+
+      contentDiv.innerHTML = '';
+      contentDiv.appendChild(descriptionSection);
+    } else {
+      contentDiv.innerHTML = '';
+    }
+
     // Cast & Crew section
     if (allData.castCrew && allData.castCrew.length > 0) {
       hasData = true;
       const section = await createSection('📋 Cast & Crew', 'cast-crew', allData.castCrew, ['name', 'role', 'roleType']);
-      contentDiv.innerHTML = '';
       contentDiv.appendChild(section);
     }
 
@@ -371,13 +427,15 @@
       elapsedTime += pollInterval;
 
       chrome.storage.local.get([
+        'consolidatedViewData_title',
         'consolidatedViewData_fullcredits',
         'consolidatedViewData_companycredits',
         'consolidatedViewData_awards',
         'consolidatedViewData_releaseinfo',
         'consolidatedViewData_technical'
       ], (result) => {
-        const hasData = result['consolidatedViewData_fullcredits'] ||
+        const hasData = result['consolidatedViewData_title'] ||
+                       result['consolidatedViewData_fullcredits'] ||
                        result['consolidatedViewData_companycredits'] ||
                        result['consolidatedViewData_awards'] ||
                        result['consolidatedViewData_releaseinfo'] ||
@@ -448,10 +506,149 @@
     }
   }
 
+  /**
+   * Check if this view was opened from comparison
+   */
+  function checkIfFromComparison() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const source = urlParams.get('source');
+
+    if (source === 'comparison' || source === 'wikipedia') {
+      // Show navigation tabs
+      const navDiv = document.getElementById('view-navigation');
+      if (navDiv) {
+        navDiv.style.display = 'flex';
+
+        // Update active tab based on source
+        if (source === 'wikipedia') {
+          document.getElementById('nav-wiki-view')?.classList.add('active');
+          document.getElementById('nav-imdb-view')?.classList.remove('active');
+        }
+      }
+    }
+  }
+
+  /**
+   * Convert Wikipedia data structure to flat array format for view
+   */
+  function convertWikipediaDataToViewFormat(wikiData) {
+    const flatData = [];
+
+    // Add cast
+    if (wikiData.cast && Array.isArray(wikiData.cast)) {
+      wikiData.cast.forEach(item => {
+        flatData.push({
+          name: item.name || item.actor || '',
+          role: item.character || item.role || '',
+          roleType: 'Cast',
+          section: 'Cast'
+        });
+      });
+    }
+
+    // Add directors
+    if (wikiData.directors && Array.isArray(wikiData.directors)) {
+      wikiData.directors.forEach(item => {
+        flatData.push({
+          name: item.name || item,
+          role: 'Director',
+          roleType: 'Directing',
+          section: 'Directing'
+        });
+      });
+    }
+
+    // Add producers
+    if (wikiData.producers && Array.isArray(wikiData.producers)) {
+      wikiData.producers.forEach(item => {
+        flatData.push({
+          name: item.name || item,
+          role: item.role || 'Producer',
+          roleType: 'Producing',
+          section: 'Producing'
+        });
+      });
+    }
+
+    // Add writers
+    if (wikiData.writers && Array.isArray(wikiData.writers)) {
+      wikiData.writers.forEach(item => {
+        flatData.push({
+          name: item.name || item,
+          role: item.role || 'Writer',
+          roleType: 'Writing',
+          section: 'Writing'
+        });
+      });
+    }
+
+    // Add production companies
+    if (wikiData.productionCompanies && Array.isArray(wikiData.productionCompanies)) {
+      wikiData.productionCompanies.forEach(item => {
+        flatData.push({
+          name: item.name || item,
+          role: 'Production Company',
+          roleType: 'Production',
+          section: 'Production'
+        });
+      });
+    }
+
+    return flatData;
+  }
+
+  /**
+   * Switch to Wikipedia view from consolidated view
+   */
+  window.switchToWikipediaViewFromConsolidated = function() {
+    // Get comparison data from storage
+    chrome.storage.local.get(['comparison-data'], (result) => {
+      if (result['comparison-data'] && result['comparison-data'].sourceA) {
+        // Convert Wikipedia data to flat format
+        const flatData = convertWikipediaDataToViewFormat(result['comparison-data'].sourceA);
+
+        // Store Wikipedia data
+        chrome.storage.local.set({
+          'customized-view-temp': {
+            data: flatData,
+            source: 'Wikipedia',
+            title: result['comparison-data'].sourceAName || 'Wikipedia',
+            columns: ['name', 'role', 'roleType'],
+            pageSource: 'Wikipedia'
+          }
+        }, () => {
+          // Reload with wikipedia source parameter
+          window.location.href = chrome.runtime.getURL('consolidated-view-page.html?source=wikipedia');
+        });
+      } else {
+        alert('Wikipedia data not available');
+      }
+    });
+  };
+
+  /**
+   * Switch to comparison view from consolidated view
+   */
+  window.switchToComparisonFromConsolidated = function() {
+    // Check if comparison data exists
+    chrome.storage.local.get(['comparison-data'], (result) => {
+      if (result['comparison-data']) {
+        // Go to comparison page
+        window.location.href = chrome.runtime.getURL('comparison-view-page.html');
+      } else {
+        alert('Comparison data not available. Please start a new comparison from IMDb or Wikipedia.');
+      }
+    });
+  };
+
   // Load when page is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initialize);
+    document.addEventListener('DOMContentLoaded', () => {
+      initialize();
+      checkIfFromComparison();
+    });
   } else {
     initialize();
+    checkIfFromComparison();
   }
 })();
