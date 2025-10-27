@@ -199,7 +199,9 @@ function applySettingsToUI() {
 
   // Customized view settings
   document.getElementById('show-customized-view-btn').checked = currentSettings.showCustomizedViewBtn !== false;
-  document.getElementById('auto-open-customized-view').checked = currentSettings.autoOpenCustomizedView === true;
+  document.getElementById('auto-open-individual-view').checked = currentSettings.autoOpenIndividualView !== false;
+  document.getElementById('show-consolidated-view-btn').checked = currentSettings.showConsolidatedViewBtn !== false;
+  document.getElementById('auto-open-consolidated-view').checked = currentSettings.autoOpenConsolidatedView !== false;
 
   // Set default view columns
   const defaultColumns = currentSettings.defaultViewColumns || ['name', 'role', 'roleType'];
@@ -362,7 +364,9 @@ function saveSettings() {
     bookMyShowIncludeRoles: document.getElementById('bookmyshow-include-roles').checked,
     // Customized view settings
     showCustomizedViewBtn: document.getElementById('show-customized-view-btn').checked,
-    autoOpenCustomizedView: document.getElementById('auto-open-customized-view').checked,
+    autoOpenIndividualView: document.getElementById('auto-open-individual-view').checked,
+    showConsolidatedViewBtn: document.getElementById('show-consolidated-view-btn').checked,
+    autoOpenConsolidatedView: document.getElementById('auto-open-consolidated-view').checked,
     defaultViewColumns: Array.from(document.querySelectorAll('.view-column-checkbox:checked')).map(cb => cb.value)
   };
 

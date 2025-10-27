@@ -56,7 +56,7 @@
    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAg7lsvd5P2DYSQrFcVsv4OUxx3/2FCs6Osaxufuikf/QZz5LXWTqnyk3MUtFFPk16hvNROLoRrfm/uHzGwWRTCMWe9cbepoNeNko863NQsGpy+XQXU3YKSCqdU5l/7vweqdR7Z1rEwvVG+NDxqpmqwsnOaFhFMLTS5lzTGF5HelkXQeQrT1UoJsNoo87gfiNcOb31vYaogtJqDcO1rxlve9wcmQPwODUBk/XeXoIl5nFKOtpOy0JjD2ErAfln8YDnGwOXvtvOLx7OJIsZ/gfDKKf/bIX2uXVNGHQM+P2gcSZVyxo6B0xOEd/iSmLWbdU4bBvM65VW+87Blp3Oejk9CQIDAQAB",
    "manifest_version": 3,
    "name": "Media Links",
-   "permissions": [ "activeTab", "sidePanel", "scripting", "storage", "contextMenus", "offscreen" ],
+   "permissions": [ "activeTab", "sidePanel", "scripting", "storage", "contextMenus", "offscreen", "tabs" ],
    "side_panel": {
       "default_path": "sidebar.html",
       "default_width": 300
@@ -65,10 +65,10 @@
       "pages": ["sandbox.html"]
    },
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "0.732",
+   "version": "0.750",
    "web_accessible_resources": [
       {
-         "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html", "offscreen.html", "customized-view-page.html", "customized-view-page.js", "customized-views.js", "theme-manager.js", "settings-utils.js"],
+         "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html", "offscreen.html", "consolidated-view-page.html", "consolidated-view-page.js", "customized-views.js", "theme-manager.js", "settings-utils.js"],
          "matches": ["<all_urls>"],
          "use_dynamic_url": true
       }

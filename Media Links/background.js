@@ -424,6 +424,37 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('Background: Received message:', message.type || message.action, 'from:', sender.tab?.id);
 
+    // Handle creating tabs for consolidated view extraction
+    if (message.type === 'createTab') {
+      chrome.tabs.create({ url: message.url, active: message.active || false }, (tab) => {
+        if (chrome.runtime.lastError) {
+          console.error('Background: Error creating tab:', chrome.runtime.lastError);
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        } else {
+          console.log('Background: Created tab:', tab.id);
+          sendResponse({ success: true, tabId: tab.id });
+        }
+      });
+      return true; // Keep channel open for async response
+    }
+
+    // Handle closing consolidated view extraction tabs
+    if (message.type === 'closeConsolidatedViewTab') {
+      const tabId = sender.tab.id;
+      console.log(`Background: Closing consolidated view tab ${tabId} (${message.pageType})`);
+
+      chrome.tabs.remove(tabId, () => {
+        if (chrome.runtime.lastError) {
+          console.warn(`Failed to close tab ${tabId}:`, chrome.runtime.lastError);
+        } else {
+          console.log(`Successfully closed tab ${tabId}`);
+        }
+        sendResponse({ success: true });
+      });
+
+      return true; // Keep channel open for async response
+    }
+
     // Handle theme change broadcasts from settings page
     if (message.type === 'themeChanged' && message.theme) {
       console.log('Background: Broadcasting theme change to all pages:', message.theme);

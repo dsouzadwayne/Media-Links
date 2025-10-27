@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Media Links View</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            background-color: var(--primary-bg);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+        }
+
+        body {
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .consolidated-page-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .consolidated-page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            gap: 15px;
+            flex-wrap: wrap;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--accent);
+        }
+
+        .consolidated-page-title h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .consolidated-page-search {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .search-input {
+            padding: 8px 12px;
+            border: 2px solid var(--accent);
+            border-radius: 4px;
+            background: var(--secondary-bg);
+            color: var(--text-primary);
+            font-size: 13px;
+            min-width: 250px;
+            transition: all 0.2s;
+        }
+
+        .search-input:focus {
+            outline: none;
+            box-shadow: 0 0 8px rgba(99, 102, 241, 0.3);
+        }
+
+        .search-result-count {
+            font-size: 12px;
+            color: var(--text-primary);
+            min-width: 150px;
+        }
+
+        .consolidated-content {
+            margin-top: 20px;
+        }
+
+        .loading-message {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-primary);
+            font-size: 16px;
+        }
+
+        .error-message {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px 20px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            border-left: 4px solid #c62828;
+        }
+
+        .section {
+            background: var(--secondary-bg);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-icon {
+            font-size: 22px;
+        }
+
+        .item {
+            padding: 10px;
+            margin-bottom: 10px;
+            background: var(--secondary-bg);
+            border-radius: 4px;
+            border-left: 3px solid var(--accent);
+        }
+
+        .item-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 3px;
+        }
+
+        .item-detail {
+            font-size: 12px;
+            color: var(--text-primary);
+            line-height: 1.4;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-primary);
+            font-size: 14px;
+        }
+
+        .highlight {
+            background-color: rgba(99, 102, 241, 0.2);
+            padding: 2px 4px;
+            border-radius: 2px;
+        }
+
+        /* Single view mode specific styles */
+        .page-source-info {
+            font-size: 12px;
+            color: var(--text-primary);
+            opacity: 0.7;
+            margin-left: 10px;
+        }
+
+        .view-page-actions {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .action-btn {
+            padding: 8px 16px;
+            background: var(--accent);
+            color: var(--button-text);
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .action-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .action-btn.secondary {
+            background: var(--secondary-bg);
+            color: var(--text-primary);
+            border: 2px solid var(--accent);
+        }
+
+        .action-btn.secondary:hover {
+            background: var(--hover-color);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-primary);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        /* Unified container and header styles */
+        .page-container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            gap: 15px;
+            flex-wrap: wrap;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--accent);
+        }
+
+        .page-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .page-title h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .page-search {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .page-content {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-container">
+        <div class="page-header">
+            <div class="page-title">
+                <h1 id="page-title">🎬 View</h1>
+                <div class="page-source-info" id="source-info"></div>
+            </div>
+            <div id="header-controls"></div>
+        </div>
+
+        <div id="page-content" class="page-content">
+            <div class="loading-message">Loading data...</div>
+        </div>
+    </div>
+
+    <script src="customized-views.js"></script>
+    <script src="theme-manager.js"></script>
+    <script src="settings-utils.js"></script>
+    <script src="consolidated-view-page.js"></script>
+</body>
+</html>

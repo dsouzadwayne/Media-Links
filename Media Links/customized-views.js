@@ -82,8 +82,30 @@
 
       // Filter by selected roles and search
       const filteredGrouped = {};
+
+      // Process predefined role types first (in order)
       roleOrder.forEach(role => {
         if (this.selectedRoles.has(role)) {
+          const filtered = grouped[role].filter(item => {
+            if (this.searchQuery.trim()) {
+              const query = this.searchQuery.toLowerCase();
+              return (
+                (item.name && item.name.toLowerCase().includes(query)) ||
+                (item.role && item.role.toLowerCase().includes(query))
+              );
+            }
+            return true;
+          });
+
+          if (filtered.length > 0) {
+            filteredGrouped[role] = filtered;
+          }
+        }
+      });
+
+      // Also process any other role types not in the predefined list (e.g., company types)
+      Object.keys(grouped).forEach(role => {
+        if (!roleOrder.includes(role) && this.selectedRoles.has(role)) {
           const filtered = grouped[role].filter(item => {
             if (this.searchQuery.trim()) {
               const query = this.searchQuery.toLowerCase();
@@ -259,9 +281,9 @@
               return;
             }
 
-            // Open the customized view page in a new tab
+            // Open the consolidated view page in a new tab (handles both single and consolidated views)
             try {
-              const extensionUrl = chrome.runtime.getURL('customized-view-page.html');
+              const extensionUrl = chrome.runtime.getURL('consolidated-view-page.html');
               window.open(extensionUrl, '_blank');
             } catch (urlError) {
               console.error('Error getting extension URL:', urlError);
@@ -331,7 +353,7 @@
         position: fixed;
         top: 20px;
         right: 20px;
-        background: var(--accent, #6366f1);
+        background: var(--accent);
         color: white;
         padding: 12px 20px;
         border-radius: 6px;
@@ -387,6 +409,52 @@
     }
 
     /**
+     * Get display name for column header
+     */
+    getColumnDisplayName(col) {
+      const displayNames = {
+        'name': 'Name',
+        'role': 'Award Body',
+        'award': 'Award',
+        'year': 'Year',
+        'roleType': 'Role Type'
+      };
+
+      // Check if we're in a cast/crew context
+      const castCrewRoleTypes = ['Cast', 'Directors', 'Producers', 'Writers', 'Writers Screenplay', 'Executive Producers', 'Creators'];
+      const isCastCrew = this.data.some(item => castCrewRoleTypes.includes(item.roleType));
+      if (isCastCrew && col === 'role') {
+        return 'Role / Character';
+      }
+
+      // Check if we're in a technical specs context
+      const isTechnical = this.data.some(item => item.roleType === 'Technical Specifications');
+      if (isTechnical && col === 'name') {
+        return 'Specification';
+      } else if (isTechnical && col === 'role') {
+        return 'Value';
+      }
+
+      // Check if we're in a release info context
+      const isReleaseInfo = this.data.some(item => item.roleType === 'Release Dates');
+      if (isReleaseInfo && col === 'name') {
+        return 'Country';
+      } else if (isReleaseInfo && col === 'role') {
+        return 'Date';
+      } else if (isReleaseInfo && col === 'award') {
+        return 'Location';
+      }
+
+      // Check if we're in a production companies context
+      const isProductionCompanies = this.data.some(item => item.roleType && item.roleType.toLowerCase().includes('production'));
+      if (isProductionCompanies && col === 'role') {
+        return 'Role';
+      }
+
+      return displayNames[col] || (col.charAt(0).toUpperCase() + col.slice(1));
+    }
+
+    /**
      * Load the customized view limit from settings
      */
     loadViewLimit() {
@@ -420,8 +488,8 @@
       container.id = this.containerId;
       container.className = 'customized-view';
       container.style.cssText = `
-        background: var(--secondary-bg, #f5f5f5);
-        color: var(--text-primary, #333);
+        background: var(--secondary-bg);
+        color: var(--text-primary);
         border-radius: 8px;
         padding: 20px;
         margin: 20px 0;
@@ -455,41 +523,9 @@
         margin: 0;
         font-size: 18px;
         font-weight: 600;
-        color: var(--text-primary, #333);
+        color: var(--text-primary);
       `;
       titleAndBtn.appendChild(title);
-
-      // Open in new tab button
-      const openTabBtn = document.createElement('button');
-      openTabBtn.textContent = '🔗 New Tab';
-      openTabBtn.title = 'Open this view in a new tab';
-      openTabBtn.style.cssText = `
-        padding: 6px 12px;
-        background: var(--accent, #6366f1);
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        font-weight: 600;
-        color: white;
-        transition: all 0.2s;
-      `;
-
-      openTabBtn.addEventListener('mouseenter', () => {
-        openTabBtn.style.opacity = '0.9';
-        openTabBtn.style.transform = 'translateY(-2px)';
-      });
-
-      openTabBtn.addEventListener('mouseleave', () => {
-        openTabBtn.style.opacity = '1';
-        openTabBtn.style.transform = 'translateY(0)';
-      });
-
-      openTabBtn.addEventListener('click', () => {
-        this.openInNewTab();
-      });
-
-      titleAndBtn.appendChild(openTabBtn);
       header.appendChild(titleAndBtn);
 
       // Controls wrapper
@@ -510,10 +546,10 @@
       searchInput.className = 'view-search';
       searchInput.style.cssText = `
         padding: 8px 12px;
-        border: 2px solid var(--hover-color, #e0e0e0);
+        border: 2px solid var(--hover-color);
         border-radius: 4px;
-        background: var(--primary-bg, #fff);
-        color: var(--text-primary, #333);
+        background: var(--primary-bg);
+        color: var(--text-primary);
         font-size: 13px;
         min-width: 200px;
         transition: all 0.2s;
@@ -541,7 +577,7 @@
       roleLabel.style.cssText = `
         font-size: 12px;
         font-weight: 600;
-        color: var(--text-primary, #333);
+        color: var(--text-primary);
       `;
       roleFilterDiv.appendChild(roleLabel);
 
@@ -595,7 +631,7 @@
       counter.textContent = `Showing ${totalEntries} of ${this.data.length} entries`;
       counter.style.cssText = `
         font-size: 12px;
-        color: var(--text-primary, #666);
+        color: var(--text-primary);
         margin-bottom: 15px;
         opacity: 0.8;
       `;
@@ -604,7 +640,22 @@
       // Create tables for each role type group
       const roleOrder = this.getRoleTypeOrder();
       const self = this; // Preserve 'this' context
+
+      // Collect all role types: predefined first, then any custom ones
+      const allRoleTypes = [];
       roleOrder.forEach(roleType => {
+        if (groupedData[roleType] && groupedData[roleType].length > 0) {
+          allRoleTypes.push(roleType);
+        }
+      });
+      // Add any custom role types (like "Production Companies")
+      Object.keys(groupedData).forEach(roleType => {
+        if (!roleOrder.includes(roleType) && groupedData[roleType].length > 0) {
+          allRoleTypes.push(roleType);
+        }
+      });
+
+      allRoleTypes.forEach(roleType => {
         let groupItems = groupedData[roleType];
 
         // Skip if no items in this group
@@ -627,7 +678,7 @@
           margin-top: 25px;
           margin-bottom: 15px;
           padding-bottom: 10px;
-          border-bottom: 2px solid var(--accent, #6366f1);
+          border-bottom: 2px solid var(--accent);
           flex-wrap: wrap;
         `;
 
@@ -652,7 +703,7 @@
           margin: 0;
           font-size: 16px;
           font-weight: 600;
-          color: var(--accent, #6366f1);
+          color: var(--accent);
         `;
         titleWrapper.appendChild(roleTypeTitle);
         sectionHeader.appendChild(titleWrapper);
@@ -668,7 +719,7 @@
         copyBtn.textContent = '📋 Copy';
         copyBtn.style.cssText = `
           padding: 6px 12px;
-          background: var(--accent, #6366f1);
+          background: var(--accent);
           border: none;
           border-radius: 4px;
           color: white;
@@ -694,8 +745,8 @@
           position: absolute;
           top: 100%;
           right: 0;
-          background: var(--secondary-bg, #f5f5f5);
-          border: 2px solid var(--accent, #6366f1);
+          background: var(--secondary-bg);
+          border: 2px solid var(--accent);
           border-radius: 4px;
           min-width: 200px;
           display: none;
@@ -721,14 +772,14 @@
             background: transparent;
             border: none;
             text-align: left;
-            color: var(--text-primary, #333);
+            color: var(--text-primary);
             font-size: 13px;
             cursor: pointer;
             transition: background-color 0.2s;
           `;
 
           optionBtn.addEventListener('mouseenter', () => {
-            optionBtn.style.backgroundColor = 'var(--hover-color, #e0e0e0)';
+            optionBtn.style.backgroundColor = 'var(--hover-color)';
           });
 
           optionBtn.addEventListener('mouseleave', () => {
@@ -773,18 +824,18 @@
         const thead = document.createElement('thead');
         const headerRow = document.createElement('tr');
         headerRow.style.cssText = `
-          border-bottom: 2px solid var(--accent, #6366f1);
-          background-color: var(--secondary-bg, #f0f0f0);
+          border-bottom: 2px solid var(--accent);
+          background-color: var(--secondary-bg);
         `;
 
         this.columns.forEach(col => {
           const th = document.createElement('th');
-          th.textContent = col.charAt(0).toUpperCase() + col.slice(1);
+          th.textContent = this.getColumnDisplayName(col);
           th.style.cssText = `
             padding: 12px;
             text-align: left;
             font-weight: 600;
-            color: var(--accent, #6366f1);
+            color: var(--accent);
           `;
           headerRow.appendChild(th);
         });
@@ -796,7 +847,7 @@
           padding: 12px;
           text-align: center;
           font-weight: 600;
-          color: var(--accent, #6366f1);
+          color: var(--accent);
         `;
         headerRow.appendChild(actionTh);
 
@@ -808,12 +859,12 @@
         displayItems.forEach((item, index) => {
         const row = document.createElement('tr');
         row.style.cssText = `
-          border-bottom: 1px solid var(--hover-color, #e0e0e0);
+          border-bottom: 1px solid var(--hover-color);
           transition: background-color 0.2s;
         `;
 
         row.addEventListener('mouseenter', () => {
-          row.style.backgroundColor = 'var(--hover-color, #e0e0e0)';
+          row.style.backgroundColor = 'var(--hover-color)';
         });
 
         row.addEventListener('mouseleave', () => {
@@ -826,7 +877,7 @@
           td.textContent = cellValue;
           td.style.cssText = `
             padding: 10px 12px;
-            color: var(--text-primary, #333);
+            color: var(--text-primary);
             cursor: pointer;
             transition: all 0.2s;
             border-radius: 3px;
@@ -834,13 +885,13 @@
 
           // Add hover effects
           td.addEventListener('mouseenter', () => {
-            td.style.backgroundColor = 'var(--accent, #6366f1)';
+            td.style.backgroundColor = 'var(--accent)';
             td.style.color = 'white';
           });
 
           td.addEventListener('mouseleave', () => {
             td.style.backgroundColor = 'transparent';
-            td.style.color = 'var(--text-primary, #333)';
+            td.style.color = 'var(--text-primary)';
           });
 
           // Add click to copy
@@ -848,7 +899,7 @@
             e.stopPropagation();
             navigator.clipboard.writeText(cellValue).then(() => {
               // Show feedback
-              td.style.backgroundColor = 'var(--accent, #6366f1)';
+              td.style.backgroundColor = 'var(--accent)';
               td.style.color = 'white';
 
               // Show notification
@@ -857,7 +908,7 @@
               setTimeout(() => {
                 // Reset to transparent and original color
                 td.style.backgroundColor = 'transparent';
-                td.style.color = 'var(--text-primary, #333)';
+                td.style.color = 'var(--text-primary)';
               }, 600);
             }).catch(err => {
               console.error('Failed to copy:', err);
@@ -878,7 +929,7 @@
         copyBtn.innerHTML = '📋';
         copyBtn.title = `Copy: ${item.name}:${item.role}`;
         copyBtn.style.cssText = `
-          background: var(--accent, #6366f1);
+          background: var(--accent);
           border: none;
           color: white;
           padding: 4px 8px;
@@ -931,7 +982,7 @@
         noResults.style.cssText = `
           padding: 40px;
           text-align: center;
-          color: var(--text-primary, #999);
+          color: var(--text-primary);
           font-size: 14px;
         `;
         container.appendChild(noResults);

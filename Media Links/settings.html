@@ -227,8 +227,8 @@
           </div>
 
           <!-- IMDb Sub-settings -->
-          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color, #e0e0e0);">
-            <h4 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; color: var(--text-primary, #333);">Copy Button Settings</h4>
+          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color);">
+            <h4 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; color: var(--text-primary);">Copy Button Settings</h4>
 
             <div class="setting-item">
               <label for="default-cast-count" class="setting-label">
@@ -293,7 +293,7 @@
           </div>
 
           <!-- Wikipedia Sub-settings -->
-          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color, #e0e0e0);">
+          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color);">
             <div class="setting-item">
               <label for="wiki-output-format" class="setting-label">
                 <span class="label-text">Default Output Format</span>
@@ -326,7 +326,7 @@
           </div>
 
           <!-- Letterboxd Sub-settings -->
-          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color, #e0e0e0);">
+          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color);">
             <div class="setting-item">
               <label for="letterboxd-cast-count" class="setting-label">
                 <span class="label-text">Default Number of Cast & Crew</span>
@@ -377,7 +377,7 @@
           </div>
 
           <!-- Apple TV+ Sub-settings -->
-          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color, #e0e0e0);">
+          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color);">
             <div class="setting-item">
               <label for="appletv-cast-count" class="setting-label">
                 <span class="label-text">Default Number of Cast & Crew</span>
@@ -428,7 +428,7 @@
           </div>
 
           <!-- BookMyShow Sub-settings -->
-          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color, #e0e0e0);">
+          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color);">
             <div class="setting-item">
               <label for="bookmyshow-cast-count" class="setting-label">
                 <span class="label-text">Default Number of Cast & Crew</span>
@@ -468,13 +468,13 @@
       <section class="settings-section" id="customized-view-pages">
         <div class="section-header">
           <h2>📋 Customized View Pages</h2>
-          <p class="section-description">Configure the customized cast and crew view feature for different sites</p>
+          <p class="section-description">Configure the customized cast, crew, production companies, and awards view feature for different sites</p>
         </div>
 
         <div class="setting-item">
           <label for="customized-view-limit" class="setting-label">
             <span class="label-text">Entry Limit per Section</span>
-            <span class="label-description">Maximum number of cast/crew members to display per section in customized view</span>
+            <span class="label-description">Maximum number of entries (cast, crew, production companies, awards) to display per section in customized view</span>
           </label>
           <input type="number" id="customized-view-limit" class="setting-input" min="1" max="1000" value="8" style="max-width: 150px;">
         </div>
@@ -485,8 +485,8 @@
 
           <div class="setting-item">
             <label class="setting-label">
-              <span class="label-text">Show "View Cast & Crew in New Tab" Button</span>
-              <span class="label-description">Display button on IMDb fullcredits pages to open interactive cast/crew view</span>
+              <span class="label-text">Show "View Production Companies in New Tab" Button</span>
+              <span class="label-description">Display button on IMDb fullcredits and companycredits pages to open interactive view</span>
             </label>
             <label class="toggle">
               <input type="checkbox" id="show-customized-view-btn" checked>
@@ -496,17 +496,39 @@
 
           <div class="setting-item">
             <label class="setting-label">
-              <span class="label-text">Auto-Open Customized View</span>
-              <span class="label-description">Automatically open the customized view in a new tab when clicking the button</span>
+              <span class="label-text">Open Individual Views in New Tab</span>
+              <span class="label-description">Automatically open individual customized views (Cast & Crew, Production Companies, etc.) in a new tab when clicking the view button</span>
             </label>
             <label class="toggle">
-              <input type="checkbox" id="auto-open-customized-view">
+              <input type="checkbox" id="auto-open-individual-view" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Show Consolidated Overview Button</span>
+              <span class="label-description">Display the consolidated overview button on IMDb title pages (combines data from all pages into one view)</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="show-consolidated-view-btn" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <label class="setting-label">
+              <span class="label-text">Auto-Open Consolidated View in New Tab</span>
+              <span class="label-description">Automatically open the consolidated overview in a new tab after data extraction completes</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="auto-open-consolidated-view" checked>
               <span class="toggle-slider"></span>
             </label>
           </div>
 
           <!-- IMDb Sub-settings -->
-          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color, #e0e0e0);">
+          <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color);">
             <div class="setting-item">
               <label for="default-view-columns" class="setting-label">
                 <span class="label-text">Default Columns to Display</span>
@@ -550,8 +572,8 @@
         </div>
 
         <!-- Copy Webpage Format Sub-settings -->
-        <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color, #e0e0e0);">
-          <h4 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; color: var(--text-primary, #333);">Multi-Tab Copy Settings</h4>
+        <div class="setting-subsection" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color);">
+          <h4 style="margin: 0 0 15px 0; font-size: 14px; font-weight: 600; color: var(--text-primary);">Multi-Tab Copy Settings</h4>
 
           <div class="setting-item">
             <label class="setting-label">
