@@ -218,7 +218,7 @@
   async function extractAwardsData() {
     // Auto-click all "See all" buttons to expand all award categories
     const seeAllButtons = document.querySelectorAll('.ipc-see-more__button');
-    console.log('Found', seeAllButtons.length, 'see-all buttons, auto-clicking to expand...');
+    console.log('Awards extraction: Found', seeAllButtons.length, 'see-all buttons, auto-clicking to expand...');
 
     for (const btn of seeAllButtons) {
       btn.click();
@@ -230,9 +230,25 @@
     await new Promise(resolve => setTimeout(resolve, 500));
 
     const awardsData = [];
-    const awardItems = document.querySelectorAll('li[data-testid="list-item"].ipc-metadata-list-summary-item');
+
+    // Try primary selector
+    let awardItems = document.querySelectorAll('li[data-testid="list-item"].ipc-metadata-list-summary-item');
+
+    // Fallback selectors
+    if (awardItems.length === 0) {
+      awardItems = document.querySelectorAll('[data-testid="list-item"]');
+    }
+    if (awardItems.length === 0) {
+      awardItems = document.querySelectorAll('li.ipc-metadata-list-summary-item');
+    }
 
     console.log('Awards extraction: Found', awardItems.length, 'award items on page');
+    console.log('Awards page DOM analysis:', {
+      'li elements': document.querySelectorAll('li').length,
+      'list-item data-testids': document.querySelectorAll('[data-testid="list-item"]').length,
+      'ipc-metadata elements': document.querySelectorAll('.ipc-metadata-list-summary-item').length,
+      'body text length': document.body.innerText.length
+    });
 
     awardItems.forEach((item, index) => {
       try {
@@ -339,7 +355,7 @@
   async function extractReleaseData() {
     // Auto-click all "See all" and "more" buttons to expand all release sections
     const seeAllButtons = document.querySelectorAll('.ipc-see-more__button');
-    console.log('Found', seeAllButtons.length, 'see-all/more buttons, auto-clicking to expand...');
+    console.log('Release extraction: Found', seeAllButtons.length, 'see-all/more buttons, auto-clicking to expand...');
 
     for (const btn of seeAllButtons) {
       btn.click();
@@ -351,9 +367,30 @@
     await new Promise(resolve => setTimeout(resolve, 500));
 
     const releaseData = [];
-    const releaseItems = document.querySelectorAll('li[data-testid="list-item"].ipc-metadata-list__item');
+
+    // Try primary selector
+    let releaseItems = document.querySelectorAll('li[data-testid="list-item"].ipc-metadata-list__item');
+
+    // Fallback selectors
+    if (releaseItems.length === 0) {
+      releaseItems = document.querySelectorAll('[data-testid="list-item"]');
+    }
+    if (releaseItems.length === 0) {
+      releaseItems = document.querySelectorAll('.ipc-metadata-list__item');
+    }
+    if (releaseItems.length === 0) {
+      releaseItems = document.querySelectorAll('li[data-testid*="release"]');
+    }
 
     console.log('Release extraction: Found', releaseItems.length, 'release items on page');
+    console.log('Release page DOM analysis:', {
+      'li elements': document.querySelectorAll('li').length,
+      'list-item data-testids': document.querySelectorAll('[data-testid="list-item"]').length,
+      'ipc-metadata-list items': document.querySelectorAll('.ipc-metadata-list__item').length,
+      'release data-testids': document.querySelectorAll('[data-testid*="release"]').length,
+      'table elements': document.querySelectorAll('table').length,
+      'body text length': document.body.innerText.length
+    });
 
     let earliestEntry = null;
 
@@ -491,6 +528,135 @@
 
     console.log('Technical extraction complete: Found', technicalData.length, 'specifications');
     return technicalData;
+  }
+
+  /**
+   * Wait for technical specs DOM elements to be available (enterprise networks may block resources)
+   */
+  async function waitForTechnicalDOM(maxWaitTime = 15000) {
+    const startTime = Date.now();
+    const requiredSelectors = [
+      'li[data-testid="title-techspec_runtime"]',
+      'li[data-testid="title-techspec_color"]'
+    ];
+
+    while (Date.now() - startTime < maxWaitTime) {
+      // Check if at least one technical spec element exists
+      const hasAnyElement = requiredSelectors.some(selector =>
+        document.querySelector(selector) !== null
+      );
+
+      if (hasAnyElement) {
+        console.log('Technical specs DOM elements found');
+        return true;
+      }
+
+      // Wait 500ms before checking again
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`Technical specs DOM elements not found after ${elapsedSeconds}s (page may not have technical data)`);
+    return false;
+  }
+
+  /**
+   * Wait for cast/crew DOM elements to load (fullcredits page)
+   */
+  async function waitForCastDOM(maxWaitTime = 15000) {
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWaitTime) {
+      const castItems = document.querySelectorAll('li[data-testid="name-credits-list-item"]');
+      if (castItems.length > 0) {
+        console.log('Cast/crew DOM elements found');
+        return true;
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`Cast/crew DOM elements not found after ${elapsedSeconds}s (page may not have cast data)`);
+    return false;
+  }
+
+  /**
+   * Wait for company credits DOM elements to load (companycredits page)
+   */
+  async function waitForCompanyDOM(maxWaitTime = 15000) {
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWaitTime) {
+      const sections = document.querySelectorAll('section.ipc-page-section');
+      if (sections.length > 0) {
+        console.log('Company credits DOM elements found');
+        return true;
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`Company credits DOM elements not found after ${elapsedSeconds}s (page may not have company data)`);
+    return false;
+  }
+
+  /**
+   * Wait for awards DOM elements to load (awards page)
+   */
+  async function waitForAwardsDOM(maxWaitTime = 15000) {
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWaitTime) {
+      // Try multiple selectors for awards
+      let awardItems = document.querySelectorAll('li[data-testid="list-item"].ipc-metadata-list-summary-item');
+
+      // Fallback: try broader selector
+      if (awardItems.length === 0) {
+        awardItems = document.querySelectorAll('[data-testid="list-item"]');
+      }
+
+      // Another fallback: look for any list items
+      if (awardItems.length === 0) {
+        awardItems = document.querySelectorAll('li.ipc-metadata-list-summary-item');
+      }
+
+      if (awardItems.length > 0) {
+        console.log(`Awards DOM elements found (${awardItems.length} items)`);
+        return true;
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`Awards DOM elements not found after ${elapsedSeconds}s (page may not have awards data)`);
+    return false;
+  }
+
+  /**
+   * Wait for release info DOM elements to load (releaseinfo page)
+   */
+  async function waitForReleaseDOM(maxWaitTime = 15000) {
+    const startTime = Date.now();
+    while (Date.now() - startTime < maxWaitTime) {
+      // Try multiple selectors for release info
+      let releaseTable = document.querySelector('table[data-testid="releaseinfo-table"]');
+      let releaseItems = document.querySelectorAll('.ipc-table__row');
+
+      // Fallback: look for any table
+      if (!releaseTable && releaseItems.length === 0) {
+        releaseTable = document.querySelector('table');
+        releaseItems = document.querySelectorAll('tr[data-testid]');
+      }
+
+      // Another fallback: look for release date containers
+      if (!releaseTable && releaseItems.length === 0) {
+        releaseItems = document.querySelectorAll('[data-testid*="release"]');
+      }
+
+      if (releaseTable || releaseItems.length > 0) {
+        console.log(`Release info DOM elements found (${releaseItems.length} rows)`);
+        return true;
+      }
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`Release info DOM elements not found after ${elapsedSeconds}s (page may not have release data)`);
+    return false;
   }
 
   /**
@@ -988,129 +1154,405 @@
             return;
           }
 
-          console.log('Starting sequential extraction...');
-          showConsolidatedViewNotification('📂 Starting data extraction...', 'info', true);
+          console.log('Opening tabs for consolidated view extraction...');
+          showConsolidatedViewNotification('📂 Opening tabs for extraction...', 'info', true);
 
-          // Define extraction pages
+          // Define extraction pages (without ?ref_=consolidatedView to prevent auto-extraction)
           const extractionPages = [
-            { url: `https://www.imdb.com/title/${movieId}/fullcredits?ref_=consolidatedView`, name: 'Cast & Crew', type: 'fullcredits' },
-            { url: `https://www.imdb.com/title/${movieId}/companycredits?ref_=consolidatedView`, name: 'Production Companies', type: 'companycredits' },
-            { url: `https://www.imdb.com/title/${movieId}/awards?ref_=consolidatedView`, name: 'Awards', type: 'awards' },
-            { url: `https://www.imdb.com/title/${movieId}/releaseinfo?ref_=consolidatedView`, name: 'Release Info', type: 'releaseinfo' },
-            { url: `https://www.imdb.com/title/${movieId}/technical?ref_=consolidatedView`, name: 'Technical', type: 'technical' }
+            { url: `https://www.imdb.com/title/${movieId}/fullcredits`, name: 'Cast & Crew', type: 'fullcredits' },
+            { url: `https://www.imdb.com/title/${movieId}/companycredits`, name: 'Production Companies', type: 'companycredits' },
+            { url: `https://www.imdb.com/title/${movieId}/awards`, name: 'Awards', type: 'awards' },
+            { url: `https://www.imdb.com/title/${movieId}/releaseinfo`, name: 'Release Info', type: 'releaseinfo' },
+            { url: `https://www.imdb.com/title/${movieId}/technical`, name: 'Technical', type: 'technical' }
           ];
 
-          let currentPageIndex = 0;
-          const completedPages = [];
+          const openedTabIds = [];
+          let tabsOpenedCount = 0;
 
           /**
-           * Process one extraction page at a time
+           * Open all extraction tabs
            */
-          const processNextPage = () => {
-            if (currentPageIndex >= extractionPages.length) {
-              // All pages processed, open consolidated view
-              console.log('All extraction pages processed, opening consolidated view');
-              showConsolidatedViewNotification('🔄 Compiling consolidated view...', 'info', true);
+          const openAllTabs = () => {
+            extractionPages.forEach((page, index) => {
+              setTimeout(() => {
+                chrome.runtime.sendMessage({ type: 'createTab', url: page.url, active: true }, (response) => {
+                  if (response && response.success) {
+                    const tabId = response.tabId;
+                    openedTabIds.push({ tabId, page });
+                    tabsOpenedCount++;
+                    console.log(`Opened ${page.name} tab (ID: ${tabId}) - URL: ${page.url}`);
+                    console.log(`Tracked tabs so far:`, openedTabIds.map(t => `${t.page.type}(${t.tabId})`).join(', '));
 
-              setTimeout(async () => {
-                try {
-                  // Check settings to see if we should auto-open
-                  const settings = await window.SettingsUtils.loadSettings();
-                  const autoOpen = settings.autoOpenConsolidatedView !== false; // Default to true
-
-                  if (autoOpen) {
-                    const extensionUrl = chrome.runtime.getURL('consolidated-view-page.html');
-                    window.open(extensionUrl, '_blank');
-                    console.log('Opened consolidated view page');
-                    showConsolidatedViewNotification('✓ Consolidated view opened successfully!', 'success');
-                  } else {
-                    console.log('Auto-open consolidated view is disabled in settings');
-                    showConsolidatedViewNotification('✓ Data extraction complete! Open consolidated view from title page.', 'success');
-                  }
-
-                  // Reset button state
-                  if (button) {
-                    button.disabled = false;
-                    button.style.opacity = '1';
-                    button.style.cursor = 'pointer';
-                    button.textContent = '🎬 Consolidated Overview';
-                  }
-                } catch (urlError) {
-                  console.error('Error opening consolidated view:', urlError);
-                  showConsolidatedViewNotification('❌ Failed to open consolidated view. Please try again.', 'error');
-                  if (button) {
-                    button.disabled = false;
-                    button.style.opacity = '1';
-                    button.style.cursor = 'pointer';
-                    button.textContent = '🎬 Consolidated Overview';
-                  }
-                }
-              }, 500);
-              return;
-            }
-
-            const page = extractionPages[currentPageIndex];
-            console.log(`Opening extraction page ${currentPageIndex + 1}/${extractionPages.length}: ${page.name}`);
-            showConsolidatedViewNotification(`📂 Extracting ${page.name}... (${currentPageIndex + 1}/${extractionPages.length})`, 'info', true);
-
-            // Open the page in a new tab via background script
-            chrome.runtime.sendMessage({ type: 'createTab', url: page.url, active: false }, (response) => {
-              if (!response || !response.success) {
-                console.error(`Error opening ${page.name} tab:`, response?.error);
-                currentPageIndex++;
-                processNextPage();
-                return;
-              }
-
-              const tabId = response.tabId;
-              console.log(`Opened ${page.name} tab (ID: ${tabId})`);
-
-              // Wait for extraction to complete by monitoring storage
-              let checkCount = 0;
-              const maxChecks = 60; // 30 seconds max (500ms * 60)
-
-              const checkInterval = setInterval(() => {
-                checkCount++;
-
-                chrome.storage.local.get([`consolidatedViewData_${page.type}`], (result) => {
-                  // Check if data exists (even if empty array) - this indicates extraction completed
-                  const hasData = result[`consolidatedViewData_${page.type}`] !== undefined &&
-                                 Array.isArray(result[`consolidatedViewData_${page.type}`]);
-
-                  if (hasData) {
-                    // Data extracted successfully
-                    clearInterval(checkInterval);
-                    completedPages.push(page.name);
-                    console.log(`✓ ${page.name} extraction complete`);
-
-                    // Show progress
-                    const progressMsg = `📂 Extracting ${page.name}... ✓ (${currentPageIndex + 1}/${extractionPages.length})`;
-                    showConsolidatedViewNotification(progressMsg, 'info', true);
-                    updateExtractionProgress(completedPages);
-
-                    // Wait a bit for tab to close itself, then move to next page
-                    setTimeout(() => {
-                      currentPageIndex++;
-                      processNextPage();
-                    }, 800);
-                  } else if (checkCount >= maxChecks) {
-                    // Timeout - move to next page anyway
-                    clearInterval(checkInterval);
-                    console.warn(`Timeout waiting for ${page.name} extraction`);
-                    showConsolidatedViewNotification(`⚠️ ${page.name} timed out, skipping...`, 'info', true);
-
-                    setTimeout(() => {
-                      currentPageIndex++;
-                      processNextPage();
-                    }, 500);
+                    if (tabsOpenedCount === extractionPages.length) {
+                      // All tabs opened, show tab selector modal
+                      setTimeout(() => showTabSelectorModal(), 1000);
+                    }
                   }
                 });
-              }, 500);
+              }, index * 300); // Stagger tab opening by 300ms each
             });
           };
 
-          // Start processing the first page
-          processNextPage();
+          /**
+           * Show modal with tab selector
+           */
+          const showTabSelectorModal = () => {
+            console.log('Showing tab selector modal');
+            showConsolidatedViewNotification('✓ All tabs opened! Select which ones to extract...', 'success', true);
+
+            // Create modal overlay
+            const modalOverlay = document.createElement('div');
+            modalOverlay.id = 'consolidated-tab-selector-overlay';
+            modalOverlay.style.cssText = `
+              position: fixed;
+              top: 0;
+              left: 0;
+              right: 0;
+              bottom: 0;
+              background: rgba(0, 0, 0, 0.6);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 10002;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            `;
+
+            // Create modal content
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+              background: white;
+              border-radius: 10px;
+              padding: 30px;
+              max-width: 500px;
+              width: 90%;
+              box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+              max-height: 80vh;
+              overflow-y: auto;
+            `;
+
+            modal.innerHTML = `
+              <h2 style="margin-top: 0; margin-bottom: 20px; color: #111;">🎬 Consolidated Overview</h2>
+              <p style="color: #666; margin-bottom: 20px;">Select pages to extract data from:</p>
+
+              <div id="tab-checkboxes" style="margin-bottom: 25px; display: flex; flex-direction: column; gap: 10px;"></div>
+
+              <div style="display: flex; gap: 12px; margin-top: 25px;">
+                <button id="extract-btn" style="
+                  flex: 1;
+                  padding: 12px;
+                  background: #8b5cf6;
+                  color: white;
+                  border: none;
+                  border-radius: 6px;
+                  font-size: 14px;
+                  font-weight: 600;
+                  cursor: pointer;
+                  transition: all 0.2s;
+                " onmouseover="this.style.background='#7c3aed'" onmouseout="this.style.background='#8b5cf6'">
+                  Extract Data
+                </button>
+                <button id="cancel-btn" style="
+                  flex: 1;
+                  padding: 12px;
+                  background: #e5e7eb;
+                  color: #333;
+                  border: none;
+                  border-radius: 6px;
+                  font-size: 14px;
+                  font-weight: 600;
+                  cursor: pointer;
+                  transition: all 0.2s;
+                " onmouseover="this.style.background='#d1d5db'" onmouseout="this.style.background='#e5e7eb'">
+                  Cancel
+                </button>
+              </div>
+            `;
+
+            modalOverlay.appendChild(modal);
+            document.body.appendChild(modalOverlay);
+
+            // Add checkboxes dynamically after modal is in DOM
+            const tabCheckboxesDiv = document.getElementById('tab-checkboxes');
+            extractionPages.forEach((page, idx) => {
+              const label = document.createElement('label');
+              label.style.cssText = 'display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 6px; transition: background 0.2s;';
+
+              const checkbox = document.createElement('input');
+              checkbox.type = 'checkbox';
+              checkbox.id = `select-${idx}`;
+              checkbox.className = 'page-selector-checkbox';
+              checkbox.dataset.type = page.type;
+              checkbox.checked = true;
+              checkbox.style.cssText = 'margin-right: 12px; width: 18px; height: 18px; cursor: pointer;';
+
+              const span = document.createElement('span');
+              span.textContent = page.name;
+              span.style.cssText = 'color: #333; font-weight: 500;';
+
+              label.appendChild(checkbox);
+              label.appendChild(span);
+
+              label.addEventListener('mouseover', () => {
+                label.style.background = '#f0f0f0';
+              });
+              label.addEventListener('mouseout', () => {
+                label.style.background = 'transparent';
+              });
+
+              tabCheckboxesDiv.appendChild(label);
+            });
+
+            console.log('Tab selector modal created with', extractionPages.length, 'pages');
+
+            // Handle extract button click
+            document.getElementById('extract-btn').addEventListener('click', () => {
+              const selectedCheckboxes = document.querySelectorAll('.page-selector-checkbox:checked');
+              const selectedPages = Array.from(selectedCheckboxes).map(cb => cb.dataset.type);
+
+              console.log('Selected pages for extraction:', selectedPages);
+
+              // Update modal to show extraction progress
+              const tabCheckboxesDiv = document.getElementById('tab-checkboxes');
+              const buttonsDiv = modal.querySelector('div:last-of-type');
+
+              // Hide checkboxes and buttons
+              tabCheckboxesDiv.style.display = 'none';
+              buttonsDiv.style.display = 'none';
+
+              // Add progress container with much more prominent styling
+              const progressDiv = document.createElement('div');
+              progressDiv.id = 'extraction-progress-container';
+              progressDiv.style.cssText = `
+                margin: 20px 0;
+                padding: 20px;
+                background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+                border-radius: 8px;
+                border-left: 4px solid #8b5cf6;
+                min-height: 200px;
+                display: flex;
+                flex-direction: column;
+              `;
+
+              const progressTitle = document.createElement('p');
+              progressTitle.style.cssText = `
+                margin: 0 0 15px 0;
+                color: #111;
+                font-weight: 700;
+                font-size: 16px;
+              `;
+              progressTitle.innerHTML = '📂 <span style="color: #8b5cf6;">Extracting data...</span>';
+
+              const progressList = document.createElement('div');
+              progressList.id = 'extraction-progress-list';
+              progressList.style.cssText = `
+                font-size: 14px;
+                color: #333;
+                line-height: 1.8;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', monospace;
+                flex-grow: 1;
+              `;
+
+              progressDiv.appendChild(progressTitle);
+              progressDiv.appendChild(progressList);
+
+              // Insert at the top of modal content, right after the heading
+              const heading = modal.querySelector('h2');
+              heading.parentNode.insertBefore(progressDiv, heading.nextSibling);
+
+              // Start extraction (modal stays visible during extraction)
+              extractFromSelectedPages(selectedPages, () => {
+                // This callback runs after extraction completes
+                // Remove modal after extraction is done
+                setTimeout(() => {
+                  modalOverlay.remove();
+                }, 1000);
+              });
+            });
+
+            // Handle cancel button click
+            document.getElementById('cancel-btn').addEventListener('click', () => {
+              console.log('User cancelled consolidated overview extraction');
+              modalOverlay.remove();
+
+              // Close all opened tabs
+              openedTabIds.forEach(({ tabId }) => {
+                chrome.runtime.sendMessage({ type: 'closeTab', tabId });
+              });
+
+              // Reset button
+              if (button) {
+                button.disabled = false;
+                button.style.opacity = '1';
+                button.style.cursor = 'pointer';
+                button.textContent = '🎬 Consolidated Overview';
+              }
+
+              showConsolidatedViewNotification('Cancelled consolidated overview extraction', 'success');
+            });
+          };
+
+          /**
+           * Extract from selected pages by injecting extraction scripts into their tabs
+           */
+          const extractFromSelectedPages = async (selectedPageTypes, onComplete) => {
+            console.log('Starting extraction from selected pages...');
+            // Don't show separate notifications - everything is shown in the modal
+            // showConsolidatedViewNotification('📂 Extracting data from tabs...', 'info', true);
+
+            let completedCount = 0;
+            const completedPages = [];
+
+            // For each selected page type, wait for extraction to complete
+            for (const pageType of selectedPageTypes) {
+              const page = extractionPages.find(p => p.type === pageType);
+              if (!page) continue;
+
+              console.log(`Waiting for ${page.name} extraction...`);
+
+              // Show waiting status in modal progress
+              const progressList = document.getElementById('extraction-progress-list');
+              if (progressList) {
+                const waitingLine = document.createElement('div');
+                waitingLine.id = `waiting-${pageType}`;
+                waitingLine.style.cssText = 'color: #f59e0b; margin: 5px 0; font-weight: 500;';
+                waitingLine.innerHTML = `⏳ ${page.name}...`;
+                progressList.appendChild(waitingLine);
+              }
+
+              // No notification - shown in modal instead
+
+              // Inject extraction message into the matching tab via background script
+              // This ensures we only extract from the tabs we opened, not other IMDb pages
+              const tabData = openedTabIds.find(t => t.page.type === pageType);
+              if (tabData) {
+                console.log(`Sending extraction message to tab ${tabData.tabId} for ${pageType}`);
+                chrome.runtime.sendMessage({
+                  type: 'sendExtractionMessage',
+                  targetTabId: tabData.tabId,
+                  extractionMessage: {
+                    type: 'performConsolidatedExtraction',
+                    pageType: pageType
+                  }
+                }).catch((error) => {
+                  console.warn(`Could not send extraction message to tab ${tabData.tabId}:`, error);
+                });
+              } else {
+                console.warn(`No tab found for page type: ${pageType}`);
+              }
+
+              // Wait for data to be stored by monitoring storage
+              let checkCount = 0;
+              const maxChecks = 240; // 120 seconds max (500ms * 240)
+
+              await new Promise((resolve) => {
+                const checkInterval = setInterval(() => {
+                  checkCount++;
+
+                  chrome.storage.local.get([`consolidatedViewData_${pageType}`], (result) => {
+                    const hasData = result[`consolidatedViewData_${pageType}`] !== undefined &&
+                                   Array.isArray(result[`consolidatedViewData_${pageType}`]);
+
+                    if (hasData) {
+                      clearInterval(checkInterval);
+                      completedCount++;
+                      completedPages.push(page.name);
+                      console.log(`✓ ${page.name} extraction complete`);
+
+                      // Update modal progress - remove waiting indicator and add completed
+                      const progressList = document.getElementById('extraction-progress-list');
+                      if (progressList) {
+                        const waitingIndicator = document.getElementById(`waiting-${pageType}`);
+                        if (waitingIndicator) {
+                          waitingIndicator.remove();
+                        }
+
+                        const progressLine = document.createElement('div');
+                        progressLine.style.cssText = 'color: #10b981; margin: 5px 0;';
+                        progressLine.innerHTML = `✓ ${page.name} (${completedCount}/${selectedPageTypes.length})`;
+                        progressList.appendChild(progressLine);
+                      }
+
+                      // Notification shown in modal, not separately
+                      // showConsolidatedViewNotification(`✓ ${page.name} extracted (${completedCount}/${selectedPageTypes.length})`, 'success', true);
+                      updateExtractionProgress(completedPages);
+                      resolve();
+                    } else if (checkCount >= maxChecks) {
+                      clearInterval(checkInterval);
+                      console.warn(`Timeout waiting for ${page.name} extraction`);
+                      // Timeout message shown in modal, not separately
+                      resolve();
+                    }
+                  });
+                }, 500);
+              });
+            }
+
+            // All pages processed, close tabs and open consolidated view
+            console.log('All extractions complete, closing tabs...');
+
+            // Update modal progress - show completion
+            const finalProgressList = document.getElementById('extraction-progress-list');
+            if (finalProgressList) {
+              const completionLine = document.createElement('div');
+              completionLine.style.cssText = 'color: #10b981; margin-top: 10px; font-weight: 600; padding-top: 10px; border-top: 1px solid #d1d5db;';
+              completionLine.innerHTML = '✅ Extraction complete! Closing tabs...';
+              finalProgressList.appendChild(completionLine);
+            }
+
+            // Call the completion callback (closes modal)
+            if (onComplete) {
+              onComplete();
+            }
+
+            // Close all opened tabs
+            openedTabIds.forEach(({ tabId }) => {
+              setTimeout(() => {
+                chrome.runtime.sendMessage({ type: 'closeTab', tabId }).catch(() => {
+                  console.warn(`Could not close tab ${tabId}`);
+                });
+              }, 300);
+            });
+
+            // Shown in modal, not separately
+
+            setTimeout(async () => {
+              try {
+                // Check settings to see if we should auto-open
+                const settings = await window.SettingsUtils.loadSettings();
+                const autoOpen = settings.autoOpenConsolidatedView !== false; // Default to true
+
+                if (autoOpen) {
+                  const extensionUrl = chrome.runtime.getURL('consolidated-view-page.html');
+                  window.open(extensionUrl, '_blank');
+                  console.log('Opened consolidated view page');
+                  showConsolidatedViewNotification('✓ Consolidated view opened successfully!', 'success');
+                } else {
+                  console.log('Auto-open consolidated view is disabled in settings');
+                  showConsolidatedViewNotification('✓ Data extraction complete! Check the consolidated view on the title page.', 'success');
+                }
+
+                // Reset button state
+                if (button) {
+                  button.disabled = false;
+                  button.style.opacity = '1';
+                  button.style.cursor = 'pointer';
+                  button.textContent = '🎬 Consolidated Overview';
+                }
+              } catch (urlError) {
+                console.error('Error opening consolidated view:', urlError);
+                showConsolidatedViewNotification('❌ Failed to open consolidated view. Please try again.', 'error');
+                if (button) {
+                  button.disabled = false;
+                  button.style.opacity = '1';
+                  button.style.cursor = 'pointer';
+                  button.textContent = '🎬 Consolidated Overview';
+                }
+              }
+            }, 1000);
+          };
+
+          // Start by opening all tabs
+          openAllTabs();
           });
         });
       } else {
@@ -1370,18 +1812,28 @@
         let pageType = '';
 
         if (isIMDbFullCreditsPage()) {
+          // Wait for cast/crew DOM to load (may be delayed due to network issues)
+          await waitForCastDOM();
           extractedData = extractCastData();
           pageType = 'fullcredits';
         } else if (isIMDbCompanyCreditsPage()) {
+          // Wait for company DOM to load
+          await waitForCompanyDOM();
           extractedData = extractCompanyData();
           pageType = 'companycredits';
         } else if (isIMDbAwardsPage()) {
+          // Wait for awards DOM to load
+          await waitForAwardsDOM();
           extractedData = await extractAwardsData();
           pageType = 'awards';
         } else if (isIMDbReleaseInfoPage()) {
+          // Wait for release info DOM to load
+          await waitForReleaseDOM();
           extractedData = await extractReleaseData();
           pageType = 'releaseinfo';
         } else if (isIMDbTechnicalPage()) {
+          // Wait for technical specs to load (may be delayed due to network/CSM resource issues)
+          await waitForTechnicalDOM();
           extractedData = extractTechnicalData();
           pageType = 'technical';
         }
@@ -1430,7 +1882,7 @@
           await new Promise(resolve => setTimeout(resolve, 1000));
           retries++;
         }
-        console.warn('Awards page: Could not find awards content after retries');
+        console.log('Awards page: No awards content found (page may not have awards)');
         return;
       }
 
@@ -1445,5 +1897,59 @@
       tryInitialize();
     }
   }
+
+  /**
+   * Listen for extraction requests from the background/main script (tab selector mode)
+   */
+  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.type === 'performConsolidatedExtraction') {
+      const pageType = request.pageType;
+      console.log(`Received extraction request for ${pageType}`);
+
+      (async () => {
+        try {
+          let extractedData = null;
+
+          // Wait for DOM to be ready first
+          await new Promise(resolve => setTimeout(resolve, 1000));
+
+          // Perform extraction based on page type
+          if (pageType === 'fullcredits' && isIMDbFullCreditsPage()) {
+            await waitForCastDOM();
+            extractedData = extractCastData();
+          } else if (pageType === 'companycredits' && isIMDbCompanyCreditsPage()) {
+            await waitForCompanyDOM();
+            extractedData = extractCompanyData();
+          } else if (pageType === 'awards' && isIMDbAwardsPage()) {
+            await waitForAwardsDOM();
+            extractedData = await extractAwardsData();
+          } else if (pageType === 'releaseinfo' && isIMDbReleaseInfoPage()) {
+            await waitForReleaseDOM();
+            extractedData = await extractReleaseData();
+          } else if (pageType === 'technical' && isIMDbTechnicalPage()) {
+            await waitForTechnicalDOM();
+            extractedData = extractTechnicalData();
+          }
+
+          // Store extracted data
+          if (extractedData) {
+            storeConsolidatedData(pageType, extractedData);
+            console.log(`✓ Extracted and stored ${pageType} data (${extractedData.length} items)`);
+          } else {
+            storeConsolidatedData(pageType, []);
+            console.log(`No data found for ${pageType}, stored empty array`);
+          }
+
+          sendResponse({ success: true, pageType, itemsExtracted: extractedData ? extractedData.length : 0 });
+        } catch (error) {
+          console.error(`Error extracting ${pageType}:`, error);
+          storeConsolidatedData(pageType, []);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+
+      return true; // Keep channel open for async response
+    }
+  });
 
 })();

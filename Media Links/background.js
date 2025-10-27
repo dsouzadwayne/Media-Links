@@ -426,13 +426,18 @@ chrome.runtime.onInstalled.addListener(() => {
 
     // Handle creating tabs for consolidated view extraction
     if (message.type === 'createTab') {
+      console.log('Background: Creating tab with URL:', message.url);
       chrome.tabs.create({ url: message.url, active: message.active || false }, (tab) => {
         if (chrome.runtime.lastError) {
-          console.error('Background: Error creating tab:', chrome.runtime.lastError);
-          sendResponse({ success: false, error: chrome.runtime.lastError.message });
-        } else {
-          console.log('Background: Created tab:', tab.id);
+          const errorMsg = chrome.runtime.lastError.message || JSON.stringify(chrome.runtime.lastError);
+          console.error('Background: Error creating tab:', errorMsg, 'URL was:', message.url);
+          sendResponse({ success: false, error: errorMsg });
+        } else if (tab) {
+          console.log('Background: Created tab:', tab.id, 'URL:', tab.url);
           sendResponse({ success: true, tabId: tab.id });
+        } else {
+          console.error('Background: Tab creation failed - no tab returned and no error');
+          sendResponse({ success: false, error: 'Tab creation failed' });
         }
       });
       return true; // Keep channel open for async response
@@ -450,6 +455,41 @@ chrome.runtime.onInstalled.addListener(() => {
           console.log(`Successfully closed tab ${tabId}`);
         }
         sendResponse({ success: true });
+      });
+
+      return true; // Keep channel open for async response
+    }
+
+    // Handle closing tabs for tab selector mode
+    if (message.type === 'closeTab') {
+      const tabId = message.tabId;
+      console.log(`Background: Closing tab ${tabId}`);
+
+      chrome.tabs.remove(tabId, () => {
+        if (chrome.runtime.lastError) {
+          console.warn(`Failed to close tab ${tabId}:`, chrome.runtime.lastError);
+        } else {
+          console.log(`Successfully closed tab ${tabId}`);
+        }
+        sendResponse({ success: true });
+      });
+
+      return true; // Keep channel open for async response
+    }
+
+    // Handle relaying extraction messages to target tabs
+    if (message.type === 'sendExtractionMessage') {
+      const targetTabId = message.targetTabId;
+      const extractionMessage = message.extractionMessage;
+
+      console.log(`Background: Relaying extraction message to tab ${targetTabId}:`, extractionMessage.pageType);
+
+      chrome.tabs.sendMessage(targetTabId, extractionMessage).then(() => {
+        console.log(`Background: Successfully sent extraction message to tab ${targetTabId}`);
+        sendResponse({ success: true });
+      }).catch((error) => {
+        console.warn(`Background: Failed to send extraction message to tab ${targetTabId}:`, error);
+        sendResponse({ success: false, error: error.message });
       });
 
       return true; // Keep channel open for async response
