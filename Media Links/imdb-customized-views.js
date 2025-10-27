@@ -200,15 +200,19 @@
       return 'Creators';
     }
 
-    if (roleLower.includes('screenplay') || roleLower.includes('written by')) {
+    if (roleLower.includes('screenplay')) {
       return 'Writers Screenplay';
     }
 
-    if (roleLower.includes('writer')) {
+    if (roleLower.includes('writer') || roleLower.includes('written by')) {
       return 'Writers';
     }
 
     if (roleLower.includes('producer')) {
+      // Filter out vfx line producer if it's the sole role
+      if (roleLower.trim() === 'vfx line producer') {
+        return null;
+      }
       return 'Producers';
     }
 
