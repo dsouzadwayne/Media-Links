@@ -173,7 +173,7 @@ function applySettingsToUI() {
   document.getElementById('default-content-format').value = currentSettings.defaultContentFormat;
   document.getElementById('default-output-format').value = currentSettings.defaultOutputFormat;
   document.getElementById('debug-mode').checked = currentSettings.debugMode;
-  document.getElementById('show-copy-webpage-btn').checked = currentSettings.showCopyWebpageBtn;
+  document.getElementById('show-copy-webpage-btn').checked = currentSettings.showCopyWebpageBtn !== undefined ? currentSettings.showCopyWebpageBtn : false;
   document.getElementById('customized-view-limit').value = currentSettings.customizedViewLimit || 8;
 
   // Copy webpage format settings
@@ -369,14 +369,14 @@ function saveSettings() {
     defaultSearchEngine: document.getElementById('default-search-engine').value,
     defaultProfile: document.getElementById('default-profile').value,
     autoOpenResults: document.getElementById('auto-open-results').checked,
-    tabDelay: parseInt(document.getElementById('tab-delay').value),
+    tabDelay: parseInt(document.getElementById('tab-delay').value, 10),
     showPreview: document.getElementById('show-preview').checked,
-    defaultCastCount: parseInt(document.getElementById('default-cast-count').value),
+    defaultCastCount: parseInt(document.getElementById('default-cast-count').value, 10),
     defaultContentFormat: document.getElementById('default-content-format').value,
     defaultOutputFormat: document.getElementById('default-output-format').value,
     debugMode: document.getElementById('debug-mode').checked,
     showCopyWebpageBtn: document.getElementById('show-copy-webpage-btn').checked,
-    customizedViewLimit: parseInt(document.getElementById('customized-view-limit').value) || 8,
+    customizedViewLimit: parseInt(document.getElementById('customized-view-limit').value, 10) || 8,
     // Copy webpage format settings
     copyFormats: {
       includeTitle: document.getElementById('copy-include-title').checked,
@@ -392,17 +392,17 @@ function saveSettings() {
     showWikiTables: document.getElementById('show-wiki-tables').checked,
     wikiOutputFormat: document.getElementById('wiki-output-format').value,
     showLetterboxdCast: document.getElementById('show-letterboxd-cast').checked,
-    letterboxdCastCount: parseInt(document.getElementById('letterboxd-cast-count').value),
+    letterboxdCastCount: parseInt(document.getElementById('letterboxd-cast-count').value, 10),
     letterboxdOutputFormat: document.getElementById('letterboxd-output-format').value,
     letterboxdIncludeRoles: document.getElementById('letterboxd-include-roles').checked,
     showAppleTVCast: document.getElementById('show-appletv-cast').checked,
     // Apple TV+ specific settings
-    appleTVCastCount: parseInt(document.getElementById('appletv-cast-count').value),
+    appleTVCastCount: parseInt(document.getElementById('appletv-cast-count').value, 10),
     appleTVOutputFormat: document.getElementById('appletv-output-format').value,
     appleTVIncludeRoles: document.getElementById('appletv-include-roles').checked,
     // BookMyShow specific settings
     showBookMyShowCopy: document.getElementById('show-bookmyshow-copy').checked,
-    bookMyShowCastCount: parseInt(document.getElementById('bookmyshow-cast-count').value),
+    bookMyShowCastCount: parseInt(document.getElementById('bookmyshow-cast-count').value, 10),
     bookMyShowOutputFormat: document.getElementById('bookmyshow-output-format').value,
     bookMyShowIncludeRoles: document.getElementById('bookmyshow-include-roles').checked,
     // Customized view settings
@@ -515,7 +515,7 @@ function loadProfileSettings() {
     const profileSelect = document.getElementById('profile-select');
     if (profileSelect) {
       profileSelect.addEventListener('change', (e) => {
-        currentProfile = parseInt(e.target.value);
+        currentProfile = parseInt(e.target.value, 10);
         document.querySelectorAll('.profile-content').forEach(p => p.classList.remove('active'));
         document.getElementById(`profile${currentProfile}`).classList.add('active');
       });

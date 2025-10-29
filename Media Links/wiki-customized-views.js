@@ -838,10 +838,45 @@
   }
 
   /**
+   * Get customized view button visibility setting
+   */
+  function getCustomizedViewButtonSetting() {
+    return new Promise((resolve) => {
+      try {
+        if (!isExtensionContextValid()) {
+          resolve(true); // Default to enabled
+          return;
+        }
+
+        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
+          chrome.storage.sync.get(['showWikiCustomizedViewBtn'], (result) => {
+            if (chrome.runtime.lastError) {
+              console.warn('Error getting customized view button setting:', chrome.runtime.lastError);
+              resolve(true); // Default to enabled on error
+            } else {
+              // Default to true if not set
+              resolve(result.showWikiCustomizedViewBtn !== false);
+            }
+          });
+        } else {
+          resolve(true); // Default to enabled
+        }
+      } catch (error) {
+        console.warn('Error accessing chrome.storage for customized view button setting:', error);
+        resolve(true); // Default to enabled on error
+      }
+    });
+  }
+
+  /**
    * Add customized view button to Wikipedia pages
    */
   async function addCustomizedViewButton() {
     if (!isWikipediaMediaPage()) return;
+
+    // Check if the button is enabled in settings
+    const isEnabled = await getCustomizedViewButtonSetting();
+    if (!isEnabled) return;
 
     const colors = await getThemeColors();
 
@@ -967,6 +1002,16 @@
   }
 
   /**
+   * Remove customized view button
+   */
+  function removeCustomizedViewButton() {
+    const button = document.querySelector('.media-links-wiki-customized-view-btn');
+    if (button) {
+      button.remove();
+    }
+  }
+
+  /**
    * Initialize when page loads
    */
   if (isWikipediaMediaPage()) {
@@ -976,6 +1021,26 @@
     } else {
       addCustomizedViewButton();
     }
+  }
+
+  /**
+   * Listen for settings changes to show/hide button
+   */
+  try {
+    if (isExtensionContextValid() && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace === 'sync' && changes.showWikiCustomizedViewBtn) {
+          const isEnabled = changes.showWikiCustomizedViewBtn.newValue !== false;
+          if (isEnabled) {
+            addCustomizedViewButton();
+          } else {
+            removeCustomizedViewButton();
+          }
+        }
+      });
+    }
+  } catch (error) {
+    console.warn('Error setting up settings change listener:', error);
   }
 
   /**

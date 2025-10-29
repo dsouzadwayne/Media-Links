@@ -60,7 +60,16 @@ window.SettingsUtils = (() => {
     customizedViewLimit: 8,
     showCustomizedViewBtn: true,
     autoOpenCustomizedView: false,
+    autoOpenIndividualView: true,
+    showConsolidatedViewBtn: true,
+    autoOpenConsolidatedView: true,
+    showWikiCustomizedViewBtn: true,
     defaultViewColumns: ['name', 'role', 'roleType'],
+
+    // Comparison Feature Settings
+    enableComparisonFeature: false,
+    showComparisonBtnWiki: true,
+    showComparisonBtnImdb: true,
 
     // Copy Webpage Settings
     copyFormats: {
@@ -224,9 +233,37 @@ window.SettingsUtils = (() => {
       type: 'boolean',
       default: false
     },
+    autoOpenIndividualView: {
+      type: 'boolean',
+      default: true
+    },
+    showConsolidatedViewBtn: {
+      type: 'boolean',
+      default: true
+    },
+    autoOpenConsolidatedView: {
+      type: 'boolean',
+      default: true
+    },
+    showWikiCustomizedViewBtn: {
+      type: 'boolean',
+      default: true
+    },
     defaultViewColumns: {
       type: 'object',
       default: ['name', 'role', 'roleType']
+    },
+    enableComparisonFeature: {
+      type: 'boolean',
+      default: false
+    },
+    showComparisonBtnWiki: {
+      type: 'boolean',
+      default: true
+    },
+    showComparisonBtnImdb: {
+      type: 'boolean',
+      default: true
     },
     copyFormats: {
       type: 'object',

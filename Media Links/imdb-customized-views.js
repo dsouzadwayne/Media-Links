@@ -1143,19 +1143,23 @@
           console.log('Extension context invalidated, using default settings');
           resolve({
             showBtn: true,
-            columns: ['name', 'role', 'roleType']
+            columns: ['name', 'role', 'roleType'],
+            showConsolidatedViewBtn: true,
+            autoOpenConsolidatedView: true
           });
           return;
         }
 
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-          chrome.storage.sync.get(['showCustomizedViewBtn', 'defaultViewColumns'], (result) => {
+          chrome.storage.sync.get(['showCustomizedViewBtn', 'defaultViewColumns', 'showConsolidatedViewBtn', 'autoOpenConsolidatedView'], (result) => {
             // Check context again in the callback in case it was invalidated during the async operation
             if (!isExtensionContextValid()) {
               console.log('Extension context invalidated in callback, using default settings');
               resolve({
                 showBtn: true,
-                columns: ['name', 'role', 'roleType']
+                columns: ['name', 'role', 'roleType'],
+                showConsolidatedViewBtn: true,
+                autoOpenConsolidatedView: true
               });
               return;
             }
@@ -1164,26 +1168,34 @@
               console.warn('Error loading customized view settings:', chrome.runtime.lastError);
               resolve({
                 showBtn: true,
-                columns: ['name', 'role', 'roleType']
+                columns: ['name', 'role', 'roleType'],
+                showConsolidatedViewBtn: true,
+                autoOpenConsolidatedView: true
               });
             } else {
               resolve({
                 showBtn: result.showCustomizedViewBtn !== false,
-                columns: result.defaultViewColumns || ['name', 'role', 'roleType']
+                columns: result.defaultViewColumns || ['name', 'role', 'roleType'],
+                showConsolidatedViewBtn: result.showConsolidatedViewBtn !== false,
+                autoOpenConsolidatedView: result.autoOpenConsolidatedView !== false
               });
             }
           });
         } else {
           resolve({
             showBtn: true,
-            columns: ['name', 'role', 'roleType']
+            columns: ['name', 'role', 'roleType'],
+            showConsolidatedViewBtn: true,
+            autoOpenConsolidatedView: true
           });
         }
       } catch (error) {
         console.warn('Error loading customized view settings:', error);
         resolve({
           showBtn: true,
-          columns: ['name', 'role', 'roleType']
+          columns: ['name', 'role', 'roleType'],
+          showConsolidatedViewBtn: true,
+          autoOpenConsolidatedView: true
         });
       }
     });
@@ -2253,6 +2265,55 @@
     }
   } catch (error) {
     console.warn('Error registering message listener:', error);
+  }
+
+  /**
+   * Listen for settings changes to show/hide customized view buttons
+   */
+  try {
+    if (isExtensionContextValid() && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace === 'sync') {
+          // Check if consolidated view button setting changed
+          if (changes.showConsolidatedViewBtn) {
+            const isEnabled = changes.showConsolidatedViewBtn.newValue !== false;
+            const button = document.getElementById('open-consolidated-view-btn');
+
+            if (!isEnabled && button) {
+              // Remove button if disabled
+              button.remove();
+              console.log('Consolidated overview button removed due to settings change');
+            } else if (isEnabled && !button && isIMDbTitlePage()) {
+              // Re-create button if enabled and we're on a title page
+              createOpenViewButton();
+              console.log('Consolidated overview button added due to settings change');
+            }
+          }
+
+          // Check if individual customized view button setting changed
+          if (changes.showCustomizedViewBtn) {
+            const isEnabled = changes.showCustomizedViewBtn.newValue !== false;
+            const button = document.getElementById('open-customized-view-btn');
+
+            if (!isEnabled && button) {
+              // Remove button if disabled
+              button.remove();
+              console.log('Customized view button removed due to settings change');
+            } else if (isEnabled && !button) {
+              // Re-create button if enabled and we're on a supported page
+              const isSupported = isIMDbFullCreditsPage() || isIMDbCompanyCreditsPage() ||
+                                 isIMDbAwardsPage() || isIMDbReleaseInfoPage() || isIMDbTechnicalPage();
+              if (isSupported) {
+                createOpenViewButton();
+                console.log('Customized view button added due to settings change');
+              }
+            }
+          }
+        }
+      });
+    }
+  } catch (error) {
+    console.warn('Error setting up customized view settings change listener:', error);
   }
 
 })();

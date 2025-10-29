@@ -374,11 +374,46 @@
     buttonContainer.appendChild(button);
   }
 
+  /**
+   * Remove comparison button from the page
+   */
+  function removeComparisonButton() {
+    const button = document.querySelector('.media-links-comparison-btn');
+    if (button) {
+      button.remove();
+    }
+  }
+
   // Initialize when page loads
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initComparisonButton);
   } else {
     initComparisonButton();
+  }
+
+  /**
+   * Listen for settings changes to show/hide comparison button
+   */
+  try {
+    if (isExtensionContextValid() && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener((changes, namespace) => {
+        if (namespace === 'sync') {
+          // Check if any comparison-related settings changed
+          const relevantChanges =
+            changes.enableComparisonFeature ||
+            changes.showComparisonBtnWiki ||
+            changes.showComparisonBtnImdb;
+
+          if (relevantChanges) {
+            // Remove existing button and re-initialize based on new settings
+            removeComparisonButton();
+            initComparisonButton();
+          }
+        }
+      });
+    }
+  } catch (error) {
+    console.warn('Error setting up comparison settings change listener:', error);
   }
 
 })();

@@ -30,10 +30,7 @@ const initializeOffscreen = async () => {
     // Set up message listeners
     setupMessageListeners();
 
-    // Wait for sandbox to load
-    sandboxFrame.addEventListener('load', () => {
-      console.log('Offscreen: Sandbox iframe loaded');
-    });
+    // Sandbox load listener is set up in waitForSandboxReady() to avoid duplicates
 
     console.log('Offscreen: Initialization complete');
   } catch (error) {

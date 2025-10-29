@@ -378,7 +378,13 @@ function initCopyWebpageButton() {
       return;
     }
     chrome.storage.sync.get(['showCopyWebpageBtn'], (result) => {
-      const shouldShow = result.showCopyWebpageBtn || false;
+      if (chrome.runtime.lastError) {
+        console.error('Error loading copy webpage button setting:', chrome.runtime.lastError);
+        return;
+      }
+      // Explicitly check for true to show the button
+      const shouldShow = result.showCopyWebpageBtn === true;
+      console.log('Copy webpage button setting:', result.showCopyWebpageBtn, 'shouldShow:', shouldShow);
       updateCopyWebpageButton(shouldShow);
     });
   } catch (error) {
@@ -391,7 +397,10 @@ try {
   if (chrome && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener((changes, namespace) => {
       if (namespace === 'sync' && changes.showCopyWebpageBtn) {
-        updateCopyWebpageButton(changes.showCopyWebpageBtn.newValue);
+        // Validate that newValue is a boolean, default to false if not
+        const newValue = changes.showCopyWebpageBtn.newValue;
+        const shouldShow = typeof newValue === 'boolean' ? newValue : false;
+        updateCopyWebpageButton(shouldShow);
       }
     });
   }

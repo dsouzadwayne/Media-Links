@@ -74,7 +74,7 @@
       categories.forEach(categoryKey => {
         const categoryData = comparison[categoryKey];
         if (categoryData && (categoryData.same.length > 0 || categoryData.sourceA.unique.length > 0 || categoryData.sourceB.unique.length > 0 || categoryData.different.length > 0)) {
-          const categoryElement = renderCategory(categoryData);
+          const categoryElement = renderCategory(categoryData, categoryKey);
           contentDiv.appendChild(categoryElement);
           hasContent = true;
         }
@@ -149,7 +149,20 @@
   /**
    * Render individual category section
    */
-  function renderCategory(categoryData) {
+  function renderCategory(categoryData, categoryKey) {
+    // Map category keys to display names
+    const categoryNames = {
+      'directors': 'Directors',
+      'producers': 'Producers',
+      'writers': 'Writers',
+      'cast': 'Cast',
+      'production': 'Production Companies',
+      'runtime': 'Runtime',
+      'countries': 'Countries',
+      'languages': 'Languages',
+      'releaseDate': 'Release Date'
+    };
+
     const section = document.createElement('div');
     section.className = 'category-section';
 
@@ -158,7 +171,7 @@
 
     const title = document.createElement('div');
     title.className = 'category-title';
-    title.textContent = `👥 ${categoryData.category}`;
+    title.textContent = `👥 ${categoryNames[categoryKey] || categoryKey}`;
 
     const stats = document.createElement('div');
     stats.className = 'category-stats';
