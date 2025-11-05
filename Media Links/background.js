@@ -806,6 +806,38 @@ chrome.runtime.onInstalled.addListener(() => {
       return true; // Keep channel open for async response
     }
 
+    // Handle getting tab status
+    if (message.type === 'getTabStatus') {
+      const tabId = message.tabId;
+
+      chrome.tabs.get(tabId, (tab) => {
+        if (chrome.runtime.lastError) {
+          console.warn(`Failed to get tab ${tabId} status:`, chrome.runtime.lastError);
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        } else {
+          sendResponse({ success: true, status: tab.status });
+        }
+      });
+
+      return true; // Keep channel open for async response
+    }
+
+    // Handle focusing a specific tab
+    if (message.type === 'focusTab') {
+      const tabId = message.tabId;
+
+      chrome.tabs.update(tabId, { active: true }, (tab) => {
+        if (chrome.runtime.lastError) {
+          console.warn(`Failed to focus tab ${tabId}:`, chrome.runtime.lastError);
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        } else {
+          sendResponse({ success: true });
+        }
+      });
+
+      return true; // Keep channel open for async response
+    }
+
     // Handle relaying extraction messages to target tabs
     if (message.type === 'sendExtractionMessage') {
       const targetTabId = message.targetTabId;

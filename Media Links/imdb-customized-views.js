@@ -129,6 +129,12 @@
       'junior art director'
     ];
 
+    // Writer roles to exclude
+    const excludedWriterRoles = [
+      'executive story editor',
+      'staff writer'
+    ];
+
     // For creators, only include if role contains 'created by' or 'creator'
     if (sectionName && sectionName.toLowerCase().includes('creator')) {
       const hasValidCreatorRole = roleLower.includes('created by') || roleLower.includes('creator');
@@ -162,6 +168,11 @@
 
     // Check if it's an excluded director role
     if (excludedDirectorRoles.some(dirRole => roleLower.includes(dirRole))) {
+      return true;
+    }
+
+    // Check if it's an excluded writer role (only for single roles)
+    if (!hasMultipleRoles && excludedWriterRoles.some(writerRole => roleLower.includes(writerRole))) {
       return true;
     }
 
@@ -1436,6 +1447,63 @@
 
           const openedTabIds = [];
           let tabsOpenedCount = 0;
+          let tabsLoadedCount = 0;
+          const loadedTabs = new Set();
+
+          /**
+           * Check if a tab has finished loading
+           */
+          const checkTabLoaded = (tabId) => {
+            return new Promise((resolve) => {
+              chrome.runtime.sendMessage({ type: 'getTabStatus', tabId }, (response) => {
+                if (response && response.success && response.status === 'complete') {
+                  resolve(true);
+                } else {
+                  resolve(false);
+                }
+              });
+            });
+          };
+
+          /**
+           * Wait for all tabs to finish loading
+           */
+          const waitForAllTabsToLoad = () => {
+            console.log('Waiting for all tabs to load...');
+            const checkInterval = setInterval(async () => {
+              for (const { tabId, page } of openedTabIds) {
+                if (!loadedTabs.has(tabId)) {
+                  const isLoaded = await checkTabLoaded(tabId);
+                  if (isLoaded) {
+                    loadedTabs.add(tabId);
+                    tabsLoadedCount++;
+                    console.log(`✓ ${page.name} tab loaded (${tabsLoadedCount}/${extractionPages.length})`);
+                  }
+                }
+              }
+
+              // Check if all tabs are loaded
+              if (tabsLoadedCount === extractionPages.length) {
+                clearInterval(checkInterval);
+                console.log('✓ All tabs loaded! Starting extraction...');
+
+                // Refocus the original tab
+                if (originalTabId) {
+                  chrome.runtime.sendMessage({
+                    type: 'focusTab',
+                    tabId: originalTabId
+                  }, (response) => {
+                    if (response && response.success) {
+                      console.log('Refocused original tab:', originalTabId);
+                    }
+                  });
+                }
+
+                // Show modal and start extraction
+                setTimeout(() => showTabSelectorModal(), 500);
+              }
+            }, 500); // Check every 500ms
+          };
 
           /**
            * Open all extraction tabs
@@ -1452,19 +1520,9 @@
                     console.log(`Tracked tabs so far:`, openedTabIds.map(t => `${t.page.type}(${t.tabId})`).join(', '));
 
                     if (tabsOpenedCount === extractionPages.length) {
-                      // All tabs opened, refocus the original tab
-                      if (originalTabId) {
-                        chrome.runtime.sendMessage({
-                          type: 'focusTab',
-                          tabId: originalTabId
-                        }, (response) => {
-                          if (response && response.success) {
-                            console.log('Refocused original tab:', originalTabId);
-                          }
-                        });
-                      }
-                      // Show tab selector modal after refocusing
-                      setTimeout(() => showTabSelectorModal(), 1000);
+                      // All tabs opened, now wait for them to load
+                      console.log('All tabs opened, waiting for them to load...');
+                      setTimeout(() => waitForAllTabsToLoad(), 1000);
                     }
                   }
                 });
@@ -1473,11 +1531,11 @@
           };
 
           /**
-           * Show modal with tab selector
+           * Show modal with extraction progress
            */
           const showTabSelectorModal = () => {
-            console.log('Showing tab selector modal');
-            showConsolidatedViewNotification('✓ All tabs opened! Select which ones to extract...', 'success', true);
+            console.log('All tabs loaded, starting extraction...');
+            showConsolidatedViewNotification('✓ All tabs loaded! Extracting data...', 'success', true);
 
             // Create modal overlay
             const modalOverlay = document.createElement('div');
@@ -1514,164 +1572,65 @@
             modalTitle.textContent = '🎬 Consolidated Overview';
             modalTitle.style.cssText = 'margin-top: 0; margin-bottom: 20px; color: #111;';
 
-            const modalDesc = document.createElement('p');
-            modalDesc.textContent = 'Select pages to extract data from:';
-            modalDesc.style.cssText = 'color: #666; margin-bottom: 20px;';
+            // Add progress container with prominent styling
+            const progressDiv = document.createElement('div');
+            progressDiv.id = 'extraction-progress-container';
+            progressDiv.style.cssText = `
+              margin: 20px 0;
+              padding: 20px;
+              background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+              border-radius: 8px;
+              border-left: 4px solid #8b5cf6;
+              min-height: 200px;
+              display: flex;
+              flex-direction: column;
+            `;
 
-            const tabCheckboxesDiv = document.createElement('div');
-            tabCheckboxesDiv.id = 'tab-checkboxes';
-            tabCheckboxesDiv.style.cssText = 'margin-bottom: 25px; display: flex; flex-direction: column; gap: 10px;';
+            const progressTitle = document.createElement('p');
+            progressTitle.style.cssText = `
+              margin: 0 0 15px 0;
+              color: #111;
+              font-weight: 700;
+              font-size: 16px;
+            `;
+            // Use textContent and span to avoid XSS
+            progressTitle.textContent = '📂 ';
+            const extractingSpan = document.createElement('span');
+            extractingSpan.textContent = 'Extracting data...';
+            extractingSpan.style.color = '#8b5cf6';
+            progressTitle.appendChild(extractingSpan);
 
-            const buttonsDiv = document.createElement('div');
-            buttonsDiv.style.cssText = 'display: flex; gap: 12px; margin-top: 25px;';
+            const progressList = document.createElement('div');
+            progressList.id = 'extraction-progress-list';
+            progressList.style.cssText = `
+              font-size: 14px;
+              color: #333;
+              line-height: 1.8;
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', monospace;
+              flex-grow: 1;
+            `;
 
-            const extractBtn = document.createElement('button');
-            extractBtn.id = 'extract-btn';
-            extractBtn.textContent = 'Extract Data';
-            extractBtn.style.cssText = 'flex: 1; padding: 12px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;';
-            extractBtn.addEventListener('mouseover', () => extractBtn.style.background = '#7c3aed');
-            extractBtn.addEventListener('mouseout', () => extractBtn.style.background = '#8b5cf6');
-
-            const cancelBtn = document.createElement('button');
-            cancelBtn.id = 'cancel-btn';
-            cancelBtn.textContent = 'Cancel';
-            cancelBtn.style.cssText = 'flex: 1; padding: 12px; background: #e5e7eb; color: #333; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;';
-            cancelBtn.addEventListener('mouseover', () => cancelBtn.style.background = '#d1d5db');
-            cancelBtn.addEventListener('mouseout', () => cancelBtn.style.background = '#e5e7eb');
-
-            buttonsDiv.appendChild(extractBtn);
-            buttonsDiv.appendChild(cancelBtn);
+            progressDiv.appendChild(progressTitle);
+            progressDiv.appendChild(progressList);
 
             modal.appendChild(modalTitle);
-            modal.appendChild(modalDesc);
-            modal.appendChild(tabCheckboxesDiv);
-            modal.appendChild(buttonsDiv);
+            modal.appendChild(progressDiv);
 
             modalOverlay.appendChild(modal);
             document.body.appendChild(modalOverlay);
 
-            // Add checkboxes dynamically after modal is in DOM
-            const tabCheckboxesDiv = document.getElementById('tab-checkboxes');
-            extractionPages.forEach((page, idx) => {
-              const label = document.createElement('label');
-              label.style.cssText = 'display: flex; align-items: center; cursor: pointer; padding: 10px; border-radius: 6px; transition: background 0.2s;';
+            console.log('Starting extraction from all pages');
 
-              const checkbox = document.createElement('input');
-              checkbox.type = 'checkbox';
-              checkbox.id = `select-${idx}`;
-              checkbox.className = 'page-selector-checkbox';
-              checkbox.dataset.type = page.type;
-              checkbox.checked = true;
-              checkbox.style.cssText = 'margin-right: 12px; width: 18px; height: 18px; cursor: pointer;';
+            // Extract from all pages (all page types)
+            const selectedPages = extractionPages.map(page => page.type);
 
-              const span = document.createElement('span');
-              span.textContent = page.name;
-              span.style.cssText = 'color: #333; font-weight: 500;';
-
-              label.appendChild(checkbox);
-              label.appendChild(span);
-
-              label.addEventListener('mouseover', () => {
-                label.style.background = '#f0f0f0';
-              });
-              label.addEventListener('mouseout', () => {
-                label.style.background = 'transparent';
-              });
-
-              tabCheckboxesDiv.appendChild(label);
-            });
-
-            console.log('Tab selector modal created with', extractionPages.length, 'pages');
-
-            // Handle extract button click
-            document.getElementById('extract-btn').addEventListener('click', () => {
-              const selectedCheckboxes = document.querySelectorAll('.page-selector-checkbox:checked');
-              const selectedPages = Array.from(selectedCheckboxes).map(cb => cb.dataset.type);
-
-              console.log('Selected pages for extraction:', selectedPages);
-
-              // Update modal to show extraction progress
-              const tabCheckboxesDiv = document.getElementById('tab-checkboxes');
-              const buttonsDiv = modal.querySelector('div:last-of-type');
-
-              // Hide checkboxes and buttons
-              tabCheckboxesDiv.style.display = 'none';
-              buttonsDiv.style.display = 'none';
-
-              // Add progress container with much more prominent styling
-              const progressDiv = document.createElement('div');
-              progressDiv.id = 'extraction-progress-container';
-              progressDiv.style.cssText = `
-                margin: 20px 0;
-                padding: 20px;
-                background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
-                border-radius: 8px;
-                border-left: 4px solid #8b5cf6;
-                min-height: 200px;
-                display: flex;
-                flex-direction: column;
-              `;
-
-              const progressTitle = document.createElement('p');
-              progressTitle.style.cssText = `
-                margin: 0 0 15px 0;
-                color: #111;
-                font-weight: 700;
-                font-size: 16px;
-              `;
-              // Use textContent and span to avoid XSS
-              progressTitle.textContent = '📂 ';
-              const extractingSpan = document.createElement('span');
-              extractingSpan.textContent = 'Extracting data...';
-              extractingSpan.style.color = '#8b5cf6';
-              progressTitle.appendChild(extractingSpan);
-
-              const progressList = document.createElement('div');
-              progressList.id = 'extraction-progress-list';
-              progressList.style.cssText = `
-                font-size: 14px;
-                color: #333;
-                line-height: 1.8;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', monospace;
-                flex-grow: 1;
-              `;
-
-              progressDiv.appendChild(progressTitle);
-              progressDiv.appendChild(progressList);
-
-              // Insert at the top of modal content, right after the heading
-              const heading = modal.querySelector('h2');
-              heading.parentNode.insertBefore(progressDiv, heading.nextSibling);
-
-              // Start extraction (modal stays visible during extraction)
-              extractFromSelectedPages(selectedPages, () => {
-                // This callback runs after extraction completes
-                // Remove modal after extraction is done
-                setTimeout(() => {
-                  modalOverlay.remove();
-                }, 1000);
-              });
-            });
-
-            // Handle cancel button click
-            document.getElementById('cancel-btn').addEventListener('click', () => {
-              console.log('User cancelled consolidated overview extraction');
-              modalOverlay.remove();
-
-              // Close all opened tabs
-              openedTabIds.forEach(({ tabId }) => {
-                chrome.runtime.sendMessage({ type: 'closeTab', tabId });
-              });
-
-              // Reset button
-              if (button) {
-                button.disabled = false;
-                button.style.opacity = '1';
-                button.style.cursor = 'pointer';
-                button.textContent = '🎬 Consolidated Overview';
-              }
-
-              showConsolidatedViewNotification('Cancelled consolidated overview extraction', 'success');
+            // Start extraction immediately (modal stays visible during extraction)
+            extractFromSelectedPages(selectedPages, () => {
+              // This callback runs after extraction completes
+              // Remove modal after extraction is done
+              setTimeout(() => {
+                modalOverlay.remove();
+              }, 1000);
             });
           };
 
@@ -1892,9 +1851,9 @@
     // Load customized view settings
     const settings = await loadCustomizedViewSettings();
 
-    // Check if the button should be shown (skip for title page since it only shows consolidated button)
-    if (!isTitle && !settings.showBtn) {
-      console.log('Customized view button is disabled in settings');
+    // Check if both buttons are disabled (skip for title page since it only shows consolidated button)
+    if (!isTitle && !settings.showBtn && !settings.showConsolidatedViewBtn) {
+      console.log('Both customized view and consolidated overview buttons are disabled in settings');
       return;
     }
 
@@ -2006,9 +1965,21 @@
     const showConsolidatedBtn = settings.showConsolidatedViewBtn !== false; // Default to true
     if (!showConsolidatedBtn && !isTitle) {
       // Don't create the consolidated button if setting is disabled (and not on title page)
+      // Just create the individual view button if it exists
       if (button) {
-        container.appendChild(button);
-        targetElement.insertAdjacentElement('afterend', container);
+        // Find the page title and position button next to it
+        const pageTitle = document.querySelector('h1');
+        if (pageTitle) {
+          let wrapper = pageTitle.closest('.imdb-title-wrapper');
+          if (!wrapper) {
+            wrapper = document.createElement('div');
+            wrapper.className = 'imdb-title-wrapper';
+            pageTitle.parentNode.insertBefore(wrapper, pageTitle);
+            wrapper.appendChild(pageTitle);
+          }
+          wrapper.appendChild(button);
+          console.log('Individual view button created (consolidated button disabled)');
+        }
       }
       return;
     }
