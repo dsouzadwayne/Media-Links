@@ -794,14 +794,29 @@
           dropdownMenu.appendChild(optionBtn);
         });
 
-        copyBtn.addEventListener('click', () => {
-          dropdownMenu.style.display = dropdownMenu.style.display === 'none' ? 'block' : 'none';
-        });
-
-        // Close dropdown when clicking outside
-        document.addEventListener('click', (e) => {
+        // Store handler so it can be removed later
+        const outsideClickHandler = (e) => {
           if (!copyDropdown.contains(e.target)) {
             dropdownMenu.style.display = 'none';
+            // Remove the listener when dropdown closes
+            document.removeEventListener('click', outsideClickHandler);
+          }
+        };
+
+        copyBtn.addEventListener('click', (e) => {
+          e.stopPropagation(); // Prevent immediate trigger of outsideClickHandler
+          const isVisible = dropdownMenu.style.display !== 'none';
+          dropdownMenu.style.display = isVisible ? 'none' : 'block';
+
+          if (!isVisible) {
+            // Add listener only when opening dropdown
+            // Use setTimeout to avoid immediate trigger from this click
+            setTimeout(() => {
+              document.addEventListener('click', outsideClickHandler);
+            }, 0);
+          } else {
+            // Remove listener when closing dropdown
+            document.removeEventListener('click', outsideClickHandler);
           }
         });
 

@@ -16,6 +16,17 @@
     }
   }
 
+  /**
+   * Sanitize HTML to prevent XSS attacks
+   * Escapes special characters that could be used for script injection
+   */
+  function sanitizeHTML(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
   // Early exit if extension context is invalid
   if (!isExtensionContextValid()) {
     console.log('Extension context invalidated, skipping IMDb customized views');
@@ -1238,13 +1249,26 @@
       gap: 8px;
     `;
 
-    notification.innerHTML = `
-      <div style="display: flex; align-items: center; gap: 10px;">
-        <span style="font-size: 16px;">${icon}</span>
-        <span>${message}</span>
-      </div>
-      <div id="extraction-progress" style="font-size: 12px; opacity: 0.9; display: none;"></div>
-    `;
+    // Build notification content safely using DOM methods
+    const contentDiv = document.createElement('div');
+    contentDiv.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = icon;
+    iconSpan.style.fontSize = '16px';
+
+    const messageSpan = document.createElement('span');
+    messageSpan.textContent = message;
+
+    contentDiv.appendChild(iconSpan);
+    contentDiv.appendChild(messageSpan);
+
+    const progressDiv = document.createElement('div');
+    progressDiv.id = 'extraction-progress';
+    progressDiv.style.cssText = 'font-size: 12px; opacity: 0.9; display: none;';
+
+    notification.appendChild(contentDiv);
+    notification.appendChild(progressDiv);
     document.body.appendChild(notification);
 
     // Auto-remove success messages after 3 seconds (unless persist is true)
@@ -1265,7 +1289,16 @@
     const progressDiv = document.getElementById('extraction-progress');
     if (progressDiv) {
       progressDiv.style.display = 'block';
-      progressDiv.innerHTML = completedPages.map(page => `✓ ${page}`).join('<br>');
+      // Clear existing content
+      progressDiv.textContent = '';
+      // Add each page as a text node with line breaks
+      completedPages.forEach((page, index) => {
+        if (index > 0) {
+          progressDiv.appendChild(document.createElement('br'));
+        }
+        const pageText = document.createTextNode(`✓ ${page}`);
+        progressDiv.appendChild(pageText);
+      });
     }
   }
 
@@ -1476,43 +1509,43 @@
               overflow-y: auto;
             `;
 
-            modal.innerHTML = `
-              <h2 style="margin-top: 0; margin-bottom: 20px; color: #111;">🎬 Consolidated Overview</h2>
-              <p style="color: #666; margin-bottom: 20px;">Select pages to extract data from:</p>
+            // Create modal content using DOM methods to avoid XSS
+            const modalTitle = document.createElement('h2');
+            modalTitle.textContent = '🎬 Consolidated Overview';
+            modalTitle.style.cssText = 'margin-top: 0; margin-bottom: 20px; color: #111;';
 
-              <div id="tab-checkboxes" style="margin-bottom: 25px; display: flex; flex-direction: column; gap: 10px;"></div>
+            const modalDesc = document.createElement('p');
+            modalDesc.textContent = 'Select pages to extract data from:';
+            modalDesc.style.cssText = 'color: #666; margin-bottom: 20px;';
 
-              <div style="display: flex; gap: 12px; margin-top: 25px;">
-                <button id="extract-btn" style="
-                  flex: 1;
-                  padding: 12px;
-                  background: #8b5cf6;
-                  color: white;
-                  border: none;
-                  border-radius: 6px;
-                  font-size: 14px;
-                  font-weight: 600;
-                  cursor: pointer;
-                  transition: all 0.2s;
-                " onmouseover="this.style.background='#7c3aed'" onmouseout="this.style.background='#8b5cf6'">
-                  Extract Data
-                </button>
-                <button id="cancel-btn" style="
-                  flex: 1;
-                  padding: 12px;
-                  background: #e5e7eb;
-                  color: #333;
-                  border: none;
-                  border-radius: 6px;
-                  font-size: 14px;
-                  font-weight: 600;
-                  cursor: pointer;
-                  transition: all 0.2s;
-                " onmouseover="this.style.background='#d1d5db'" onmouseout="this.style.background='#e5e7eb'">
-                  Cancel
-                </button>
-              </div>
-            `;
+            const tabCheckboxesDiv = document.createElement('div');
+            tabCheckboxesDiv.id = 'tab-checkboxes';
+            tabCheckboxesDiv.style.cssText = 'margin-bottom: 25px; display: flex; flex-direction: column; gap: 10px;';
+
+            const buttonsDiv = document.createElement('div');
+            buttonsDiv.style.cssText = 'display: flex; gap: 12px; margin-top: 25px;';
+
+            const extractBtn = document.createElement('button');
+            extractBtn.id = 'extract-btn';
+            extractBtn.textContent = 'Extract Data';
+            extractBtn.style.cssText = 'flex: 1; padding: 12px; background: #8b5cf6; color: white; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;';
+            extractBtn.addEventListener('mouseover', () => extractBtn.style.background = '#7c3aed');
+            extractBtn.addEventListener('mouseout', () => extractBtn.style.background = '#8b5cf6');
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.id = 'cancel-btn';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.style.cssText = 'flex: 1; padding: 12px; background: #e5e7eb; color: #333; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s;';
+            cancelBtn.addEventListener('mouseover', () => cancelBtn.style.background = '#d1d5db');
+            cancelBtn.addEventListener('mouseout', () => cancelBtn.style.background = '#e5e7eb');
+
+            buttonsDiv.appendChild(extractBtn);
+            buttonsDiv.appendChild(cancelBtn);
+
+            modal.appendChild(modalTitle);
+            modal.appendChild(modalDesc);
+            modal.appendChild(tabCheckboxesDiv);
+            modal.appendChild(buttonsDiv);
 
             modalOverlay.appendChild(modal);
             document.body.appendChild(modalOverlay);
@@ -1586,7 +1619,12 @@
                 font-weight: 700;
                 font-size: 16px;
               `;
-              progressTitle.innerHTML = '📂 <span style="color: #8b5cf6;">Extracting data...</span>';
+              // Use textContent and span to avoid XSS
+              progressTitle.textContent = '📂 ';
+              const extractingSpan = document.createElement('span');
+              extractingSpan.textContent = 'Extracting data...';
+              extractingSpan.style.color = '#8b5cf6';
+              progressTitle.appendChild(extractingSpan);
 
               const progressList = document.createElement('div');
               progressList.id = 'extraction-progress-list';
@@ -1661,7 +1699,7 @@
                 const waitingLine = document.createElement('div');
                 waitingLine.id = `waiting-${pageType}`;
                 waitingLine.style.cssText = 'color: #f59e0b; margin: 5px 0; font-weight: 500;';
-                waitingLine.innerHTML = `⏳ ${page.name}...`;
+                waitingLine.textContent = `⏳ ${page.name}...`;
                 progressList.appendChild(waitingLine);
               }
 
@@ -1694,41 +1732,55 @@
                 const checkInterval = setInterval(() => {
                   checkCount++;
 
-                  chrome.storage.local.get([`consolidatedViewData_${pageType}`], (result) => {
-                    const hasData = result[`consolidatedViewData_${pageType}`] !== undefined &&
-                                   Array.isArray(result[`consolidatedViewData_${pageType}`]);
-
-                    if (hasData) {
-                      clearInterval(checkInterval);
-                      completedCount++;
-                      completedPages.push(page.name);
-                      console.log(`✓ ${page.name} extraction complete`);
-
-                      // Update modal progress - remove waiting indicator and add completed
-                      const progressList = document.getElementById('extraction-progress-list');
-                      if (progressList) {
-                        const waitingIndicator = document.getElementById(`waiting-${pageType}`);
-                        if (waitingIndicator) {
-                          waitingIndicator.remove();
-                        }
-
-                        const progressLine = document.createElement('div');
-                        progressLine.style.cssText = 'color: #10b981; margin: 5px 0;';
-                        progressLine.innerHTML = `✓ ${page.name} (${completedCount}/${selectedPageTypes.length})`;
-                        progressList.appendChild(progressLine);
+                  try {
+                    chrome.storage.local.get([`consolidatedViewData_${pageType}`], (result) => {
+                      // Check for chrome.runtime.lastError
+                      if (chrome.runtime.lastError) {
+                        console.error(`Storage error for ${page.name}:`, chrome.runtime.lastError);
+                        clearInterval(checkInterval);
+                        resolve();
+                        return;
                       }
 
-                      // Notification shown in modal, not separately
-                      // showConsolidatedViewNotification(`✓ ${page.name} extracted (${completedCount}/${selectedPageTypes.length})`, 'success', true);
-                      updateExtractionProgress(completedPages);
-                      resolve();
-                    } else if (checkCount >= maxChecks) {
-                      clearInterval(checkInterval);
-                      console.warn(`Timeout waiting for ${page.name} extraction`);
-                      // Timeout message shown in modal, not separately
-                      resolve();
-                    }
-                  });
+                      const hasData = result[`consolidatedViewData_${pageType}`] !== undefined &&
+                                     Array.isArray(result[`consolidatedViewData_${pageType}`]);
+
+                      if (hasData) {
+                        clearInterval(checkInterval);
+                        completedCount++;
+                        completedPages.push(page.name);
+                        console.log(`✓ ${page.name} extraction complete`);
+
+                        // Update modal progress - remove waiting indicator and add completed
+                        const progressList = document.getElementById('extraction-progress-list');
+                        if (progressList) {
+                          const waitingIndicator = document.getElementById(`waiting-${pageType}`);
+                          if (waitingIndicator) {
+                            waitingIndicator.remove();
+                          }
+
+                          const progressLine = document.createElement('div');
+                          progressLine.style.cssText = 'color: #10b981; margin: 5px 0;';
+                          progressLine.textContent = `✓ ${page.name} (${completedCount}/${selectedPageTypes.length})`;
+                          progressList.appendChild(progressLine);
+                        }
+
+                        // Notification shown in modal, not separately
+                        // showConsolidatedViewNotification(`✓ ${page.name} extracted (${completedCount}/${selectedPageTypes.length})`, 'success', true);
+                        updateExtractionProgress(completedPages);
+                        resolve();
+                      } else if (checkCount >= maxChecks) {
+                        clearInterval(checkInterval);
+                        console.warn(`Timeout waiting for ${page.name} extraction`);
+                        // Timeout message shown in modal, not separately
+                        resolve();
+                      }
+                    });
+                  } catch (error) {
+                    console.error(`Exception during storage polling for ${page.name}:`, error);
+                    clearInterval(checkInterval);
+                    resolve();
+                  }
                 }, 500);
               });
             }
@@ -1741,7 +1793,7 @@
             if (finalProgressList) {
               const completionLine = document.createElement('div');
               completionLine.style.cssText = 'color: #10b981; margin-top: 10px; font-weight: 600; padding-top: 10px; border-top: 1px solid #d1d5db;';
-              completionLine.innerHTML = '✅ Extraction complete! Closing tabs...';
+              completionLine.textContent = '✅ Extraction complete! Closing tabs...';
               finalProgressList.appendChild(completionLine);
             }
 

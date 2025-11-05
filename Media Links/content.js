@@ -207,10 +207,19 @@ function createCopyModal() {
 
         const textDiv = document.createElement('div');
         textDiv.style.flex = '1';
-        textDiv.innerHTML = `
-          <div style="font-weight: 500; color: #333; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${tab.title}</div>
-          <div style="font-size: 11px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${tab.url}</div>
-        `;
+
+        // Create title div safely
+        const titleDiv = document.createElement('div');
+        titleDiv.textContent = tab.title;
+        titleDiv.style.cssText = 'font-weight: 500; color: #333; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+
+        // Create URL div safely
+        const urlDiv = document.createElement('div');
+        urlDiv.textContent = tab.url;
+        urlDiv.style.cssText = 'font-size: 11px; color: #999; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+
+        textDiv.appendChild(titleDiv);
+        textDiv.appendChild(urlDiv);
 
         tabItem.appendChild(checkbox);
         tabItem.appendChild(favicon);

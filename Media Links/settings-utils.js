@@ -64,12 +64,14 @@ window.SettingsUtils = (() => {
     showConsolidatedViewBtn: true,
     autoOpenConsolidatedView: true,
     showWikiCustomizedViewBtn: true,
+    autoOpenWikiView: true,
     defaultViewColumns: ['name', 'role', 'roleType'],
 
     // Comparison Feature Settings
     enableComparisonFeature: false,
     showComparisonBtnWiki: true,
     showComparisonBtnImdb: true,
+    autoOpenComparison: true,
 
     // Copy Webpage Settings
     copyFormats: {
@@ -249,8 +251,12 @@ window.SettingsUtils = (() => {
       type: 'boolean',
       default: true
     },
+    autoOpenWikiView: {
+      type: 'boolean',
+      default: true
+    },
     defaultViewColumns: {
-      type: 'object',
+      type: 'array',
       default: ['name', 'role', 'roleType']
     },
     enableComparisonFeature: {
@@ -262,6 +268,10 @@ window.SettingsUtils = (() => {
       default: true
     },
     showComparisonBtnImdb: {
+      type: 'boolean',
+      default: true
+    },
+    autoOpenComparison: {
       type: 'boolean',
       default: true
     },
@@ -298,12 +308,28 @@ window.SettingsUtils = (() => {
       return DEFAULT_SETTINGS[key];
     }
 
-    // Check type
-    if (typeof value !== rule.type) {
-      console.warn(
-        `SettingsUtils: Invalid type for "${key}": expected ${rule.type}, got ${typeof value}. Using default: ${rule.default}`
-      );
-      return rule.default;
+    // Check type - handle arrays specially since typeof [] === 'object'
+    if (rule.type === 'array') {
+      if (!Array.isArray(value)) {
+        console.warn(
+          `SettingsUtils: Invalid type for "${key}": expected array, got ${typeof value}. Using default: ${JSON.stringify(rule.default)}`
+        );
+        return rule.default;
+      }
+    } else if (rule.type === 'object') {
+      if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        console.warn(
+          `SettingsUtils: Invalid type for "${key}": expected object, got ${typeof value}. Using default: ${JSON.stringify(rule.default)}`
+        );
+        return rule.default;
+      }
+    } else {
+      if (typeof value !== rule.type) {
+        console.warn(
+          `SettingsUtils: Invalid type for "${key}": expected ${rule.type}, got ${typeof value}. Using default: ${rule.default}`
+        );
+        return rule.default;
+      }
     }
 
     // Check enum values
@@ -464,7 +490,8 @@ window.SettingsUtils = (() => {
         if (chrome.storage && chrome.storage.sync) {
           chrome.storage.sync.get([key], (result) => {
             const value = result[key] !== undefined ? result[key] : DEFAULT_SETTINGS[key];
-            resolve(validateSetting(key, value));
+            // Don't validate on load - preserve user's stored value
+            resolve(value);
           });
         } else {
           resolve(DEFAULT_SETTINGS[key]);
@@ -493,12 +520,13 @@ window.SettingsUtils = (() => {
 
         if (chrome.storage && chrome.storage.sync) {
           chrome.storage.sync.get(keys, (result) => {
-            const validated = {};
+            const retrieved = {};
             keys.forEach(key => {
               const value = result[key] !== undefined ? result[key] : DEFAULT_SETTINGS[key];
-              validated[key] = validateSetting(key, value);
+              // Don't validate on load - preserve user's stored values
+              retrieved[key] = value;
             });
-            resolve(validated);
+            resolve(retrieved);
           });
         } else {
           const result = {};

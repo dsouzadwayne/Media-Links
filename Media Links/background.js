@@ -376,20 +376,43 @@ chrome.runtime.onInstalled.addListener(() => {
       openPanelOnActionClick: true
     });
 
-    // Create parent context menu
+    // Create static parent context menu
     chrome.contextMenus.create({
       id: 'search-selection',
       title: 'Search with Media Links',
       contexts: ['selection']
     });
 
-    // Create CBFC India search submenu
+    // Create CBFC India search submenu (static)
     chrome.contextMenus.create({
       id: 'cbfc-search',
       parentId: 'search-selection',
       title: 'Search on CBFC India',
       contexts: ['selection']
     });
+
+    // Create separator (static)
+    chrome.contextMenus.create({
+      id: 'cbfc-separator',
+      parentId: 'search-selection',
+      type: 'separator',
+      contexts: ['selection']
+    });
+
+    // Pre-create all possible menu structures for 1-4 words
+    // We'll show/hide and update titles dynamically
+    for (let wordCount = 1; wordCount <= 4; wordCount++) {
+      const patterns = groupingPatterns[wordCount] || [];
+      patterns.forEach(pattern => {
+        chrome.contextMenus.create({
+          id: `grouping-${wordCount}-${pattern.id}`,
+          parentId: 'search-selection',
+          title: pattern.display,  // Placeholder, will be updated
+          contexts: ['selection'],
+          visible: false  // Hidden by default
+        });
+      });
+    }
 
     // Create offscreen document for Tesseract
     createOffscreenDocument().catch(err => {
@@ -578,7 +601,8 @@ chrome.runtime.onInstalled.addListener(() => {
   let currentSelectionInfo = { words: [], wordCount: 0 };
   let menuUpdateTimeout = null;
   let isUpdatingMenu = false;
-  let pendingUpdate = null;  // Store only the most recent pending update
+  let pendingUpdates = [];  // Queue to store all pending updates
+  let lastMenuStructureWordCount = 0;  // Track the menu structure (changes with word count)
 
   // Sanitize text for context menu display
   const sanitizeForContextMenu = (text) => {
@@ -587,12 +611,13 @@ chrome.runtime.onInstalled.addListener(() => {
     return text.replace(/[&<>"']/g, '').substring(0, 50);
   };
 
-  // Process any pending update that came in while we were busy
+  // Process any pending updates that came in while we were busy
   const processPendingUpdate = () => {
-    if (pendingUpdate !== null) {
-      // Get the most recent update
-      const textToUpdate = pendingUpdate;
-      pendingUpdate = null;  // Clear the pending update
+    if (pendingUpdates.length > 0) {
+      // Get the most recent update from the queue
+      const textToUpdate = pendingUpdates.pop();
+      // Clear any older pending updates (only process the most recent)
+      pendingUpdates = [];
       updateContextMenu(textToUpdate, true);
     }
   };
@@ -602,9 +627,9 @@ chrome.runtime.onInstalled.addListener(() => {
     clearTimeout(menuUpdateTimeout);
 
     const updateMenus = () => {
-      // If already updating, store this request and return
+      // If already updating, add this request to queue and return
       if (isUpdatingMenu) {
-        pendingUpdate = selectionText;
+        pendingUpdates.push(selectionText);
         return;
       }
 
@@ -616,122 +641,89 @@ chrome.runtime.onInstalled.addListener(() => {
 
       // Sanitize words before storing
       const sanitizedWords = words.map(sanitizeForContextMenu);
+
+      // Check if this is the same selection we already have
+      const isSameSelection = currentSelectionInfo.wordCount === wordCount &&
+                              currentSelectionInfo.words.every((word, i) => word === sanitizedWords[i]);
+
+      if (isSameSelection) {
+        // Menu is already built for this selection, no need to rebuild
+        return;
+      }
+
       currentSelectionInfo = { words: sanitizedWords, wordCount };
 
       // Mark that we're updating
       isUpdatingMenu = true;
 
-      // Remove all existing menus
-      chrome.contextMenus.removeAll(() => {
-        // Check if menu removal failed
-        if (chrome.runtime.lastError) {
-          console.error('Failed to remove context menus:', chrome.runtime.lastError);
-          isUpdatingMenu = false;
-          processPendingUpdate();
-          return;
+      // Update strategy: show menus for current word count, hide others
+      // This is MUCH faster than removeAll + create
+      try {
+        let updatesCompleted = 0;
+        let totalUpdates = 0;
+
+        // Count total updates needed
+        for (let wc = 1; wc <= 4; wc++) {
+          const patterns = groupingPatterns[wc] || [];
+          totalUpdates += patterns.length;
         }
 
-        try {
-          // Recreate parent menu
-          chrome.contextMenus.create({
-            id: 'search-selection',
-            title: 'Search with Media Links',
-            contexts: ['selection']
-          }, () => {
-            if (chrome.runtime.lastError) {
-              console.error('Failed to create parent menu:', chrome.runtime.lastError);
-              isUpdatingMenu = false;
-              processPendingUpdate();
-              return;
-            }
+        // Update all menu items
+        for (let wc = 1; wc <= 4; wc++) {
+          const patterns = groupingPatterns[wc] || [];
+          const shouldBeVisible = (wc === wordCount);
 
-            // Always add CBFC India search option
-            chrome.contextMenus.create({
-              id: 'cbfc-search',
-              parentId: 'search-selection',
-              title: 'Search on CBFC India',
-              contexts: ['selection']
-            });
+          patterns.forEach(pattern => {
+            const menuId = `grouping-${wc}-${pattern.id}`;
+            let displayText = pattern.display;
 
-            // Add separator between CBFC and regular search options
-            chrome.contextMenus.create({
-              id: 'cbfc-separator',
-              parentId: 'search-selection',
-              type: 'separator',
-              contexts: ['selection']
-            });
-
-            // Create submenus based on word count
-            const patterns = groupingPatterns[wordCount] || [];
-            let createdCount = 0;
-            const totalPatterns = patterns.length;
-
-            if (totalPatterns === 0) {
-              isUpdatingMenu = false;
-              processPendingUpdate();
-              return;
-            }
-
-            patterns.forEach(pattern => {
-              // Replace placeholders with sanitized words
-              let displayText = pattern.display;
+            // If this menu should be visible, update its title with actual words
+            if (shouldBeVisible) {
               sanitizedWords.forEach((word, index) => {
-                // Use regex replace for compatibility
                 const regex = new RegExp(`word${index + 1}`, 'g');
                 displayText = displayText.replace(regex, word);
               });
 
-              // Truncate menu title if too long (Chrome limit is ~50 chars)
+              // Truncate menu title if too long
               if (displayText.length > 50) {
                 displayText = displayText.substring(0, 47) + '...';
               }
+            }
 
-              try {
-                chrome.contextMenus.create({
-                  id: `grouping-${wordCount}-${pattern.id}`,
-                  parentId: 'search-selection',
-                  title: displayText,
-                  contexts: ['selection']
-                }, () => {
-                  createdCount++;
+            // Update menu visibility and title
+            chrome.contextMenus.update(menuId, {
+              visible: shouldBeVisible,
+              title: displayText
+            }, () => {
+              updatesCompleted++;
+              if (chrome.runtime.lastError) {
+                console.debug('Menu update error (may not exist yet):', chrome.runtime.lastError);
+              }
 
-                  // If this was the last menu item, mark update as complete
-                  if (createdCount === totalPatterns) {
-                    isUpdatingMenu = false;
-                    processPendingUpdate();
-                  }
-
-                  if (chrome.runtime.lastError) {
-                    console.error('Failed to create context menu item:', chrome.runtime.lastError, displayText);
-                  }
-                });
-              } catch (error) {
-                console.error('Failed to create context menu item:', error, displayText);
-                createdCount++;
-
-                // Check if we're done even with errors
-                if (createdCount === totalPatterns) {
-                  isUpdatingMenu = false;
-                  processPendingUpdate();
-                }
+              // Mark update as complete when all updates are done
+              if (updatesCompleted === totalUpdates) {
+                isUpdatingMenu = false;
+                processPendingUpdate();
               }
             });
           });
-        } catch (error) {
-          console.error('Failed to create context menu:', error);
+        }
+
+        // Handle edge case where no updates are needed
+        if (totalUpdates === 0) {
           isUpdatingMenu = false;
           processPendingUpdate();
         }
-      });
+      } catch (error) {
+        console.error('Failed to update context menu:', error);
+        isUpdatingMenu = false;
+        processPendingUpdate();
+      }
     };
 
-    // If immediate update requested (from contextmenu), update right away
-    // Otherwise use minimal debouncing for other events
-    if (immediate) {
-      updateMenus();
-    } else {
-      menuUpdateTimeout = setTimeout(updateMenus, 20);
-    }
+    // Always update immediately to ensure menu is ready when user right-clicks
+    // The isSameSelection check above prevents unnecessary rebuilds
+    updateMenus();
   };
 
   // Broadcast theme change to all pages
