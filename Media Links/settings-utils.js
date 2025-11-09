@@ -27,6 +27,9 @@ window.SettingsUtils = (() => {
     debugMode: false,
     showCopyWebpageBtn: false,
 
+    // Hotstar Settings
+    hotstarAutoViewMorePaused: false,
+
     // IMDb Settings
     showImdbCast: true,
     showImdbCompany: true,
@@ -132,6 +135,10 @@ window.SettingsUtils = (() => {
       default: false
     },
     showCopyWebpageBtn: {
+      type: 'boolean',
+      default: false
+    },
+    hotstarAutoViewMorePaused: {
       type: 'boolean',
       default: false
     },

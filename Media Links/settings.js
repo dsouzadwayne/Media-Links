@@ -1,56 +1,20 @@
 // Settings management
-const DEFAULT_SETTINGS = {
-  theme: 'light',
-  defaultSearchEngine: 'google',
-  defaultProfile: '',
-  autoOpenResults: false,
-  tabDelay: 150,
-  showPreview: true,
-  defaultCastCount: 5,
-  defaultContentFormat: 'name-role',
-  defaultOutputFormat: 'newline',
-  debugMode: false,
-  showCopyWebpageBtn: false,
-  // Copy button visibility settings
-  showImdbCast: true,
-  showImdbCompany: true,
-  showImdbAwards: true,
-  showImdbMain: true,
-  showWikiCast: true,
-  showWikiTables: true,
-  wikiOutputFormat: 'newline',
-  showLetterboxdCast: true,
-  letterboxdCastCount: 10,
-  letterboxdOutputFormat: 'colon',
-  letterboxdIncludeRoles: true,
-  showAppleTVCast: true,
-  // Apple TV+ specific settings
-  appleTVCastCount: 10,
-  appleTVOutputFormat: 'colon',
-  appleTVIncludeRoles: true,
-  showBookMyShowCopy: true,
-  // BookMyShow specific settings
-  bookMyShowCastCount: 10,
-  bookMyShowOutputFormat: 'colon',
-  bookMyShowIncludeRoles: true,
-  // Customized view settings
-  customizedViewLimit: 8,
-  showCustomizedViewBtn: true,
-  autoOpenIndividualView: true,
-  showConsolidatedViewBtn: true,
-  autoOpenConsolidatedView: true,
-  defaultViewColumns: ['name', 'role', 'roleType'],
-  // Wikipedia customized view settings
-  showWikiCustomizedViewBtn: true,
-  autoOpenWikiView: true,
-  // Comparison feature settings
-  enableComparisonFeature: false,
-  showComparisonBtnWiki: true,
-  showComparisonBtnImdb: true,
-  autoOpenComparison: true
+// Use centralized DEFAULT_SETTINGS from SettingsUtils to avoid duplication
+const getDefaultSettings = () => {
+  if (typeof window.SettingsUtils !== 'undefined') {
+    return window.SettingsUtils.getDefaultSettings();
+  }
+  // Fallback defaults if SettingsUtils not loaded yet (shouldn't happen in normal flow)
+  console.warn('SettingsUtils not available, using minimal fallback defaults');
+  return {
+    theme: 'light',
+    defaultSearchEngine: 'google',
+    autoOpenResults: false,
+    tabDelay: 150
+  };
 };
 
-let currentSettings = { ...DEFAULT_SETTINGS };
+let currentSettings = getDefaultSettings();
 let hasUnsavedChanges = false;
 
 // Search profile patterns configuration
@@ -145,16 +109,17 @@ async function loadSettings() {
       console.log('Settings loaded via SettingsUtils');
     } else {
       // Fallback to direct chrome.storage if SettingsUtils not available
+      const defaults = getDefaultSettings();
       return new Promise((resolve) => {
-        chrome.storage.sync.get(DEFAULT_SETTINGS, (result) => {
-          currentSettings = { ...DEFAULT_SETTINGS, ...result };
+        chrome.storage.sync.get(defaults, (result) => {
+          currentSettings = { ...defaults, ...result };
           resolve();
         });
       });
     }
   } catch (error) {
     console.error('Error loading settings:', error);
-    currentSettings = { ...DEFAULT_SETTINGS };
+    currentSettings = getDefaultSettings();
   }
 
   applySettingsToUI();
@@ -174,6 +139,7 @@ function applySettingsToUI() {
   document.getElementById('default-output-format').value = currentSettings.defaultOutputFormat;
   document.getElementById('debug-mode').checked = currentSettings.debugMode;
   document.getElementById('show-copy-webpage-btn').checked = currentSettings.showCopyWebpageBtn !== undefined ? currentSettings.showCopyWebpageBtn : false;
+  document.getElementById('hotstar-auto-viewmore-paused').checked = currentSettings.hotstarAutoViewMorePaused !== undefined ? currentSettings.hotstarAutoViewMorePaused : false;
   document.getElementById('customized-view-limit').value = currentSettings.customizedViewLimit || 8;
 
   // Copy webpage format settings
@@ -287,10 +253,11 @@ function attachEventListeners() {
   document.getElementById('save-btn').addEventListener('click', saveSettings);
 
   // Cancel button
-  document.getElementById('cancel-btn').addEventListener('click', () => {
+  document.getElementById('cancel-btn').addEventListener('click', async () => {
     if (hasUnsavedChanges) {
       if (confirm('You have unsaved changes. Are you sure you want to cancel?')) {
-        loadSettings(); // Reload original settings
+        await loadSettings(); // Reload original settings
+        window.close();
       }
     } else {
       window.close();
@@ -298,9 +265,10 @@ function attachEventListeners() {
   });
 
   // Close button
-  document.getElementById('close-btn').addEventListener('click', () => {
+  document.getElementById('close-btn').addEventListener('click', async () => {
     if (hasUnsavedChanges) {
       if (confirm('You have unsaved changes. Are you sure you want to close?')) {
+        await loadSettings(); // Reload original settings before closing
         window.close();
       }
     } else {
@@ -376,6 +344,7 @@ function saveSettings() {
     defaultOutputFormat: document.getElementById('default-output-format').value,
     debugMode: document.getElementById('debug-mode').checked,
     showCopyWebpageBtn: document.getElementById('show-copy-webpage-btn').checked,
+    hotstarAutoViewMorePaused: document.getElementById('hotstar-auto-viewmore-paused').checked,
     customizedViewLimit: parseInt(document.getElementById('customized-view-limit').value, 10) || 8,
     // Copy webpage format settings
     copyFormats: {
@@ -430,10 +399,15 @@ function saveSettings() {
         showStatus('✓ Settings saved successfully!', 'success');
 
         // Notify other pages about theme change
-        chrome.runtime.sendMessage({
-          type: 'themeChanged',
-          theme: validated.theme
-        });
+        try {
+          chrome.runtime.sendMessage({
+            type: 'themeChanged',
+            theme: validated.theme
+          });
+        } catch (error) {
+          // Ignore error if no listeners are registered
+          console.log('No listeners for theme change message (this is normal)');
+        }
       })
       .catch((error) => {
         showStatus('Error saving settings: ' + error.message, 'error');
@@ -448,10 +422,15 @@ function saveSettings() {
         hasUnsavedChanges = false;
         showStatus('✓ Settings saved successfully!', 'success');
 
-        chrome.runtime.sendMessage({
-          type: 'themeChanged',
-          theme: newSettings.theme
-        });
+        try {
+          chrome.runtime.sendMessage({
+            type: 'themeChanged',
+            theme: newSettings.theme
+          });
+        } catch (error) {
+          // Ignore error if no listeners are registered
+          console.log('No listeners for theme change message (this is normal)');
+        }
       }
     });
   }
@@ -461,25 +440,31 @@ function saveSettings() {
 async function resetSettings() {
   if (confirm('Are you sure you want to reset all settings to their default values? This cannot be undone.')) {
     try {
+      const defaults = getDefaultSettings();
       if (typeof window.SettingsUtils !== 'undefined') {
         await window.SettingsUtils.resetSettings();
         currentSettings = { ...window.SettingsUtils.getDefaultSettings() };
       } else {
         // Fallback to direct chrome.storage
         chrome.storage.sync.clear(() => {
-          currentSettings = { ...DEFAULT_SETTINGS };
+          currentSettings = { ...defaults };
         });
       }
 
       applySettingsToUI();
-      applyTheme(DEFAULT_SETTINGS.theme);
+      applyTheme(defaults.theme);
       showStatus('✓ Settings reset to defaults', 'success');
 
       // Notify other pages about theme change
-      chrome.runtime.sendMessage({
-        type: 'themeChanged',
-        theme: DEFAULT_SETTINGS.theme
-      });
+      try {
+        chrome.runtime.sendMessage({
+          type: 'themeChanged',
+          theme: defaults.theme
+        });
+      } catch (error) {
+        // Ignore error if no listeners are registered
+        console.log('No listeners for theme change message (this is normal)');
+      }
     } catch (error) {
       showStatus('Error resetting settings: ' + error.message, 'error');
     }

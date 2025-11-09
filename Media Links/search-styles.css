@@ -92,6 +92,7 @@ body[data-theme="cats"] {
   --accent: #ff9933;
   --accent-hover: #ff7700;
   --accent-glow: rgba(255, 153, 51, 0.3);
+  --accent-glow-strong: rgba(255, 153, 51, 0.6);
   --success: #8bc34a;
   --danger: #ff6b6b;
   --warning: #ffd93d;
@@ -181,6 +182,7 @@ body[data-theme="cat-night"] {
   --accent: #818cf8;
   --accent-hover: #6366f1;
   --accent-glow: rgba(129, 140, 248, 0.3);
+  --accent-glow-strong: rgba(129, 140, 248, 0.6);
   --success: #34d399;
   --danger: #f87171;
   --warning: #fbbf24;

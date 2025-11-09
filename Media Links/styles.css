@@ -49,6 +49,8 @@ body[data-theme="cats"] {
   --secondary-bg: #3d2b23;
   --text-primary: #f5deb3;
   --accent: #ff9933;
+  --accent-glow: rgba(255, 153, 51, 0.3);
+  --accent-glow-strong: rgba(255, 153, 51, 0.6);
   --hover-color: #4d3b33;
 }
 
@@ -88,6 +90,8 @@ body[data-theme="cat-night"] {
   --secondary-bg: #151b3d;
   --text-primary: #e0e7ff;
   --accent: #818cf8;
+  --accent-glow: rgba(129, 140, 248, 0.3);
+  --accent-glow-strong: rgba(129, 140, 248, 0.6);
   --hover-color: #1e2749;
   background: linear-gradient(180deg, #0a0e27 0%, #1a1f3a 50%, #0d1428 100%);
 }
