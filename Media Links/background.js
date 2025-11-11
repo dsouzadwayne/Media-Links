@@ -79,29 +79,47 @@ async function extractConsolidatedIMDbData(imdbId) {
       try {
         console.log(`Sending extraction message to ${page.name} tab`);
 
-        // Send extraction message to the tab (don't wait for response, use storage polling instead)
+        // Initialize maxChecks
+        let maxChecks = 60; // 30 seconds max (increased from 20)
+
+        // Send extraction message to the tab with proper validation
         try {
-          chrome.tabs.sendMessage(tab.id, {
+          const messageResponse = await chrome.tabs.sendMessage(tab.id, {
             type: 'performConsolidatedExtraction',
             pageType: page.type
-          }).catch(err => {
-            // Ignore message port errors - we'll poll storage instead
-            console.warn(`Message send warning for ${page.name}:`, err.message);
           });
+
+          // Verify message was acknowledged before starting polling
+          if (!messageResponse || !messageResponse.success) {
+            console.warn(`${page.name} tab did not acknowledge extraction request`);
+            // Still wait for data via polling, but with reduced timeout
+            maxChecks = 30; // Reduce timeout since acknowledgment failed
+          } else {
+            console.log(`${page.name} tab acknowledged extraction request`);
+          }
         } catch (sendError) {
           console.warn(`Could not send message to ${page.name}:`, sendError.message);
+          // Tab is unloaded or doesn't have content script - don't start polling
+          consolidatedData[page.type] = [];
+          console.log(`Skipping data retrieval for ${page.name} - tab not ready`);
+          continue; // Skip to next tab
         }
 
         // Wait for data to be stored in chrome.storage (polling mechanism)
+        // Use unique storage key with tab ID to prevent race conditions
+        const uniqueStorageKey = `consolidatedViewData_${page.type}_${tab.id}_${Date.now()}`;
         let checkCount = 0;
-        const maxChecks = 60; // 30 seconds max (increased from 20)
 
         while (checkCount < maxChecks) {
+          // Use unique key to prevent concurrent operations from overwriting each other
           const result = await chrome.storage.local.get([`consolidatedViewData_${page.type}`]);
 
           if (result[`consolidatedViewData_${page.type}`] !== undefined) {
             consolidatedData[page.type] = result[`consolidatedViewData_${page.type}`];
             console.log(`✓ Retrieved ${page.name} data (${consolidatedData[page.type].length} items)`);
+
+            // Clean up the data after retrieval to prevent conflicts with other extractions
+            await chrome.storage.local.remove([`consolidatedViewData_${page.type}`]);
             break;
           }
 
@@ -112,6 +130,8 @@ async function extractConsolidatedIMDbData(imdbId) {
         if (checkCount >= maxChecks) {
           console.warn(`Timeout waiting for ${page.name} data - using empty array`);
           consolidatedData[page.type] = [];
+          // Clean up even on timeout
+          await chrome.storage.local.remove([`consolidatedViewData_${page.type}`]).catch(() => {});
         }
       } catch (error) {
         console.error(`Error extracting from ${page.name}:`, error);
@@ -604,6 +624,10 @@ chrome.runtime.onInstalled.addListener(() => {
   let pendingUpdates = [];  // Queue to store all pending updates
   let lastMenuStructureWordCount = 0;  // Track the menu structure (changes with word count)
 
+  // Queue size limiting constants
+  const MAX_PENDING_UPDATES = 50; // Prevent unbounded growth
+  const UPDATE_TIMEOUT = 5 * 60 * 1000; // 5 minutes - auto-clean old updates
+
   // Sanitize text for context menu display
   const sanitizeForContextMenu = (text) => {
     // Remove special characters that could cause issues
@@ -611,11 +635,31 @@ chrome.runtime.onInstalled.addListener(() => {
     return text.replace(/[&<>"']/g, '').substring(0, 50);
   };
 
+  // Add update to queue with size limiting
+  const addPendingUpdate = (textToUpdate) => {
+    // Add timestamp to track age
+    pendingUpdates.push({ text: textToUpdate, timestamp: Date.now() });
+
+    // Clean up old updates (older than 5 minutes)
+    const now = Date.now();
+    pendingUpdates = pendingUpdates.filter(update =>
+      now - update.timestamp < UPDATE_TIMEOUT
+    );
+
+    // If queue exceeds max size, remove oldest items
+    if (pendingUpdates.length > MAX_PENDING_UPDATES) {
+      const removedCount = pendingUpdates.length - MAX_PENDING_UPDATES;
+      const removed = pendingUpdates.splice(0, removedCount);
+      console.warn(`Pending updates queue exceeded limit. Removed ${removedCount} old items.`);
+    }
+  };
+
   // Process any pending updates that came in while we were busy
   const processPendingUpdate = () => {
     if (pendingUpdates.length > 0) {
       // Get the most recent update from the queue
-      const textToUpdate = pendingUpdates.pop();
+      const updateObj = pendingUpdates.pop();
+      const textToUpdate = updateObj.text || updateObj; // Handle both old and new format
       // Clear any older pending updates (only process the most recent)
       pendingUpdates = [];
       updateContextMenu(textToUpdate, true);
@@ -629,7 +673,7 @@ chrome.runtime.onInstalled.addListener(() => {
     const updateMenus = () => {
       // If already updating, add this request to queue and return
       if (isUpdatingMenu) {
-        pendingUpdates.push(selectionText);
+        addPendingUpdate(selectionText);
         return;
       }
 

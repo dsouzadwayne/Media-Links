@@ -1,0 +1,17 @@
+{
+  "name": "media-links-test",
+  "version": "1.0.0",
+  "description": "Test scripts for Media Links extension",
+  "main": "test-wiki-extraction.js",
+  "scripts": {
+    "test:wiki": "node test-wiki-extraction.js",
+    "test:wiki:friends": "node test-wiki-extraction.js https://en.wikipedia.org/wiki/Friends",
+    "test:wiki:breaking-bad": "node test-wiki-extraction.js https://en.wikipedia.org/wiki/Breaking_Bad"
+  },
+  "keywords": ["wikipedia", "extraction", "testing"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "puppeteer": "^21.0.0"
+  }
+}

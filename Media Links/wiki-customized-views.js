@@ -105,83 +105,102 @@
               itemClone.querySelectorAll('sup.reference, sup[id^="cite_ref"]').forEach(el => el.remove());
 
               const links = itemClone.querySelectorAll('a');
-              if (links.length > 0) {
-                const name = cleanName(links[0].textContent.trim());
+              if (links.length < 1) return; // Need at least one link
 
-                // Skip invalid cast entries (generic terms that shouldn't be cast members)
-                const invalidPatterns = ['official website', 'cast', 'bugonia', 'wikipedia', 'IMDb', 'external link'];
-                if (invalidPatterns.some(pattern => name.toLowerCase().includes(pattern))) {
-                  return; // Skip this entry
-                }
+              // Get the text content to analyze
+              const text = itemClone.textContent;
 
-                let role = '';
-                const text = itemClone.textContent;
+              // Look for " as " pattern with flexible spacing (handles variable whitespace)
+              // Use regex to match " as " with any amount of whitespace
+              const asMatch = text.match(/\s+as\s+/i);
+              if (!asMatch) return; // Not a cast entry if no " as " pattern
 
-                // Try multiple patterns to find character name
-                // Pattern 1: " as " (e.g., "Actor as Character")
-                let charIndex = text.indexOf(' as ');
-                let separator = ' as ';
+              const asIndex = text.indexOf(asMatch[0]);
+              // The actor name should be before " as "
+              const beforeAs = text.substring(0, asIndex).trim();
 
-                // Pattern 2: " who portrayed " (e.g., "Actor, who portrayed Character")
-                if (charIndex === -1) {
-                  charIndex = text.indexOf(' who portrayed ');
-                  separator = ' who portrayed ';
-                }
+              // Find the first link - should be the actor
+              const actorLink = links[0];
+              const actorLinkHref = actorLink.getAttribute('href') || '';
+              const actorName = cleanName(actorLink.textContent.trim());
 
-                // Pattern 3: "—" em-dash (e.g., "Actor — Character")
-                if (charIndex === -1) {
-                  charIndex = text.indexOf('—');
-                  separator = '—';
-                }
+              // Skip invalid entries
+              const invalidPatterns = ['official website', 'cast', 'bugonia', 'wikipedia', 'IMDb', 'external link', '(TV series)', '(film)', '(movie)', 'list of', 'main article'];
+              if (invalidPatterns.some(pattern => actorName.toLowerCase().includes(pattern))) {
+                return;
+              }
 
-                // Pattern 4: " - " hyphen (e.g., "Actor - Character")
-                if (charIndex === -1) {
-                  charIndex = text.indexOf(' - ');
-                  separator = ' - ';
-                }
+              // Skip links to "List of..." pages
+              if (actorLinkHref.includes('/wiki/List_of')) {
+                return;
+              }
 
-                if (charIndex !== -1) {
-                  const afterSeparator = text.substring(charIndex + separator.length);
+              // Skip the page title itself
+              const pageTitle = document.title.split('|')[0].trim().split(' - ')[0].trim();
+              if (actorName.toLowerCase() === pageTitle.toLowerCase()) {
+                return;
+              }
 
-                  // If there's a second link, check if it's a valid character name
-                  // (not common words like "actor", "beekeeper", etc. in descriptive contexts)
-                  if (links.length > 1) {
-                    const potentialCharName = cleanName(links[1].textContent.trim());
-                    // Only use it if it looks like a proper name or character name (has capital letters or is substantial)
-                    if (potentialCharName.length > 2 && /[A-Z]/.test(potentialCharName) && !potentialCharName.match(/^(the|a|an|beekeeper|actor|cop|officer|mother|brother|sister|cousin|friend)$/i)) {
-                      role = potentialCharName;
-                    } else {
-                      // Fall back to extracting text until punctuation
-                      const commaIndex = afterSeparator.indexOf(',');
-                      const colonIndex = afterSeparator.indexOf(':');
-                      let endIndex = afterSeparator.length;
+              // Verify the actor name appears in the text before " as "
+              if (!beforeAs.includes(actorName)) {
+                return; // First link is not the actor
+              }
 
-                      if (commaIndex !== -1) endIndex = Math.min(endIndex, commaIndex);
-                      if (colonIndex !== -1) endIndex = Math.min(endIndex, colonIndex);
+              // Find character name after " as " (use actual matched pattern length)
+              let role = '';
+              const afterAs = text.substring(asIndex + asMatch[0].length).trim(); // Use matched pattern length
 
-                      role = cleanName(afterSeparator.substring(0, endIndex).trim());
-                    }
-                  } else {
-                    // No second link - extract text until next punctuation
-                    const commaIndex = afterSeparator.indexOf(',');
-                    const colonIndex = afterSeparator.indexOf(':');
-                    let endIndex = afterSeparator.length;
+              // Validate afterAs is not empty before attempting string operations
+              if (afterAs && afterAs.length > 0) {
+                // Look for the second link (should be the character)
+                if (links.length >= 2) {
+                  const characterLink = links[1];
+                  const characterLinkHref = characterLink.getAttribute('href') || '';
+                  const characterName = cleanName(characterLink.textContent.trim());
 
-                    if (commaIndex !== -1) endIndex = Math.min(endIndex, commaIndex);
-                    if (colonIndex !== -1) endIndex = Math.min(endIndex, colonIndex);
-
-                    role = cleanName(afterSeparator.substring(0, endIndex).trim());
+                  // Skip if character link looks invalid - add null/empty checks
+                  if (characterName &&
+                      characterName.length > 0 &&
+                      !characterLinkHref.includes('/wiki/List_of') &&
+                      !characterName.toLowerCase().includes('(tv series)') &&
+                      !characterName.toLowerCase().includes('(film)') &&
+                      !characterName.toLowerCase().includes('season') &&
+                      afterAs.indexOf(characterName) === 0) { // Character name should be right after "as"
+                    role = characterName;
                   }
                 }
+              }
 
-                if (!seen.has(name)) {
-                  seen.add(name);
-                  castData.push({
-                    name,
-                    role: role || 'Cast',
-                    roleType: 'Cast'
-                  });
-                }
+              // If no valid character link, extract text until colon or other delimiter
+              // Only attempt extraction if afterAs is not empty
+              if (!role && afterAs && afterAs.length > 0) {
+                const colonIndex = afterAs.indexOf(':');
+                const commaIndex = afterAs.indexOf(',');
+                const parenIndex = afterAs.indexOf('(');
+                const brIndex = afterAs.indexOf('<br');
+                let endIndex = afterAs.length;
+
+                if (colonIndex !== -1) endIndex = Math.min(endIndex, colonIndex);
+                if (commaIndex !== -1) endIndex = Math.min(endIndex, commaIndex);
+                if (parenIndex !== -1) endIndex = Math.min(endIndex, parenIndex);
+                if (brIndex !== -1) endIndex = Math.min(endIndex, brIndex);
+
+                role = cleanName(afterAs.substring(0, endIndex).trim());
+              }
+
+              // Validate role
+              if (!role || role.length < 2 || /^[\s\-—.:,;]+$/.test(role)) {
+                role = 'Cast';
+              }
+
+              // Add to cast data
+              if (!seen.has(actorName)) {
+                seen.add(actorName);
+                castData.push({
+                  name: actorName,
+                  role: role,
+                  roleType: 'Cast'
+                });
               }
             });
           });
@@ -222,12 +241,12 @@
   }
 
   /**
-   * Extract directors from infobox only
+   * Extract directors/creators from infobox only
    */
   function extractDirectorData() {
     const directorData = [];
 
-    // Check infobox for directors - look for "Directed by" row
+    // Check infobox for directors/creators - look for "Directed by", "Created by", or "Developer" rows
     const infobox = getMainInfobox();
     if (infobox) {
       const rows = infobox.querySelectorAll('tr');
@@ -238,8 +257,25 @@
         if (th && td) {
           const thText = normalizeText(th.textContent);
 
-          // Match "Directed by" (flexible matching)
-          if (thText.includes('directed by') || thText === 'directed by') {
+          // Match "Directed by", "Created by", or "Developer" (flexible matching)
+          if (thText.includes('directed by') || thText === 'directed by' ||
+              thText.includes('created by') || thText === 'created by' ||
+              thText === 'creator' || thText === 'creators' ||
+              thText === 'developer' || thText === 'developers') {
+
+            // Determine the role type based on the field
+            let role = 'Director';
+            let roleType = 'Directors';
+
+            if (thText.includes('created by') || thText === 'created by' ||
+                thText === 'creator' || thText === 'creators') {
+              role = 'Creator';
+              roleType = 'Creators';
+            } else if (thText === 'developer' || thText === 'developers') {
+              role = 'Developer';
+              roleType = 'Developers';
+            }
+
             // Extract from links
             const links = td.querySelectorAll('a[href*="/wiki/"]');
             links.forEach(link => {
@@ -247,8 +283,8 @@
               if (name && !directorData.some(d => d.name === name)) {
                 directorData.push({
                   name,
-                  role: 'Director',
-                  roleType: 'Directors'
+                  role,
+                  roleType
                 });
               }
             });
@@ -263,8 +299,8 @@
                 if (name && !directorData.some(d => d.name === name)) {
                   directorData.push({
                     name,
-                    role: 'Director',
-                    roleType: 'Directors'
+                    role,
+                    roleType
                   });
                 }
               });

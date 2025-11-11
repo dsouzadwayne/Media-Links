@@ -234,18 +234,53 @@ function createCopyModal() {
   // Handle confirm button
   confirmBtn.addEventListener('click', () => {
     const checkboxes = modalContent.querySelectorAll('.tab-checkbox:checked');
-    const selectedTabIds = Array.from(checkboxes).map(cb => parseInt(cb.dataset.tabId));
+
+    // Validate tab IDs before processing
+    if (!Array.isArray(checkboxes) || checkboxes.length === 0) {
+      console.warn('No checkboxes selected');
+      alert('Please select at least one tab');
+      return;
+    }
+
+    const selectedTabIds = Array.from(checkboxes)
+      .map(cb => {
+        const tabId = cb.dataset.tabId;
+        // Validate tab ID is a valid number
+        const parsedId = parseInt(tabId, 10);
+        if (!tabId || typeof tabId !== 'string' || tabId.trim() === '' || isNaN(parsedId) || parsedId < 0) {
+          console.warn('Invalid tab ID:', tabId);
+          return null;
+        }
+        return parsedId;
+      })
+      .filter(id => id !== null); // Remove invalid IDs
+
+    // Only proceed if we have valid IDs
+    if (selectedTabIds.length === 0) {
+      console.error('No valid tab IDs found after filtering');
+      alert('Selected tabs are invalid. Please try again.');
+      return;
+    }
 
     if (selectedTabIds.length > 0) {
       confirmBtn.disabled = true;
       confirmBtn.textContent = 'Copying...';
       confirmBtn.style.backgroundColor = '#999';
 
+      // Store modal reference to ensure it stays alive during async operations
+      const modalRef = { element: modal, alive: true };
+
       // Request copy from background script
       chrome.runtime.sendMessage({
         type: 'copyMultipleTabs',
         tabIds: selectedTabIds
       }, async (response) => {
+        // Only proceed if modal is still alive (not removed yet)
+        if (!modalRef.alive) {
+          console.warn('Modal was removed before clipboard operation completed');
+          return;
+        }
+
         if (response && response.success && response.combinedText) {
           try {
             // Copy the combined text to clipboard
@@ -258,8 +293,13 @@ function createCopyModal() {
         } else {
           showCopyFeedback(false);
         }
-        modal.remove();
-        copyModal = null;
+
+        // Only remove modal if it still exists in the DOM
+        if (modalRef.alive && modalRef.element && modalRef.element.parentNode) {
+          modalRef.element.remove();
+          copyModal = null;
+        }
+        modalRef.alive = false;
       });
     } else {
       modal.remove();

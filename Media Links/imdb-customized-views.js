@@ -115,10 +115,11 @@
       'record producer',
       'associate producer',
       'female producer',
-      'line producer'
+      'line producer',
+      'senior producer'
     ];
 
-    // Director roles to exclude
+    // Director roles to exclude (NOTE: creative director is now handled separately as single-role-only)
     const excludedDirectorRoles = [
       'director of photography',
       'casting director',
@@ -166,9 +167,36 @@
       return true;
     }
 
-    // Check if it's an excluded director role
-    if (excludedDirectorRoles.some(dirRole => roleLower.includes(dirRole))) {
+    // Check if it's an excluded director role (excluding creative director and other special roles - only for single roles)
+    // Note: Some director roles like "director of photography" and "casting director" are always excluded
+    // but "creative director" is only excluded when it's a single role
+    const alwaysExcludedDirectorRoles = [
+      'director of photography',
+      'casting director',
+      'senior art director',
+      'dneg',
+      'supervising art director',
+      'standby art director',
+      'junior art director'
+    ];
+
+    const singleRoleExcludedDirectorRoles = [
+      'creative director'
+    ];
+
+    // Always exclude certain director roles regardless of single/multiple
+    // For always-excluded roles, check if it includes the role text (these are specific phrases)
+    if (alwaysExcludedDirectorRoles.some(dirRole => roleLower.includes(dirRole))) {
       return true;
+    }
+
+    // Exclude single-role-only director roles - normalize and compare exact match
+    // This prevents "Creative Director/Director" from being excluded
+    if (!hasMultipleRoles) {
+      const normalizedRole = normalizeRole(roleLower);
+      if (singleRoleExcludedDirectorRoles.includes(normalizedRole)) {
+        return true;
+      }
     }
 
     // Check if it's an excluded writer role (only for single roles)

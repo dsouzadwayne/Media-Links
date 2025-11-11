@@ -22,6 +22,13 @@
     return;
   }
 
+  // Helper function to sanitize storage keys
+  function sanitizeStorageKey(key) {
+    // Only allow alphanumeric, dash, underscore, forward slash, and dot
+    // This prevents injection attacks
+    return key.replace(/[^a-zA-Z0-9_\-.\/]/g, '_');
+  }
+
   // CustomizedView class - manages a single view
   class CustomizedView {
     constructor(options = {}) {
@@ -35,8 +42,8 @@
       this.searchQuery = '';
       this.selectedRoles = new Set(this.getAvailableRoles());
 
-      // Storage key for preferences
-      this.storageKey = `view-prefs-${this.pagePath}`;
+      // Storage key for preferences - sanitize pagePath to prevent injection
+      this.storageKey = `view-prefs-${sanitizeStorageKey(this.pagePath)}`;
     }
 
     /**
@@ -304,9 +311,27 @@
      * Copy section data with format options
      */
     copySectionData(items, roleType, format) {
-      if (!items || items.length === 0) {
+      // Comprehensive input validation
+      if (!Array.isArray(items)) {
+        console.error('copySectionData: items must be an array');
+        alert('Invalid items data');
+        return;
+      }
+
+      if (items.length === 0) {
+        console.warn('copySectionData: empty items array');
         alert('No items to copy');
         return;
+      }
+
+      if (!roleType || typeof roleType !== 'string') {
+        console.warn('copySectionData: invalid roleType:', roleType);
+        roleType = 'Unknown';
+      }
+
+      if (!format || typeof format !== 'string' || !['names', 'roles', 'names-roles', 'names-colon-roles'].includes(format)) {
+        console.warn('copySectionData: invalid format:', format);
+        format = 'names-roles'; // Default format
       }
 
       let text = '';
@@ -366,7 +391,20 @@
         word-break: break-word;
       `;
 
-      notification.innerHTML = `✓ Copied: <span style="opacity: 0.9;">${text.substring(0, 50)}${text.length > 50 ? '...' : ''}</span>`;
+      // Helper function to escape HTML special characters to prevent XSS
+      const escapeHtml = (str) => {
+        const map = {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#039;'
+        };
+        return str.replace(/[&<>"']/g, m => map[m]);
+      };
+
+      const safeText = escapeHtml(text.substring(0, 50));
+      notification.innerHTML = `✓ Copied: <span style="opacity: 0.9;">${safeText}${text.length > 50 ? '...' : ''}</span>`;
 
       // Add animation styles if not already in document
       if (!document.querySelector('style[data-copy-notification]')) {
@@ -710,6 +748,7 @@
 
         // Create copy dropdown button for this section
         const copyDropdown = document.createElement('div');
+        copyDropdown.setAttribute('data-copy-dropdown', 'true'); // Mark for cleanup
         copyDropdown.style.cssText = `
           position: relative;
           display: inline-block;
@@ -794,13 +833,21 @@
           dropdownMenu.appendChild(optionBtn);
         });
 
-        // Store handler so it can be removed later
-        const outsideClickHandler = (e) => {
-          if (!copyDropdown.contains(e.target)) {
-            dropdownMenu.style.display = 'none';
-            // Remove the listener when dropdown closes
-            document.removeEventListener('click', outsideClickHandler);
-          }
+        // Track active handlers for this dropdown for proper cleanup
+        const handlerTracking = { active: false, handler: null };
+
+        // Create handler function with proper cleanup
+        const createOutsideClickHandler = () => {
+          return (e) => {
+            if (!copyDropdown.contains(e.target)) {
+              dropdownMenu.style.display = 'none';
+              // Remove the listener when dropdown closes
+              if (handlerTracking.handler) {
+                document.removeEventListener('click', handlerTracking.handler);
+                handlerTracking.active = false;
+              }
+            }
+          };
         };
 
         copyBtn.addEventListener('click', (e) => {
@@ -810,15 +857,36 @@
 
           if (!isVisible) {
             // Add listener only when opening dropdown
+            // Create and store the handler
+            if (!handlerTracking.handler) {
+              handlerTracking.handler = createOutsideClickHandler();
+            }
+            handlerTracking.active = true;
             // Use setTimeout to avoid immediate trigger from this click
             setTimeout(() => {
-              document.addEventListener('click', outsideClickHandler);
+              if (handlerTracking.active) {
+                document.addEventListener('click', handlerTracking.handler);
+              }
             }, 0);
           } else {
             // Remove listener when closing dropdown
-            document.removeEventListener('click', outsideClickHandler);
+            if (handlerTracking.handler && handlerTracking.active) {
+              document.removeEventListener('click', handlerTracking.handler);
+              handlerTracking.active = false;
+            }
           }
         });
+
+        // Store cleanup function for this dropdown
+        const cleanupDropdown = () => {
+          if (handlerTracking.handler && handlerTracking.active) {
+            document.removeEventListener('click', handlerTracking.handler);
+            handlerTracking.active = false;
+          }
+        };
+
+        // Store cleanup function on copyDropdown element for later cleanup
+        copyDropdown._cleanup = cleanupDropdown;
 
         copyDropdown.appendChild(copyBtn);
         copyDropdown.appendChild(dropdownMenu);
@@ -1006,7 +1074,35 @@
       // Replace existing container or insert new
       const existingContainer = document.getElementById(this.containerId);
       if (existingContainer) {
-        existingContainer.parentNode.replaceChild(container, existingContainer);
+        // Clean up event listeners from the old container before removing it
+        const dropdowns = existingContainer.querySelectorAll('[data-copy-dropdown]');
+        dropdowns.forEach(dropdown => {
+          if (dropdown._cleanup && typeof dropdown._cleanup === 'function') {
+            dropdown._cleanup();
+          }
+        });
+
+        // Now safely replace the container
+        try {
+          if (existingContainer.parentNode) {
+            existingContainer.parentNode.replaceChild(container, existingContainer);
+          } else {
+            // Fallback: parent doesn't exist, just append
+            console.warn('Container parent not found, appending instead');
+            document.body.appendChild(container);
+          }
+        } catch (error) {
+          console.error('Error replacing container:', error);
+          // Fallback: append if replace fails
+          if (document.body) {
+            document.body.appendChild(container);
+          }
+        }
+      } else {
+        // First render: append instead of replace
+        if (document.body) {
+          document.body.appendChild(container);
+        }
       }
 
       return container;
