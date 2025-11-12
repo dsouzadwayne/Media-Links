@@ -270,11 +270,32 @@ function createCopyModal() {
       // Store modal reference to ensure it stays alive during async operations
       const modalRef = { element: modal, alive: true };
 
+      // Add timeout to auto-close modal if operation takes too long
+      const timeoutId = setTimeout(() => {
+        if (modalRef.alive) {
+          console.warn('Copy operation timed out');
+          showCopyFeedback(false);
+          if (modalRef.element && modalRef.element.parentNode) {
+            modalRef.element.remove();
+            copyModal = null;
+          }
+          modalRef.alive = false;
+        }
+      }, 10000); // 10 second timeout
+
       // Request copy from background script
       chrome.runtime.sendMessage({
         type: 'copyMultipleTabs',
         tabIds: selectedTabIds
       }, async (response) => {
+        clearTimeout(timeoutId);
+
+        // Check if extension context is still valid
+        if (!chrome.runtime?.id) {
+          console.warn('Extension context invalidated during copy operation');
+          return;
+        }
+
         // Only proceed if modal is still alive (not removed yet)
         if (!modalRef.alive) {
           console.warn('Modal was removed before clipboard operation completed');

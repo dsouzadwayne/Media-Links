@@ -80,13 +80,17 @@ async function extractConsolidatedIMDbData(imdbId) {
         console.log(`Sending extraction message to ${page.name} tab`);
 
         // Initialize maxChecks
-        let maxChecks = 60; // 30 seconds max (increased from 20)
+        let maxChecks = 40; // 20 seconds max (reduced from 60 for better UX)
+
+        // Create unique storage key to prevent race conditions
+        const uniqueStorageKey = `consolidatedViewData_${page.type}_${tab.id}_${Date.now()}`;
 
         // Send extraction message to the tab with proper validation
         try {
           const messageResponse = await chrome.tabs.sendMessage(tab.id, {
             type: 'performConsolidatedExtraction',
-            pageType: page.type
+            pageType: page.type,
+            storageKey: uniqueStorageKey
           });
 
           // Verify message was acknowledged before starting polling
@@ -106,21 +110,39 @@ async function extractConsolidatedIMDbData(imdbId) {
         }
 
         // Wait for data to be stored in chrome.storage (polling mechanism)
-        // Use unique storage key with tab ID to prevent race conditions
-        const uniqueStorageKey = `consolidatedViewData_${page.type}_${tab.id}_${Date.now()}`;
         let checkCount = 0;
+        let lastProgressLog = Date.now();
 
         while (checkCount < maxChecks) {
           // Use unique key to prevent concurrent operations from overwriting each other
-          const result = await chrome.storage.local.get([`consolidatedViewData_${page.type}`]);
+          const result = await chrome.storage.local.get([uniqueStorageKey]);
 
-          if (result[`consolidatedViewData_${page.type}`] !== undefined) {
-            consolidatedData[page.type] = result[`consolidatedViewData_${page.type}`];
+          if (result[uniqueStorageKey] !== undefined) {
+            consolidatedData[page.type] = result[uniqueStorageKey];
             console.log(`✓ Retrieved ${page.name} data (${consolidatedData[page.type].length} items)`);
 
             // Clean up the data after retrieval to prevent conflicts with other extractions
-            await chrome.storage.local.remove([`consolidatedViewData_${page.type}`]);
+            await chrome.storage.local.remove([uniqueStorageKey]);
             break;
+          }
+
+          // Log progress every 5 seconds
+          const now = Date.now();
+          if (now - lastProgressLog >= 5000) {
+            console.log(`Still waiting for ${page.name} data... (${checkCount * 0.5}s elapsed)`);
+            lastProgressLog = now;
+
+            // Check if tab is still alive - early exit if tab was closed
+            try {
+              const tabInfo = await chrome.tabs.get(tab.id);
+              if (!tabInfo) {
+                console.warn(`Tab ${tab.id} no longer exists, stopping polling for ${page.name}`);
+                break;
+              }
+            } catch (tabError) {
+              console.warn(`Tab ${tab.id} became invalid, stopping polling for ${page.name}`);
+              break;
+            }
           }
 
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -128,10 +150,10 @@ async function extractConsolidatedIMDbData(imdbId) {
         }
 
         if (checkCount >= maxChecks) {
-          console.warn(`Timeout waiting for ${page.name} data - using empty array`);
+          console.warn(`Timeout waiting for ${page.name} data after ${maxChecks * 0.5}s - using empty array`);
           consolidatedData[page.type] = [];
           // Clean up even on timeout
-          await chrome.storage.local.remove([`consolidatedViewData_${page.type}`]).catch(() => {});
+          await chrome.storage.local.remove([uniqueStorageKey]).catch(() => {});
         }
       } catch (error) {
         console.error(`Error extracting from ${page.name}:`, error);
@@ -772,14 +794,34 @@ chrome.runtime.onInstalled.addListener(() => {
 
   // Broadcast theme change to all pages
   const broadcastThemeChange = (theme) => {
+    let failedTabs = [];
+    let successCount = 0;
+
     // Send to all tabs
     chrome.tabs.query({}, (tabs) => {
+      let completed = 0;
+      const totalTabs = tabs.length;
+
       tabs.forEach(tab => {
         chrome.tabs.sendMessage(tab.id, {
           type: 'themeChanged',
           theme: theme
-        }).catch(() => {
-          // Silently catch errors for tabs that don't have content script
+        }).then(() => {
+          successCount++;
+        }).catch((error) => {
+          // Only track errors that aren't "no content script" errors
+          if (error.message && !error.message.includes('Could not establish connection')) {
+            failedTabs.push({ id: tab.id, url: tab.url, error: error.message });
+            console.warn(`Failed to update theme for tab ${tab.id}:`, error);
+          }
+        }).finally(() => {
+          completed++;
+
+          // After all tabs processed, log summary
+          if (completed === totalTabs && failedTabs.length > 0) {
+            console.warn(`Theme broadcast completed: ${successCount} succeeded, ${failedTabs.length} failed`);
+            console.warn('Failed tabs:', failedTabs);
+          }
         });
       });
     });
@@ -788,8 +830,11 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.runtime.sendMessage({
       type: 'themeChanged',
       theme: theme
-    }).catch(() => {
-      // Silently catch errors if offscreen document isn't loaded
+    }).catch((error) => {
+      // Only warn if the error is NOT "no offscreen document"
+      if (error.message && !error.message.includes('Could not establish connection')) {
+        console.warn('Failed to update theme for offscreen document:', error);
+      }
     });
   };
 
@@ -800,19 +845,47 @@ chrome.runtime.onInstalled.addListener(() => {
     // Handle creating tabs for consolidated view extraction
     if (message.type === 'createTab') {
       console.log('Background: Creating tab with URL:', message.url);
-      chrome.tabs.create({ url: message.url, active: message.active || false }, (tab) => {
-        if (chrome.runtime.lastError) {
-          const errorMsg = chrome.runtime.lastError.message || JSON.stringify(chrome.runtime.lastError);
+
+      // Use promise-based approach for better error handling
+      (async () => {
+        try {
+          // Validate context before starting
+          if (!chrome.runtime?.id) {
+            throw new Error('Extension context invalid');
+          }
+
+          const tab = await chrome.tabs.create({
+            url: message.url,
+            active: message.active || false
+          });
+
+          // Validate context after async operation
+          if (!chrome.runtime?.id) {
+            console.warn('Extension context lost after tab creation');
+            // Clean up the tab we just created
+            if (tab?.id) {
+              await chrome.tabs.remove(tab.id).catch(() => {});
+            }
+            throw new Error('Extension context lost');
+          }
+
+          if (tab) {
+            console.log('Background: Created tab:', tab.id, 'URL:', tab.url);
+            sendResponse({ success: true, tabId: tab.id });
+          } else {
+            throw new Error('Tab creation failed - no tab returned');
+          }
+        } catch (error) {
+          const errorMsg = error.message || JSON.stringify(error);
           console.error('Background: Error creating tab:', errorMsg, 'URL was:', message.url);
-          sendResponse({ success: false, error: errorMsg });
-        } else if (tab) {
-          console.log('Background: Created tab:', tab.id, 'URL:', tab.url);
-          sendResponse({ success: true, tabId: tab.id });
-        } else {
-          console.error('Background: Tab creation failed - no tab returned and no error');
-          sendResponse({ success: false, error: 'Tab creation failed' });
+
+          // Only send response if context is still valid
+          if (chrome.runtime?.id) {
+            sendResponse({ success: false, error: errorMsg });
+          }
         }
-      });
+      })();
+
       return true; // Keep channel open for async response
     }
 

@@ -237,26 +237,48 @@
     if (!selectedTab) return;
 
     try {
-      // Send message to background script to handle the comparison flow
-      chrome.runtime.sendMessage(
-        {
-          action: 'startComparison',
-          currentSource: currentPageInfo.source,
-          currentPageInfo: currentPageInfo,
-          selectedTab: selectedTab
-        },
-        (response) => {
-          if (chrome.runtime.lastError) {
-            console.error('Comparison error:', chrome.runtime.lastError);
-            alert('Error starting comparison. Please try again.');
-          } else if (response && response.success) {
-            // Comparison started successfully
-            console.log('Comparison started');
-          } else {
-            alert('Error starting comparison.');
+      // Validate extension context before sending message
+      if (!chrome.runtime?.id) {
+        alert('Extension context lost. Please refresh the page.');
+        return;
+      }
+
+      // Set timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Comparison request timed out')), 10000);
+      });
+
+      // Send message with timeout
+      const messagePromise = new Promise((resolve, reject) => {
+        chrome.runtime.sendMessage(
+          {
+            action: 'startComparison',
+            currentSource: currentPageInfo.source,
+            currentPageInfo: currentPageInfo,
+            selectedTab: selectedTab
+          },
+          (response) => {
+            // Check for context invalidation in callback
+            if (!chrome.runtime?.id) {
+              reject(new Error('Extension context lost'));
+              return;
+            }
+
+            if (chrome.runtime.lastError) {
+              reject(chrome.runtime.lastError);
+            } else if (response && response.success) {
+              resolve(response);
+            } else {
+              reject(new Error('Comparison failed'));
+            }
           }
-        }
-      );
+        );
+      });
+
+      // Race between message and timeout
+      await Promise.race([messagePromise, timeoutPromise]);
+      console.log('Comparison started');
+
     } catch (error) {
       console.error('Comparison initiation error:', error);
       alert(`Error: ${error.message}`);

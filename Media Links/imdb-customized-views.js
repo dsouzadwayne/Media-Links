@@ -925,7 +925,7 @@
   /**
    * Store extracted data in chrome storage for consolidated view
    */
-  function storeConsolidatedData(pageType, data) {
+  function storeConsolidatedData(pageType, data, customStorageKey) {
     // Check if extension context is still valid before making API call
     if (!isExtensionContextValid()) {
       console.log('Extension context invalidated, cannot store consolidated data');
@@ -933,7 +933,7 @@
     }
 
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      const storageKey = `consolidatedViewData_${pageType}`;
+      const storageKey = customStorageKey || `consolidatedViewData_${pageType}`;
       chrome.storage.local.set({ [storageKey]: data }, () => {
         // Check context again in the callback
         if (!isExtensionContextValid()) {
@@ -2244,6 +2244,7 @@
       chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.type === 'performConsolidatedExtraction') {
           const pageType = request.pageType;
+          const storageKey = request.storageKey || `consolidatedViewData_${pageType}`;
           console.log(`Received extraction request for ${pageType}`);
 
           (async () => {
@@ -2291,19 +2292,19 @@
                 return;
               }
 
-              // Store extracted data
+              // Store extracted data using the provided storage key
               if (extractedData) {
-                storeConsolidatedData(pageType, extractedData);
+                storeConsolidatedData(pageType, extractedData, storageKey);
                 console.log(`✓ Extracted and stored ${pageType} data (${extractedData.length} items)`);
               } else {
-                storeConsolidatedData(pageType, []);
+                storeConsolidatedData(pageType, [], storageKey);
                 console.log(`No data found for ${pageType}, stored empty array`);
               }
 
               sendResponse({ success: true, pageType, itemsExtracted: extractedData ? extractedData.length : 0 });
             } catch (error) {
               console.error(`Error extracting ${pageType}:`, error);
-              storeConsolidatedData(pageType, []);
+              storeConsolidatedData(pageType, [], storageKey);
               sendResponse({ success: false, error: error.message });
             }
           })();

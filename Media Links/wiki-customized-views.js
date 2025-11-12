@@ -72,19 +72,43 @@
    * Extract cast data from Wikipedia - prioritize cast section with character names
    */
   function extractCastData() {
+    const startTime = Date.now();
+    const TIMEOUT_MS = 10000; // 10 second timeout
+
+    const checkTimeout = () => {
+      if (Date.now() - startTime > TIMEOUT_MS) {
+        throw new Error('Cast extraction timed out');
+      }
+    };
+
     const castData = [];
     const seen = new Set();
 
-    // First, extract from cast sections with character names (most detailed)
-    const castSections = document.querySelectorAll('#Cast, #cast, #Cast_and_characters');
+    try {
+      // First, extract from cast sections with character names (most detailed)
+      const castSections = document.querySelectorAll('#Cast, #cast, #Cast_and_characters');
 
-    castSections.forEach(section => {
-      let currentElement = section.parentElement;
-      const castHeadingLevel = parseInt(section.tagName.substring(1));
+      castSections.forEach(section => {
+        checkTimeout(); // Check timeout at start of each section
 
-      // Traverse to find cast lists
-      while (currentElement && currentElement.nextElementSibling) {
-        currentElement = currentElement.nextElementSibling;
+        let currentElement = section.parentElement;
+        const castHeadingLevel = parseInt(section.tagName.substring(1));
+
+        // Add safety limit to prevent infinite loops
+        const MAX_ITERATIONS = 100;
+        let iterationCount = 0;
+
+        // Traverse to find cast lists
+        while (currentElement && currentElement.nextElementSibling && iterationCount < MAX_ITERATIONS) {
+          checkTimeout(); // Check timeout during iteration
+          iterationCount++;
+          currentElement = currentElement.nextElementSibling;
+
+          // Safety check: ensure we're still in the main content area
+          if (!currentElement.closest('#mw-content-text')) {
+            console.warn('DOM traversal left content area, stopping');
+            break;
+          }
 
         // Stop at same-level headings
         if (currentElement.tagName.match(/^H[1-6]$/)) {
@@ -99,7 +123,10 @@
             currentElement.querySelectorAll('ul');
 
           uls.forEach(ul => {
-            ul.querySelectorAll('li').forEach(li => {
+            // Add limit to list items as well
+            const listItems = Array.from(ul.querySelectorAll('li')).slice(0, 200);
+
+            listItems.forEach(li => {
               const itemClone = li.cloneNode(true);
               // Remove citations
               itemClone.querySelectorAll('sup.reference, sup[id^="cite_ref"]').forEach(el => el.remove());
@@ -206,6 +233,11 @@
           });
         }
       }
+
+      // Log warning if limit was reached
+      if (iterationCount >= MAX_ITERATIONS) {
+        console.warn(`Cast section iteration limit reached (${MAX_ITERATIONS}). Some cast members may be missing.`);
+      }
     });
 
     // Then, if we haven't found enough from cast section, add from infobox "Starring" row
@@ -235,6 +267,15 @@
           }
         }
       });
+    }
+
+    } catch (error) {
+      if (error.message === 'Cast extraction timed out') {
+        console.error('Wikipedia cast extraction timed out after 10 seconds');
+        // Return whatever data was collected so far
+        return castData;
+      }
+      throw error;
     }
 
     return castData;

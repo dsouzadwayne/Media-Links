@@ -44,6 +44,61 @@
 
       // Storage key for preferences - sanitize pagePath to prevent injection
       this.storageKey = `view-prefs-${sanitizeStorageKey(this.pagePath)}`;
+
+      // Set up MutationObserver to clean up removed dropdowns
+      this.setupDropdownCleanupObserver();
+    }
+
+    /**
+     * Set up MutationObserver to clean up event listeners when dropdowns are removed
+     */
+    setupDropdownCleanupObserver() {
+      if (this.dropdownObserver) {
+        return; // Already set up
+      }
+
+      this.dropdownObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          mutation.removedNodes.forEach((node) => {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              // Check if the removed node or its children have dropdowns
+              const dropdowns = node.querySelectorAll ?
+                node.querySelectorAll('[data-copy-dropdown]') : [];
+
+              dropdowns.forEach(dropdown => {
+                if (dropdown._cleanup && typeof dropdown._cleanup === 'function') {
+                  dropdown._cleanup();
+                }
+              });
+
+              // Also check if the node itself is a dropdown
+              if (node.hasAttribute && node.hasAttribute('data-copy-dropdown')) {
+                if (node._cleanup && typeof node._cleanup === 'function') {
+                  node._cleanup();
+                }
+              }
+            }
+          });
+        });
+      });
+
+      // Start observing when DOM is ready
+      if (document.body) {
+        this.dropdownObserver.observe(document.body, {
+          childList: true,
+          subtree: true
+        });
+      }
+    }
+
+    /**
+     * Clean up observer when view is destroyed
+     */
+    destroy() {
+      if (this.dropdownObserver) {
+        this.dropdownObserver.disconnect();
+        this.dropdownObserver = null;
+      }
     }
 
     /**
