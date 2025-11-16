@@ -3,6 +3,10 @@
 
 let pendingRequests = new Map();
 let requestId = 0;
+let sandboxReady = false;
+let sandboxReadyPromise = null;
+let sandboxReadyResolve = null;
+let sandboxReadyReject = null;
 
 // Helper to generate unique request ID
 function getNextRequestId() {
@@ -45,15 +49,52 @@ const initializeOffscreen = async () => {
  * Set up message listeners
  */
 const setupMessageListeners = () => {
+  // Create sandbox ready promise
+  sandboxReadyPromise = new Promise((resolve, reject) => {
+    sandboxReadyResolve = resolve;
+    sandboxReadyReject = reject;
+
+    // Set timeout for sandbox initialization
+    setTimeout(() => {
+      if (!sandboxReady) {
+        reject(new Error('Sandbox failed to initialize within 60 seconds'));
+      }
+    }, 60000); // 60 second timeout for initialization
+  });
+
   // Listen for messages from sandboxed iframe
   window.addEventListener('message', (event) => {
+    // HIGH SEVERITY FIX: Check type before calling includes()
+    if (typeof event.origin !== 'string') {
+      console.warn('Offscreen: Received message with invalid origin type:', typeof event.origin);
+      return;
+    }
+
     // Validate origin for security - accept only messages from this extension
+    // Now it's safe to call includes()
     if (event.origin !== 'null' && !event.origin.includes('chrome-extension')) {
       console.warn('Offscreen: Rejected message from untrusted origin:', event.origin);
       return;
     }
 
     console.log('Offscreen: Received message from sandbox:', event.data);
+
+    // Handle sandbox ready signal
+    if (event.data?.type === 'sandboxReady') {
+      if (event.data.success) {
+        console.log('Offscreen: Sandbox is ready and Tesseract initialized');
+        sandboxReady = true;
+        if (sandboxReadyResolve) {
+          sandboxReadyResolve();
+        }
+      } else {
+        console.error('Offscreen: Sandbox initialization failed:', event.data.error);
+        if (sandboxReadyReject) {
+          sandboxReadyReject(new Error(event.data.error || 'Sandbox initialization failed'));
+        }
+      }
+      return;
+    }
 
     // Match response to pending request by request ID
     const responseRequestId = event.data?.requestId;
@@ -158,16 +199,35 @@ const handleOCRRequest = async (message, sendResponse) => {
       return;
     }
 
+    // Wait for sandbox to finish initializing Tesseract
+    if (!sandboxReady) {
+      console.log('Offscreen: Waiting for sandbox Tesseract initialization...');
+      try {
+        await sandboxReadyPromise;
+        console.log('Offscreen: Sandbox ready, proceeding with OCR');
+      } catch (error) {
+        console.error('Offscreen: Sandbox initialization failed:', error);
+        sendResponse({
+          success: false,
+          error: error.message || 'Tesseract initialization failed'
+        });
+        return;
+      }
+    }
+
     // Generate unique request ID for this OCR request
     const id = getNextRequestId();
 
     // Create a promise that resolves when sandbox responds
     const ocrPromise = new Promise((resolve, reject) => {
-      // Set timeout to prevent hanging
+      // Set timeout to prevent hanging (increased from 30s to 60s for slow connections)
       const timeoutId = setTimeout(() => {
         pendingRequests.delete(id);
-        reject(new Error('OCR request timeout - no response from sandbox'));
-      }, 30000); // 30 second timeout
+        const errorMsg = 'OCR request timeout - Tesseract may be taking too long to process the image. ' +
+                        'This could be due to network issues loading Tesseract, a large image, or poor image quality. ' +
+                        'Try reloading the page.';
+        reject(new Error(errorMsg));
+      }, 60000); // 60 second timeout
 
       // Store response handler with timeout
       pendingRequests.set(id, {

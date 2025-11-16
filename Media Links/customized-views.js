@@ -89,15 +89,40 @@
           subtree: true
         });
       }
+
+      // HIGH SEVERITY FIX: Auto-disconnect when container is removed
+      const containerRemovalObserver = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+          if (mutation.removedNodes.length > 0) {
+            Array.from(mutation.removedNodes).forEach((node) => {
+              if (node === this.container || (node.contains && node.contains(this.container))) {
+                console.log('CustomizedView: Container removed, cleaning up observer');
+                this.destroy();
+                containerRemovalObserver.disconnect();
+              }
+            });
+          }
+        });
+      });
+
+      // Observe parent for removal
+      if (this.container?.parentNode) {
+        containerRemovalObserver.observe(this.container.parentNode, {
+          childList: true,
+          subtree: false
+        });
+      }
     }
 
     /**
      * Clean up observer when view is destroyed
      */
     destroy() {
+      // HIGH SEVERITY FIX: Properly clean up observer
       if (this.dropdownObserver) {
         this.dropdownObserver.disconnect();
         this.dropdownObserver = null;
+        console.log('CustomizedView: Observer cleaned up');
       }
     }
 

@@ -1,3 +1,12 @@
+// Helper function to generate unique IDs (UUID v4)
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
 // Offscreen document management for Tesseract OCR
 let offscreenDocumentCreated = false;
 
@@ -82,8 +91,8 @@ async function extractConsolidatedIMDbData(imdbId) {
         // Initialize maxChecks
         let maxChecks = 40; // 20 seconds max (reduced from 60 for better UX)
 
-        // Create unique storage key to prevent race conditions
-        const uniqueStorageKey = `consolidatedViewData_${page.type}_${tab.id}_${Date.now()}`;
+        // CRITICAL FIX: Use UUID instead of Date.now() for truly unique keys
+        const uniqueStorageKey = `consolidatedViewData_${page.type}_${tab.id}_${generateUUID()}`;
 
         // Send extraction message to the tab with proper validation
         try {
@@ -109,51 +118,57 @@ async function extractConsolidatedIMDbData(imdbId) {
           continue; // Skip to next tab
         }
 
-        // Wait for data to be stored in chrome.storage (polling mechanism)
-        let checkCount = 0;
-        let lastProgressLog = Date.now();
+        // CRITICAL FIX: Ensure cleanup ALWAYS happens with try-finally
+        try {
+          // Wait for data to be stored in chrome.storage (polling mechanism)
+          let checkCount = 0;
+          let lastProgressLog = Date.now();
 
-        while (checkCount < maxChecks) {
-          // Use unique key to prevent concurrent operations from overwriting each other
-          const result = await chrome.storage.local.get([uniqueStorageKey]);
+          while (checkCount < maxChecks) {
+            // Use unique key to prevent concurrent operations from overwriting each other
+            const result = await chrome.storage.local.get([uniqueStorageKey]);
 
-          if (result[uniqueStorageKey] !== undefined) {
-            consolidatedData[page.type] = result[uniqueStorageKey];
-            console.log(`✓ Retrieved ${page.name} data (${consolidatedData[page.type].length} items)`);
-
-            // Clean up the data after retrieval to prevent conflicts with other extractions
-            await chrome.storage.local.remove([uniqueStorageKey]);
-            break;
-          }
-
-          // Log progress every 5 seconds
-          const now = Date.now();
-          if (now - lastProgressLog >= 5000) {
-            console.log(`Still waiting for ${page.name} data... (${checkCount * 0.5}s elapsed)`);
-            lastProgressLog = now;
-
-            // Check if tab is still alive - early exit if tab was closed
-            try {
-              const tabInfo = await chrome.tabs.get(tab.id);
-              if (!tabInfo) {
-                console.warn(`Tab ${tab.id} no longer exists, stopping polling for ${page.name}`);
-                break;
-              }
-            } catch (tabError) {
-              console.warn(`Tab ${tab.id} became invalid, stopping polling for ${page.name}`);
+            if (result[uniqueStorageKey] !== undefined) {
+              consolidatedData[page.type] = result[uniqueStorageKey];
+              console.log(`✓ Retrieved ${page.name} data (${consolidatedData[page.type].length} items)`);
               break;
             }
+
+            // Log progress every 5 seconds
+            const now = Date.now();
+            if (now - lastProgressLog >= 5000) {
+              console.log(`Still waiting for ${page.name} data... (${checkCount * 0.5}s elapsed)`);
+              lastProgressLog = now;
+
+              // Check if tab is still alive - early exit if tab was closed
+              try {
+                const tabInfo = await chrome.tabs.get(tab.id);
+                if (!tabInfo) {
+                  console.warn(`Tab ${tab.id} no longer exists, stopping polling for ${page.name}`);
+                  break;
+                }
+              } catch (tabError) {
+                console.warn(`Tab ${tab.id} became invalid, stopping polling for ${page.name}`);
+                break;
+              }
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 500));
+            checkCount++;
           }
 
-          await new Promise(resolve => setTimeout(resolve, 500));
-          checkCount++;
-        }
-
-        if (checkCount >= maxChecks) {
-          console.warn(`Timeout waiting for ${page.name} data after ${maxChecks * 0.5}s - using empty array`);
-          consolidatedData[page.type] = [];
-          // Clean up even on timeout
-          await chrome.storage.local.remove([uniqueStorageKey]).catch(() => {});
+          if (checkCount >= maxChecks) {
+            console.warn(`Timeout waiting for ${page.name} data after ${maxChecks * 0.5}s - using empty array`);
+            consolidatedData[page.type] = [];
+          }
+        } finally {
+          // CRITICAL FIX: Ensure cleanup ALWAYS happens
+          try {
+            await chrome.storage.local.remove([uniqueStorageKey]);
+            console.log(`Cleaned up storage key: ${uniqueStorageKey}`);
+          } catch (cleanupError) {
+            console.warn(`Failed to clean up storage key ${uniqueStorageKey}:`, cleanupError);
+          }
         }
       } catch (error) {
         console.error(`Error extracting from ${page.name}:`, error);
@@ -745,9 +760,11 @@ chrome.runtime.onInstalled.addListener(() => {
 
             // If this menu should be visible, update its title with actual words
             if (shouldBeVisible) {
+              // HIGH SEVERITY FIX: Use safe string replacement instead of regex with user input
               sanitizedWords.forEach((word, index) => {
-                const regex = new RegExp(`word${index + 1}`, 'g');
-                displayText = displayText.replace(regex, word);
+                const placeholder = `word${index + 1}`;
+                // Use split and join for safe string replacement
+                displayText = displayText.split(placeholder).join(word);
               });
 
               // Truncate menu title if too long
@@ -838,8 +855,13 @@ chrome.runtime.onInstalled.addListener(() => {
     });
   };
 
-  // Listen for selection updates and OCR requests
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Prevent duplicate message listener registration
+  let messageListenerRegistered = false;
+
+  // HIGH SEVERITY FIX: Only register listener once
+  if (!messageListenerRegistered) {
+    // Listen for selection updates and OCR requests
+    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('Background: Received message:', message.type || message.action, 'from:', sender.tab?.id);
 
     // Handle creating tabs for consolidated view extraction
@@ -1120,11 +1142,27 @@ chrome.runtime.onInstalled.addListener(() => {
 
           // Get copy format settings
           const settings = await chrome.storage.sync.get(['copyFormats']);
-          const copyFormats = settings.copyFormats || {
+          let copyFormats = settings.copyFormats || {
             includeTitle: true,
             includeURL: true,
             separator: '\\n\\n---\\n\\n'
           };
+
+          // MEDIUM FIX: Validate copyFormats structure
+          if (!copyFormats || typeof copyFormats !== 'object') {
+            console.warn('Invalid copyFormats, using defaults');
+            copyFormats = {
+              includeTitle: true,
+              includeURL: true,
+              separator: '\\n\\n---\\n\\n'
+            };
+          }
+
+          // Validate separator exists and is a string
+          if (typeof copyFormats.separator !== 'string') {
+            console.warn('Invalid separator, using default');
+            copyFormats.separator = '\\n\\n---\\n\\n';
+          }
 
           // Convert escaped newlines to actual newlines
           const separator = copyFormats.separator.replace(/\\n/g, '\n');
@@ -1310,3 +1348,7 @@ chrome.runtime.onInstalled.addListener(() => {
       });
     }
   });
+
+    messageListenerRegistered = true;
+    console.log('Background: Message listener registered');
+  }

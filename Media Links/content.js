@@ -58,10 +58,12 @@ let copyModal = null;
 // Message handler for copying current page content
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'copyPageContent') {
+    // MEDIUM FIX: Use try-finally to guarantee selection restoration
+    const selection = window.getSelection();
+    const savedRanges = [];
+
     try {
       // Save the current selection
-      const selection = window.getSelection();
-      const savedRanges = [];
       for (let i = 0; i < selection.rangeCount; i++) {
         savedRanges.push(selection.getRangeAt(i).cloneRange());
       }
@@ -75,10 +77,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Get the text content (like what Ctrl+C would copy)
       const textContent = selection.toString();
 
-      // Restore the previous selection
-      selection.removeAllRanges();
-      savedRanges.forEach(range => selection.addRange(range));
-
+      // Respond with content BEFORE restoring selection
+      // This ensures response is sent even if restoration fails
       sendResponse({
         success: true,
         content: textContent,
@@ -88,7 +88,22 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     } catch (error) {
       console.error('Failed to get page content:', error);
       sendResponse({ success: false, error: error.message });
+    } finally {
+      // MEDIUM FIX: ALWAYS restore selection, even on error
+      try {
+        selection.removeAllRanges();
+        savedRanges.forEach(range => {
+          try {
+            selection.addRange(range);
+          } catch (e) {
+            console.debug('Could not restore individual range:', e);
+          }
+        });
+      } catch (restoreError) {
+        console.warn('Failed to restore selection:', restoreError);
+      }
     }
+
     return true; // Keep the message channel open for async response
   }
 });
@@ -245,12 +260,23 @@ function createCopyModal() {
     const selectedTabIds = Array.from(checkboxes)
       .map(cb => {
         const tabId = cb.dataset.tabId;
-        // Validate tab ID is a valid number
-        const parsedId = parseInt(tabId, 10);
-        if (!tabId || typeof tabId !== 'string' || tabId.trim() === '' || isNaN(parsedId) || parsedId < 0) {
-          console.warn('Invalid tab ID:', tabId);
+
+        // CRITICAL FIX: Validate BEFORE parseInt, not after
+        // Check if tabId exists and is not empty first
+        if (!tabId || typeof tabId !== 'string' || tabId.trim() === '') {
+          console.warn('Invalid tabId: not a valid string');
           return null;
         }
+
+        // Now parse to integer
+        const parsedId = parseInt(tabId, 10);
+
+        // Validate the parsed integer
+        if (isNaN(parsedId) || parsedId < 0) {
+          console.warn('Invalid tabId: not a valid positive integer:', tabId);
+          return null;
+        }
+
         return parsedId;
       })
       .filter(id => id !== null); // Remove invalid IDs

@@ -66,14 +66,47 @@
 
       // Render categories
       contentDiv.innerHTML = '';
+
+      // MEDIUM FIX: Validate comparison data structure
+      if (!comparisonData.comparison || typeof comparisonData.comparison !== 'object') {
+        throw new Error('comparisonData.comparison is missing or invalid');
+      }
+
       const comparison = comparisonData.comparison;
+
+      // Helper function to validate comparison category
+      function validateCategoryData(categoryData) {
+        if (!categoryData || typeof categoryData !== 'object') {
+          return null;
+        }
+
+        return {
+          same: Array.isArray(categoryData.same) ? categoryData.same : [],
+          different: Array.isArray(categoryData.different) ? categoryData.different : [],
+          sourceA: {
+            name: categoryData.sourceA?.name || 'Source A',
+            unique: Array.isArray(categoryData.sourceA?.unique) ? categoryData.sourceA.unique : []
+          },
+          sourceB: {
+            name: categoryData.sourceB?.name || 'Source B',
+            unique: Array.isArray(categoryData.sourceB?.unique) ? categoryData.sourceB.unique : []
+          }
+        };
+      }
 
       const categories = ['directors', 'producers', 'writers', 'cast', 'production', 'runtime', 'countries', 'languages', 'releaseDate'];
       let hasContent = false;
 
       categories.forEach(categoryKey => {
-        const categoryData = comparison[categoryKey];
-        if (categoryData && (categoryData.same.length > 0 || categoryData.sourceA.unique.length > 0 || categoryData.sourceB.unique.length > 0 || categoryData.different.length > 0)) {
+        const categoryData = validateCategoryData(comparison[categoryKey]);
+
+        if (!categoryData) {
+          console.warn(`Skipping invalid category: ${categoryKey}`);
+          return;
+        }
+
+        // Safe to use categoryData now
+        if (categoryData.same.length > 0 || categoryData.sourceA.unique.length > 0 || categoryData.sourceB.unique.length > 0 || categoryData.different.length > 0) {
           const categoryElement = renderCategory(categoryData, categoryKey);
           contentDiv.appendChild(categoryElement);
           hasContent = true;
@@ -412,10 +445,51 @@
     });
   };
 
+  /**
+   * Initialize theme on page load
+   */
+  async function initializeTheme() {
+    try {
+      if (typeof ThemeManager !== 'undefined') {
+        await ThemeManager.initialize();
+        console.log('Comparison View: Theme initialized');
+      } else {
+        console.warn('Comparison View: ThemeManager not available');
+      }
+    } catch (error) {
+      console.error('Comparison View: Error initializing theme:', error);
+    }
+  }
+
+  /**
+   * Listen for theme changes
+   */
+  function setupThemeListeners() {
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.type === 'themeChanged' && message.theme) {
+        if (typeof ThemeManager !== 'undefined') {
+          ThemeManager.setTheme(message.theme);
+        } else {
+          // Fallback if ThemeManager not available
+          document.body.setAttribute('data-theme', message.theme);
+          document.documentElement.setAttribute('data-theme', message.theme);
+        }
+      }
+    });
+  }
+
   // Initialize when page loads
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', renderComparison);
+    document.addEventListener('DOMContentLoaded', async () => {
+      await initializeTheme();
+      setupThemeListeners();
+      await renderComparison();
+    });
   } else {
-    renderComparison();
+    (async () => {
+      await initializeTheme();
+      setupThemeListeners();
+      await renderComparison();
+    })();
   }
 })();

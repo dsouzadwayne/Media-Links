@@ -78,6 +78,20 @@
     const headerControls = document.getElementById('header-controls');
 
     try {
+      // HIGH SEVERITY FIX: Validate input data exists and has correct structure
+      if (!viewDataObj) {
+        throw new Error('viewDataObj is null or undefined');
+      }
+
+      if (!viewDataObj.data) {
+        throw new Error('viewDataObj.data is missing');
+      }
+
+      if (!Array.isArray(viewDataObj.data)) {
+        console.warn('viewDataObj.data is not an array:', typeof viewDataObj.data);
+        throw new Error('viewDataObj.data must be an array');
+      }
+
       const data = viewDataObj.data;
       const options = {
         title: viewDataObj.title,
@@ -117,22 +131,50 @@
           pagePath: options.pagePath
         });
 
-        // Load preferences
-        view.loadPreferences().then((prefs) => {
-          // Always ensure all available roles from current data are selected by default
-          const allRoles = view.getAvailableRoles();
-          view.selectedRoles = new Set(allRoles);
+        // MEDIUM FIX: Add .catch() handler for promise rejection
+        view.loadPreferences()
+          .then((prefs) => {
+            // Validate that preferences were loaded
+            if (!prefs || typeof prefs !== 'object') {
+              console.warn('Invalid preferences returned, using defaults');
+              prefs = {};
+            }
 
-          // If there are saved preferences, use the search query (but not the role filters)
-          if (prefs && prefs.searchQuery) {
-            view.searchQuery = prefs.searchQuery;
-          }
+            // Always ensure all available roles from current data are selected by default
+            const allRoles = view.getAvailableRoles();
+            view.selectedRoles = new Set(allRoles);
 
-          contentDiv.innerHTML = '';
-          view.render().then(viewElement => {
-            contentDiv.appendChild(viewElement);
+            // If there are saved preferences, use the search query (but not the role filters)
+            if (prefs && prefs.searchQuery) {
+              view.searchQuery = prefs.searchQuery;
+            }
+
+            contentDiv.innerHTML = '';
+            view.render().then(viewElement => {
+              contentDiv.appendChild(viewElement);
+            });
+          })
+          .catch((error) => {
+            // MEDIUM FIX: Handle preference loading errors
+            console.error('Failed to load preferences:', error);
+
+            // Set default empty preferences if load fails
+            const allRoles = view.getAvailableRoles();
+            view.selectedRoles = new Set(allRoles);
+            view.searchQuery = '';
+
+            // Continue with rendering despite error
+            contentDiv.innerHTML = '';
+            view.render().then(viewElement => {
+              contentDiv.appendChild(viewElement);
+
+              // Optionally show user message
+              const warning = document.createElement('div');
+              warning.style.cssText = 'color: orange; padding: 10px; background: #fff3cd; margin: 10px 0; border-radius: 4px;';
+              warning.textContent = 'Warning: Could not load saved preferences. Using defaults.';
+              viewElement.insertBefore(warning, viewElement.firstChild);
+            });
           });
-        });
       } else {
         throw new Error('CustomizedView not available');
       }
@@ -166,12 +208,18 @@
       });
 
     } catch (error) {
-      console.error('Error loading single view:', error);
-      contentDiv.innerHTML = `
-        <div class="error-message">
-          ⚠️ Error loading data: ${error.message}
-        </div>
-      `;
+      console.error('Error rendering single view:', error);
+      // HIGH SEVERITY FIX: Display error to user
+      const contentDiv = document.getElementById('page-content');
+      if (contentDiv) {
+        contentDiv.innerHTML = `
+          <div style="color: red; padding: 20px;">
+            <h3>Error Loading View</h3>
+            <p>${error.message}</p>
+            <p>Please refresh the page or try again.</p>
+          </div>
+        `;
+      }
     }
   }
 
@@ -456,6 +504,39 @@
   }
 
   /**
+   * Initialize theme on page load
+   */
+  async function initializeTheme() {
+    try {
+      if (typeof ThemeManager !== 'undefined') {
+        await ThemeManager.initialize();
+        console.log('Consolidated View: Theme initialized');
+      } else {
+        console.warn('Consolidated View: ThemeManager not available');
+      }
+    } catch (error) {
+      console.error('Consolidated View: Error initializing theme:', error);
+    }
+  }
+
+  /**
+   * Listen for theme changes
+   */
+  function setupThemeListeners() {
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.type === 'themeChanged' && message.theme) {
+        if (typeof ThemeManager !== 'undefined') {
+          ThemeManager.setTheme(message.theme);
+        } else {
+          // Fallback if ThemeManager not available
+          document.body.setAttribute('data-theme', message.theme);
+          document.documentElement.setAttribute('data-theme', message.theme);
+        }
+      }
+    });
+  }
+
+  /**
    * Initialize the view page
    */
   async function initialize() {
@@ -643,12 +724,18 @@
 
   // Load when page is ready
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
+      await initializeTheme();
+      setupThemeListeners();
       initialize();
       checkIfFromComparison();
     });
   } else {
-    initialize();
-    checkIfFromComparison();
+    (async () => {
+      await initializeTheme();
+      setupThemeListeners();
+      initialize();
+      checkIfFromComparison();
+    })();
   }
 })();

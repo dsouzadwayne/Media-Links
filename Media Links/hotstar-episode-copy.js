@@ -61,11 +61,23 @@
 
     // Get current theme
     function getCurrentTheme() {
-        const htmlElement = document.documentElement;
-        const dataTheme = htmlElement.getAttribute('data-theme');
-        const bodyTheme = document.body.getAttribute('data-theme');
-        const theme = dataTheme || bodyTheme || 'light';
-        return THEME_COLORS[theme] || THEME_COLORS.light;
+        try {
+            const htmlElement = document.documentElement;
+            const dataTheme = htmlElement.getAttribute('data-theme');
+            const bodyTheme = document.body.getAttribute('data-theme');
+            const theme = dataTheme || bodyTheme || 'light';
+
+            // MEDIUM FIX: Ensure this always returns a valid object
+            const themeColors = THEME_COLORS[theme];
+            if (!themeColors || typeof themeColors !== 'object') {
+                console.warn('Invalid theme detected:', theme, 'falling back to light');
+                return THEME_COLORS.light;
+            }
+            return themeColors;
+        } catch (error) {
+            console.error('Error getting current theme:', error);
+            return THEME_COLORS.light; // Always have a fallback
+        }
     }
 
     // Get CSS variable value with fallback
@@ -90,7 +102,15 @@
 
         // Fallback to theme map
         const theme = getCurrentTheme();
-        return theme[colorType] || THEME_COLORS.light[colorType];
+
+        // MEDIUM FIX: Add null check for theme
+        if (!theme || typeof theme !== 'object') {
+            console.warn('Theme not available, using light theme defaults');
+            return THEME_COLORS.light[colorType] || '#000000';
+        }
+
+        // Safe to access theme now
+        return theme[colorType] || THEME_COLORS.light[colorType] || '#000000';
     }
 
     // Create and show a toast notification

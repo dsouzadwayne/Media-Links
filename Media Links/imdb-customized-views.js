@@ -144,19 +144,25 @@
       }
     }
 
+    // MEDIUM FIX: Consolidate dialogue checking logic
+    // Helper function to check if a role is dialogue-related and should be excluded
+    const isExcludedDialogueRole = (role) => {
+      const r = role.toLowerCase().trim();
+      // Exclude dialogue-only credits or writer + dialogue combination
+      return r.includes('dialogue') && (r === 'dialogue' || r.includes('writer'));
+    };
+
     // Exclude dialogue writers - check for dialogue as sole credit
     if (roleLower.includes('dialogue')) {
-      // Exclude if dialogue is the only role or if writer + dialogue
       if (!hasMultipleRoles) {
-        // Singular role - exclude if it's dialogue-related
-        if (roleLower.includes('dialogue')) {
+        // Single role - exclude if it's dialogue-related
+        if (isExcludedDialogueRole(roleLower)) {
           return true;
         }
       } else {
-        // Multiple roles - exclude if one of them is dialogue
+        // Multiple roles - exclude if any of them is dialogue
         const roles = roleText.split('/').map(r => normalizeRole(r));
-        const hasSoleDialogue = roles.some(role => role.includes('dialogue') && !role.includes('writer'));
-        if (hasSoleDialogue || (roleLower.includes('writer') && roleLower.includes('dialogue'))) {
+        if (roles.some(role => isExcludedDialogueRole(role))) {
           return true;
         }
       }
@@ -281,7 +287,12 @@
 
     if (roleLower.includes('producer')) {
       // Filter out vfx line producer if it's the sole role
-      if (roleLower.trim() === 'vfx line producer') {
+      if (roleLower.includes('vfx line producer') && !hasMultipleRoles) {
+        return null;
+      }
+      // Filter out co-executive producer if it's the sole role (not combined with other roles)
+      // This handles cases like "co-executive producer (as Name)" or just "co-executive producer"
+      if (roleLower.includes('co-executive producer') && !hasMultipleRoles) {
         return null;
       }
       return 'Producers';

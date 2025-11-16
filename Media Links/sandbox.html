@@ -94,6 +94,30 @@
       }
     });
 
+    // Pre-initialize Tesseract on page load to avoid delays
+    (async function() {
+      try {
+        console.log('Sandbox: Pre-initializing Tesseract worker...');
+        await initTesseractWorker();
+        console.log('Sandbox: Tesseract worker pre-initialized successfully');
+
+        // Send ready signal to parent
+        window.parent.postMessage({
+          type: 'sandboxReady',
+          success: true
+        }, '*');
+      } catch (error) {
+        console.error('Sandbox: Failed to pre-initialize Tesseract:', error);
+
+        // Send error signal to parent
+        window.parent.postMessage({
+          type: 'sandboxReady',
+          success: false,
+          error: error.message || 'Failed to initialize Tesseract'
+        }, '*');
+      }
+    })();
+
     console.log('Sandbox: Ready to receive OCR requests');
   </script>
 </body>

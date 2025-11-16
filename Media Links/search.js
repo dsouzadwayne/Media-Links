@@ -525,27 +525,37 @@ document.addEventListener('DOMContentLoaded', async () => {
   const executeBtn = document.querySelector('.search-execute-btn');
   const engineSelector = document.getElementById('search-engine');
 
+  // MEDIUM FIX: Check if element exists before using it
+  if (!engineSelector) {
+    console.error('search-engine element not found in DOM');
+    return;
+  }
+
   searchInputs.forEach(input => {
     input.addEventListener('input', updateSearchPreview);
   });
 
-  executeBtn.addEventListener('click', () => {
-    const elements = getCurrentElements();
+  if (executeBtn) {
+    executeBtn.addEventListener('click', () => {
+      const elements = getCurrentElements();
 
-    if (elements.length === 0) {
-      return;
-    }
+      if (elements.length === 0) {
+        return;
+      }
 
-    const queries = generateQueries(elements);
-    const selectedEngine = engineSelector.value;
+      const queries = generateQueries(elements);
+      const selectedEngine = engineSelector.value;
 
-    queries.forEach((query, index) => {
-      setTimeout(() => {
-        const url = getSearchUrl(query, selectedEngine);
-        chrome.tabs.create({ url: url, active: false });
-      }, index * 150);
+      queries.forEach((query, index) => {
+        setTimeout(() => {
+          const url = getSearchUrl(query, selectedEngine);
+          chrome.tabs.create({ url: url, active: false });
+        }, index * 150);
+      });
     });
-  });
+  } else {
+    console.error('search-execute-btn element not found');
+  }
 
   updateSearchPreview();
 });

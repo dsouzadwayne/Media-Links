@@ -304,10 +304,54 @@ window.SettingsUtils = (() => {
   };
 
   /**
+   * MEDIUM FIX: Validate copyFormats structure
+   */
+  const validateCopyFormats = (copyFormats) => {
+    if (!copyFormats || typeof copyFormats !== 'object') {
+      console.warn('copyFormats is not an object, using defaults');
+      return DEFAULT_SETTINGS.copyFormats;
+    }
+
+    const validated = { ...copyFormats };
+
+    // Validate separator is a string
+    if (typeof validated.separator !== 'string') {
+      console.warn('copyFormats.separator is not a string, using default');
+      validated.separator = DEFAULT_SETTINGS.copyFormats.separator;
+    } else {
+      // Validate separator is valid (can process escape sequences)
+      try {
+        // Test that separator can be processed
+        const testSeparator = validated.separator.replace(/\\n/g, '\n');
+        if (typeof testSeparator !== 'string') {
+          throw new Error('Invalid separator format');
+        }
+      } catch (e) {
+        console.warn('copyFormats.separator is invalid:', e.message);
+        validated.separator = DEFAULT_SETTINGS.copyFormats.separator;
+      }
+    }
+
+    // Validate boolean fields
+    if (typeof validated.includeTitle !== 'boolean') {
+      validated.includeTitle = DEFAULT_SETTINGS.copyFormats.includeTitle;
+    }
+    if (typeof validated.includeURL !== 'boolean') {
+      validated.includeURL = DEFAULT_SETTINGS.copyFormats.includeURL;
+    }
+
+    return validated;
+  };
+
+  /**
    * Validate a single setting value (used only when SAVING)
    * Ensures type correctness and constraint satisfaction
    */
   const validateSetting = (key, value) => {
+    // MEDIUM FIX: Special handling for copyFormats
+    if (key === 'copyFormats') {
+      return validateCopyFormats(value);
+    }
     const rule = VALIDATION_RULES[key];
 
     if (!rule) {

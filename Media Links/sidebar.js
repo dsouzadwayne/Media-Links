@@ -81,6 +81,12 @@ const setActiveLink = () => {
 
 const updateLinks = () => {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    // CRITICAL FIX: Check that we have at least one tab
+    if (!tabs || tabs.length === 0) {
+      console.warn('No active tab found');
+      return;
+    }
+
     const tabUrl = tabs[0].url;
     const linksTab = document.querySelector('[data-tab="links"]');
 
@@ -91,13 +97,39 @@ const updateLinks = () => {
         let hasLinks = false;
 
         if (currentUrl.hostname === 'www.imdb.com') {
-          const imdbId = currentUrl.pathname.split('/')[2];
-          links = getLinksForIMDb(imdbId);
-          hasLinks = true;
+          // CRITICAL FIX: Check array bounds before accessing
+          const pathParts = currentUrl.pathname.split('/');
+          if (pathParts.length <= 2) {
+            console.warn('Invalid IMDb URL format:', currentUrl.pathname);
+            hasLinks = false;
+          } else {
+            const imdbId = pathParts[2];
+            // Additional validation: IMDb IDs should start with 'tt'
+            if (!imdbId || !imdbId.match(/^tt\d+$/)) {
+              console.warn('Invalid IMDb ID:', imdbId);
+              hasLinks = false;
+            } else {
+              links = getLinksForIMDb(imdbId);
+              hasLinks = true;
+            }
+          }
         } else if (currentUrl.hostname === 'letterboxd.com') {
-          const filmName = currentUrl.pathname.split('/')[2];
-          links = getLinksForLetterboxd(filmName);
-          hasLinks = true;
+          // CRITICAL FIX: Check array bounds before accessing
+          const pathParts = currentUrl.pathname.split('/');
+          if (pathParts.length <= 2) {
+            console.warn('Invalid Letterboxd URL format:', currentUrl.pathname);
+            hasLinks = false;
+          } else {
+            const filmName = pathParts[2];
+            // Additional validation: Film name should not be empty
+            if (!filmName || filmName.trim() === '') {
+              console.warn('Invalid film name');
+              hasLinks = false;
+            } else {
+              links = getLinksForLetterboxd(filmName);
+              hasLinks = true;
+            }
+          }
         }
 
         // Show/hide Links tab based on whether we have links

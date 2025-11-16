@@ -185,6 +185,14 @@
       });
 
       tabButton.addEventListener('click', () => {
+        // HIGH SEVERITY FIX: Validate tab before calling callback
+        if (!tab || !tab.id) {
+          console.error('Tab is not valid:', tab);
+          document.body.removeChild(backdrop);
+          alert('The selected tab is no longer available');
+          return;
+        }
+
         document.body.removeChild(backdrop);
         callback(tab);
       });
