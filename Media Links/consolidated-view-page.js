@@ -135,8 +135,8 @@
         view.loadPreferences()
           .then((prefs) => {
             // Validate that preferences were loaded
+            // Note: null prefs is expected on first use, so don't warn
             if (!prefs || typeof prefs !== 'object') {
-              console.warn('Invalid preferences returned, using defaults');
               prefs = {};
             }
 

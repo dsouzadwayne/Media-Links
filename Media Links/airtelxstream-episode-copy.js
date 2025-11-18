@@ -10,6 +10,34 @@
         theme: 'light' // Will be updated from storage
     };
 
+    // Configurable timing constants
+    const TIMING = {
+        initialLoadDelay: 500,
+        retryInterval: 1000,
+        maxRetries: 15,
+        navigationDelay: 500
+    };
+
+    // Observer tracking
+    const OBSERVERS = {
+        mutation: null,
+        theme: null
+    };
+
+    let historyWrapped = false;
+
+    // Check if Chrome storage API is available
+    function isChromeStorageAvailable() {
+        try {
+            return typeof chrome !== 'undefined' &&
+                   typeof chrome.storage !== 'undefined' &&
+                   typeof chrome.storage.sync !== 'undefined';
+        } catch (error) {
+            log('Chrome storage check error:', error);
+            return false;
+        }
+    }
+
     // Theme colors mapping
     const THEME_COLORS = {
         light: {
@@ -60,14 +88,9 @@
         }
     }
 
-    // Get current theme - checks storage first, then DOM, then defaults
+    // Get current theme - checks DOM first (most up-to-date), then config
     function getCurrentTheme() {
-        // First priority: Theme from config (loaded from storage)
-        if (CONFIG.theme && CONFIG.theme !== 'light') {
-            return THEME_COLORS[CONFIG.theme] || THEME_COLORS.light;
-        }
-
-        // Second priority: Check DOM attributes
+        // First priority: Check DOM attributes (most up-to-date source)
         const htmlElement = document.documentElement;
         const dataTheme = htmlElement.getAttribute('data-theme');
         const bodyTheme = document.body.getAttribute('data-theme');
@@ -75,7 +98,7 @@
 
         let theme = dataTheme || bodyTheme || null;
 
-        // Third priority: Try to extract theme from class names
+        // Try to extract theme from class names if not found in attributes
         if (!theme) {
             for (const themeKey of Object.keys(THEME_COLORS)) {
                 if (classTheme.includes(themeKey)) {
@@ -85,7 +108,8 @@
             }
         }
 
-        theme = theme || 'light';
+        // Finally, use CONFIG.theme if DOM detection found nothing
+        theme = theme || CONFIG.theme || 'light';
         return THEME_COLORS[theme] || THEME_COLORS.light;
     }
 
@@ -288,6 +312,13 @@
             // Extract just the episode name (remove "Free" tag if present)
             const cleanTitle = title.replace(/Free/g, '').trim();
 
+            // Check if clipboard API is available
+            if (!navigator.clipboard) {
+                showToast('Clipboard not available in this context (HTTPS required)', 'error');
+                log('Clipboard API not available');
+                return;
+            }
+
             // Copy to clipboard
             navigator.clipboard.writeText(cleanTitle).then(() => {
                 log('Copied title:', cleanTitle);
@@ -308,7 +339,7 @@
                 }, 1500);
             }).catch((error) => {
                 log('Error copying to clipboard:', error);
-                showToast('Failed to copy', 'error');
+                showToast('Failed to copy: ' + (error.message || 'Unknown error'), 'error');
             });
         } catch (error) {
             log('Error in copyEpisodeTitle:', error);
@@ -337,6 +368,13 @@
                 return;
             }
 
+            // Check if clipboard API is available
+            if (!navigator.clipboard) {
+                showToast('Clipboard not available in this context (HTTPS required)', 'error');
+                log('Clipboard API not available');
+                return;
+            }
+
             // Copy the description
             navigator.clipboard.writeText(description).then(() => {
                 log('Copied description for:', title);
@@ -357,7 +395,7 @@
                 }, 1500);
             }).catch((error) => {
                 log('Error copying to clipboard:', error);
-                showToast('Failed to copy', 'error');
+                showToast('Failed to copy: ' + (error.message || 'Unknown error'), 'error');
             });
         } catch (error) {
             log('Error in copyEpisodeDescription:', error);
@@ -447,6 +485,13 @@
 
     // Set up MutationObserver to watch for new episodes (when scrolling loads more or navigating)
     function setupObserver() {
+        // Disconnect any existing observer first
+        if (OBSERVERS.mutation) {
+            OBSERVERS.mutation.disconnect();
+        }
+
+        let debounceTimeout = null;
+
         const observer = new MutationObserver((mutations) => {
             let hasNewTiles = false;
 
@@ -468,11 +513,11 @@
 
             if (hasNewTiles) {
                 // Debounce: wait a bit before adding buttons to new tiles
-                clearTimeout(observer.timeout);
-                observer.timeout = setTimeout(() => {
+                clearTimeout(debounceTimeout);
+                debounceTimeout = setTimeout(() => {
                     log('New tiles detected, adding copy buttons');
                     addCopyButtonsToTiles();
-                }, 300);
+                }, TIMING.navigationDelay);
             }
         });
 
@@ -481,6 +526,7 @@
             childList: true,
             subtree: true
         });
+        OBSERVERS.mutation = observer;
         log('MutationObserver set up for entire document body');
 
         return observer;
@@ -488,6 +534,11 @@
 
     // Set up theme change listener via MutationObserver
     function setupThemeListener() {
+        // Disconnect any existing observer first
+        if (OBSERVERS.theme) {
+            OBSERVERS.theme.disconnect();
+        }
+
         const htmlElement = document.documentElement;
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
@@ -511,16 +562,26 @@
             });
         }
 
+        OBSERVERS.theme = observer;
         log('Theme listener set up');
     }
 
     // Load theme from storage - returns a promise
     function loadThemeFromStorage() {
         return new Promise((resolve) => {
+            if (!isChromeStorageAvailable()) {
+                log('Chrome storage not available, using default theme');
+                CONFIG.theme = 'light';
+                resolve(CONFIG.theme);
+                return;
+            }
+
             try {
                 chrome.storage.sync.get(['theme'], (result) => {
-                    log('Storage sync result:', result);
-                    if (result && result.theme) {
+                    if (chrome.runtime.lastError) {
+                        log('Storage error:', chrome.runtime.lastError);
+                        CONFIG.theme = 'light';
+                    } else if (result && result.theme) {
                         CONFIG.theme = result.theme;
                         log('✓ Loaded theme from storage:', CONFIG.theme);
                     } else {
@@ -532,6 +593,7 @@
                 });
             } catch (error) {
                 log('✗ Could not access chrome storage:', error);
+                CONFIG.theme = 'light';
                 resolve(CONFIG.theme);
             }
         });
@@ -571,23 +633,36 @@
     // Retry adding buttons at intervals if they weren't found
     function startRetryMechanism() {
         let retryCount = 0;
-        const maxRetries = 10;
-        const retryInterval = 800; // 0.8 seconds
+        const maxRetries = TIMING.maxRetries;
+        const retryInterval = TIMING.retryInterval;
 
         const retryTimer = setInterval(() => {
             retryCount++;
             const currentTiles = document.querySelectorAll('.cdp-tile');
             const tilesWithButtons = document.querySelectorAll('.airtelxstream-episode-copy-wrapper');
 
+            log(`Retry ${retryCount}/${maxRetries}: Found ${currentTiles.length} tiles, ${tilesWithButtons.length} have buttons`);
+
+            // Only add buttons if there are tiles without buttons
             if (currentTiles.length > tilesWithButtons.length) {
-                log(`Retry ${retryCount}: Found ${currentTiles.length} tiles but only ${tilesWithButtons.length} have buttons. Adding missing buttons...`);
+                log(`Adding missing buttons (${currentTiles.length - tilesWithButtons.length} tiles)`);
                 addCopyButtonsToTiles();
             }
 
-            if (retryCount >= maxRetries || (currentTiles.length > 0 && currentTiles.length === tilesWithButtons.length)) {
+            // Stop retrying if:
+            // 1. All tiles have buttons, OR
+            // 2. Max retries reached, OR
+            // 3. No tiles found and we've waited long enough
+            const allButtonsAdded = currentTiles.length > 0 && currentTiles.length === tilesWithButtons.length;
+            const maxRetriesReached = retryCount >= maxRetries;
+            const noTilesAndWaitedLong = currentTiles.length === 0 && retryCount >= 5;
+
+            if (allButtonsAdded || maxRetriesReached || noTilesAndWaitedLong) {
                 clearInterval(retryTimer);
                 if (currentTiles.length > 0) {
                     log(`Retry mechanism complete. All ${currentTiles.length} tile(s) have copy buttons.`);
+                } else {
+                    log('No tiles found, stopping retry mechanism');
                 }
             }
         }, retryInterval);
@@ -600,7 +675,7 @@
             log('Navigation detected via popstate, refreshing buttons');
             setTimeout(() => {
                 addCopyButtonsToTiles();
-            }, 500);
+            }, TIMING.navigationDelay);
         });
 
         // Listen for hash changes
@@ -608,30 +683,65 @@
             log('Navigation detected via hashchange, refreshing buttons');
             setTimeout(() => {
                 addCopyButtonsToTiles();
-            }, 500);
+            }, TIMING.navigationDelay);
         });
 
-        // Intercept History API calls
-        const originalPushState = history.pushState;
-        const originalReplaceState = history.replaceState;
+        // Intercept History API calls - only do this once
+        if (historyWrapped) {
+            log('History API already wrapped, skipping');
+            return;
+        }
+
+        // Save original methods to window object
+        if (!window.airtelxstreamOriginalMethods) {
+            window.airtelxstreamOriginalMethods = {
+                pushState: history.pushState,
+                replaceState: history.replaceState
+            };
+        }
 
         history.pushState = function(...args) {
-            originalPushState.apply(history, args);
+            window.airtelxstreamOriginalMethods.pushState.apply(history, args);
             log('Navigation detected via pushState, refreshing buttons');
             setTimeout(() => {
                 addCopyButtonsToTiles();
-            }, 500);
+            }, TIMING.navigationDelay);
         };
 
         history.replaceState = function(...args) {
-            originalReplaceState.apply(history, args);
+            window.airtelxstreamOriginalMethods.replaceState.apply(history, args);
             log('Navigation detected via replaceState, refreshing buttons');
             setTimeout(() => {
                 addCopyButtonsToTiles();
-            }, 500);
+            }, TIMING.navigationDelay);
         };
 
+        historyWrapped = true;
         log('Navigation listener set up');
+    }
+
+    // Cleanup function for when script needs to be disabled
+    function cleanupNavigationListener() {
+        if (historyWrapped && window.airtelxstreamOriginalMethods) {
+            history.pushState = window.airtelxstreamOriginalMethods.pushState;
+            history.replaceState = window.airtelxstreamOriginalMethods.replaceState;
+            historyWrapped = false;
+            log('Navigation listeners cleaned up');
+        }
+    }
+
+    // Cleanup all observers
+    function cleanupObservers() {
+        if (OBSERVERS.mutation) {
+            OBSERVERS.mutation.disconnect();
+            OBSERVERS.mutation = null;
+            log('Mutation observer disconnected');
+        }
+        if (OBSERVERS.theme) {
+            OBSERVERS.theme.disconnect();
+            OBSERVERS.theme = null;
+            log('Theme observer disconnected');
+        }
     }
 
     // Initialize
@@ -667,8 +777,8 @@
                     setTimeout(() => {
                         log('Updating existing buttons to use theme:', CONFIG.theme);
                         updateButtonColorsForTheme();
-                    }, 1000);
-                }, 500);
+                    }, TIMING.initialLoadDelay * 2);
+                }, TIMING.initialLoadDelay);
             });
         } else {
             setTimeout(() => {
@@ -681,8 +791,8 @@
                 setTimeout(() => {
                     log('Updating existing buttons to use theme:', CONFIG.theme);
                     updateButtonColorsForTheme();
-                }, 1000);
-            }, 500);
+                }, TIMING.initialLoadDelay * 2);
+            }, TIMING.initialLoadDelay);
         }
     }
 
@@ -695,7 +805,12 @@
         updateThemeColors: updateButtonColorsForTheme,
         getCurrentTheme: getCurrentTheme,
         enableDebug: () => { CONFIG.debug = true; log('Debug enabled'); },
-        disableDebug: () => { CONFIG.debug = false; }
+        disableDebug: () => { CONFIG.debug = false; },
+        cleanup: () => {
+            cleanupNavigationListener();
+            cleanupObservers();
+            log('All listeners cleaned up');
+        }
     };
 
     log('Episode copy feature initialized');

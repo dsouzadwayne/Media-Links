@@ -34,6 +34,129 @@ function isIMDbAwardsPage() {
          window.location.pathname.includes('/awards');
 }
 
+// Centralized DOM selectors for IMDb pages
+const IMDB_SELECTORS = {
+  sections: {
+    creditsSection: 'section.ipc-page-section',
+    sectionTitle: '.ipc-title__wrapper',
+    sectionTitleText: '.ipc-title__text'
+  },
+  castItems: {
+    // Primary selector for fullcredits pages
+    creditsList: 'li[data-testid="name-credits-list-item"]',
+    // Fallback selectors
+    fallback: ['li.ipc-metadata-list-summary-item', 'li[class*="cast"]', 'li[class*="crew"]'],
+    // Company credits list
+    companyList: 'li.ipc-metadata-list__item'
+  },
+  nameLinks: {
+    // Cast/crew name links
+    nameLink1: 'a.name-credits--title-text-big',
+    nameLink2: 'a.name-credits--title-text',
+    nameLink3: 'a[href*="/name/"]',
+    // Company name links
+    companyLink1: 'a[href*="/company/"]',
+    companyLink2: 'a.ipc-metadata-list-item__label'
+  },
+  roles: {
+    // Cast character
+    castChar1: 'div[class*="sc-2840b417-6"]',
+    castChar2: 'div.gBAHic',
+    castChar3: 'div[data-testid="cast-item-characters-list"]',
+    castCharMain: '[data-testid="title-cast-item__characters"]',
+    // Crew role
+    crewRole: 'div[class*="sc-2840b417-7"]',
+    // Generic metadata
+    metadata1: '.ipc-inline-list',
+    metadata2: '[class*="metadata"]',
+    // Company role
+    companyRole: 'span.ipc-metadata-list-item__list-content-item'
+  },
+  awards: {
+    awardItems: 'li[data-testid="list-item"].ipc-metadata-list-summary-item',
+    awardItemsFallback: 'li.ipc-metadata-list-summary-item',
+    personLink: '.ipc-metadata-list-summary-item__stl a.ipc-metadata-list-summary-item__li--link',
+    category: '.ipc-metadata-list-summary-item__tl span.awardCategoryName',
+    awardBody: '.ipc-metadata-list-summary-item__tc a.ipc-metadata-list-summary-item__t',
+    awardBodySpan: 'span.ipc-metadata-list-summary-item__tst'
+  }
+};
+
+// Helper function to safely query elements with multiple selectors
+function querySelector(element, selectors) {
+  if (typeof selectors === 'string') {
+    return element.querySelector(selectors);
+  }
+  // If array of selectors, try each one
+  for (const selector of selectors) {
+    const result = element.querySelector(selector);
+    if (result) return result;
+  }
+  return null;
+}
+
+// Helper function to safely query all elements with fallback
+function querySelectorAll(element, primarySelector, fallbackSelectors = []) {
+  let results = element.querySelectorAll(primarySelector);
+  if (results.length === 0 && fallbackSelectors.length > 0) {
+    for (const selector of fallbackSelectors) {
+      results = element.querySelectorAll(selector);
+      if (results.length > 0) break;
+    }
+  }
+  return results;
+}
+
+// Helper function to check if an added node contains meaningful cast-related content
+function containsCastRelatedContent(node) {
+  // Must be an Element node
+  if (node.nodeType !== 1) return false;
+
+  // Check for cast-related elements
+  const castRelatedSelectors = [
+    IMDB_SELECTORS.sections.creditsSection,
+    `${IMDB_SELECTORS.castItems.creditsList}`,
+    `${IMDB_SELECTORS.nameLinks.nameLink1}`,
+    `${IMDB_SELECTORS.nameLinks.nameLink3}`,
+    'a[href*="/name/"]',
+    '[data-testid="title-cast-item"]'
+  ];
+
+  // Check if node itself matches any selector
+  for (const selector of castRelatedSelectors) {
+    if (node.matches && node.matches(selector)) {
+      return true;
+    }
+  }
+
+  // Check if node contains any cast-related elements
+  if (node.querySelector) {
+    for (const selector of castRelatedSelectors) {
+      if (node.querySelector(selector)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+// Helper function to validate and sanitize count input
+function validateCastCount(input) {
+  let count = parseInt(input, 10);
+
+  // Handle invalid inputs
+  if (isNaN(count) || count === null || count === undefined) {
+    return 5; // Default to 5
+  }
+
+  // Ensure count is a positive integer
+  count = Math.max(1, count); // Minimum 1
+  count = Math.min(1000, count); // Maximum 1000 (as per input max attribute)
+
+  return count;
+}
+
 function getThemeColors() {
   // Use ThemeManager if available, fallback to default colors
   return new Promise((resolve) => {
@@ -141,6 +264,31 @@ function getCopyButtonSettings() {
 }
 
 let isProcessingIMDbButtons = false;
+let dialogAnimationsInjected = false;
+
+function injectDialogAnimations() {
+  // Check if animations are already injected
+  if (dialogAnimationsInjected || document.querySelector('style[data-extension="media-links-animations"]')) {
+    return;
+  }
+
+  // Create a style element with animation keyframes
+  const style = document.createElement('style');
+  style.setAttribute('data-extension', 'media-links-animations');
+  style.textContent = `
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    @keyframes slideIn {
+      from { transform: translate(-50%, -45%); opacity: 0; }
+      to { transform: translate(-50%, -50%); opacity: 1; }
+    }
+  `;
+  document.head.appendChild(style);
+  dialogAnimationsInjected = true;
+  console.log('Dialog animations injected once');
+}
 
 async function addCastCopyButtons() {
   if (!isIMDbCreditsPage()) return;
@@ -157,14 +305,14 @@ async function addCastCopyButtons() {
 
   sections.forEach(section => {
     // Find the title wrapper in this section
-    const titleWrapper = section.querySelector('.ipc-title__wrapper');
+    const titleWrapper = section.querySelector(IMDB_SELECTORS.sections.sectionTitle);
     if (!titleWrapper) return;
 
     // Skip if button already added
     if (titleWrapper.querySelector('.media-links-copy-btn')) return;
 
     // Get the section name (Directors, Writers, Cast, etc.)
-    const titleText = titleWrapper.querySelector('.ipc-title__text');
+    const titleText = titleWrapper.querySelector(IMDB_SELECTORS.sections.sectionTitleText);
     if (!titleText) return;
 
     const sectionName = titleText.textContent.trim();
@@ -227,16 +375,104 @@ async function addCastCopyButtons() {
   }
 }
 
+// Helper function to extract role from item (consolidated role extraction logic)
+function extractRoleFromItem(item, isCompanyCredits) {
+  if (isCompanyCredits) {
+    // Company credits have role in span.ipc-metadata-list-item__list-content-item
+    const roleSpan = item.querySelector(IMDB_SELECTORS.roles.companyRole);
+    return roleSpan ? roleSpan.textContent.trim() : '';
+  }
+
+  // For cast/crew, try methods in order of reliability
+  const methods = [
+    // Method 1: Character link in cast section
+    () => {
+      const charLinkDiv = querySelector(item, [
+        IMDB_SELECTORS.roles.castChar1,
+        IMDB_SELECTORS.roles.castChar2,
+        IMDB_SELECTORS.roles.castChar3
+      ]);
+      if (!charLinkDiv) return null;
+
+      const charLink = charLinkDiv.querySelector('a');
+      if (charLink) return charLink.textContent.trim();
+
+      // Fallback: character without link
+      const text = charLinkDiv.textContent.trim();
+      return text && text !== '' ? text : null;
+    },
+
+    // Method 2: Role in crew section
+    () => {
+      const roleDiv = item.querySelector(IMDB_SELECTORS.roles.crewRole);
+      if (!roleDiv) return null;
+
+      const roleSpan = roleDiv.querySelector('span');
+      if (!roleSpan) return null;
+
+      let spanText = '';
+      roleSpan.childNodes.forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          spanText += node.textContent;
+        }
+      });
+      return spanText.trim() || null;
+    },
+
+    // Method 3: Character in main title page format
+    () => {
+      const charElement = item.querySelector(IMDB_SELECTORS.roles.castCharMain);
+      return charElement ? charElement.textContent.trim() : null;
+    },
+
+    // Method 4: Generic metadata search
+    () => {
+      const metadata = querySelector(item, [
+        IMDB_SELECTORS.roles.metadata1,
+        IMDB_SELECTORS.roles.metadata2
+      ]);
+      if (!metadata) return null;
+
+      const allSpans = metadata.querySelectorAll('span');
+      for (const span of allSpans) {
+        const text = span.textContent.trim();
+        // Filter out noise
+        if (text && !text.includes('episode') && !text.match(/^\d{4}$/)) {
+          return text;
+        }
+      }
+      return null;
+    }
+  ];
+
+  // Try each method until one returns a valid result
+  for (const method of methods) {
+    try {
+      const role = method();
+      if (role) return role;
+    } catch (e) {
+      console.debug('Role extraction method failed:', e);
+      continue;
+    }
+  }
+
+  return '';
+}
+
 async function addIndividualCopyButtons(section, colors) {
   // Check if this is a company credits page
   const isCompanyCredits = window.location.pathname.includes('/companycredits');
 
-  // Find all list items in this section - try multiple selectors
+  // Find all list items in this section
   let listItems;
   if (isCompanyCredits) {
-    listItems = section.querySelectorAll('li.ipc-metadata-list__item');
+    listItems = querySelectorAll(section, IMDB_SELECTORS.castItems.companyList);
   } else {
-    listItems = section.querySelectorAll('li[data-testid="name-credits-list-item"], li[data-testid="title-cast-item"], li.ipc-metadata-list-summary-item, li[class*="cast"], li[class*="crew"]');
+    listItems = querySelectorAll(
+      section,
+      IMDB_SELECTORS.castItems.creditsList,
+      IMDB_SELECTORS.castItems.fallback
+    );
   }
 
   listItems.forEach(item => {
@@ -246,90 +482,52 @@ async function addIndividualCopyButtons(section, colors) {
         item.querySelector('.media-links-wiki-name-copy-btn') ||
         item.querySelector('.media-links-wiki-role-copy-btn')) return;
 
-    // Extract cast member or company data - try multiple selector patterns
+    // Extract cast member or company data using centralized selectors
     let nameLink;
     if (isCompanyCredits) {
-      nameLink = item.querySelector('a[href*="/company/"]') ||
-                 item.querySelector('a.ipc-metadata-list-item__label');
+      nameLink = querySelector(item, [
+        IMDB_SELECTORS.nameLinks.companyLink1,
+        IMDB_SELECTORS.nameLinks.companyLink2
+      ]);
     } else {
-      nameLink = item.querySelector('a.name-credits--title-text-big') ||
-                 item.querySelector('a.name-credits--title-text') ||
-                 item.querySelector('a[data-testid="title-cast-item__actor"]') ||
-                 item.querySelector('a[href*="/name/"]');
+      nameLink = querySelector(item, [
+        IMDB_SELECTORS.nameLinks.nameLink1,
+        IMDB_SELECTORS.nameLinks.nameLink2,
+        'a[data-testid="title-cast-item__actor"]',
+        IMDB_SELECTORS.nameLinks.nameLink3
+      ]);
     }
 
     if (!nameLink) return;
 
     const name = nameLink.textContent.trim();
 
-    // Get role/character - try multiple methods
-    let role = '';
-    let roleElement = null;  // Store the element that contains the role
+    // Get role/character using consolidated utility
+    let role = extractRoleFromItem(item, isCompanyCredits);
+    let roleElement = null;
 
+    // For company credits, find the role element differently
     if (isCompanyCredits) {
-      // For company credits, extract the role/description (only exists for some sections like Distributors, Special Effects)
-      const roleSpan = item.querySelector('span.ipc-metadata-list-item__list-content-item');
+      const roleSpan = item.querySelector(IMDB_SELECTORS.roles.companyRole);
       if (roleSpan) {
-        role = roleSpan.textContent.trim();
-        roleElement = roleSpan.parentElement; // Use the parent ul as the roleElement
+        roleElement = roleSpan.parentElement;
       }
-      // Note: Production Companies have no role, so role will remain empty - that's expected
     } else {
-      // Method 1: Character link in cast section
-      const charLinkDiv = item.querySelector('div[class*="sc-2840b417-6"], div.gBAHic, div[data-testid="cast-item-characters-list"]');
-      if (charLinkDiv) {
-        const charLink = charLinkDiv.querySelector('a');
-        if (charLink) {
-          role = charLink.textContent.trim();
+      // Find role element for button insertion
+      if (role) {
+        // Try to find which div contains this role text
+        const charLinkDiv = querySelector(item, [
+          IMDB_SELECTORS.roles.castChar1,
+          IMDB_SELECTORS.roles.castChar2,
+          IMDB_SELECTORS.roles.castChar3
+        ]);
+        if (charLinkDiv) {
           roleElement = charLinkDiv;
         } else {
-          // Sometimes character is just text without a link
-          role = charLinkDiv.textContent.trim();
-          roleElement = charLinkDiv;
-        }
-      }
-
-      // Method 2: Role in crew section
-      if (!role) {
-        const roleDiv = item.querySelector('div[class*="sc-2840b417-7"]');
-        if (roleDiv) {
-          const roleSpan = roleDiv.querySelector('span');
-          if (roleSpan) {
-            let spanText = '';
-            roleSpan.childNodes.forEach(node => {
-              if (node.nodeType === Node.TEXT_NODE) {
-                spanText += node.textContent;
-              }
-            });
-            role = spanText.trim();
+          const roleDiv = item.querySelector(IMDB_SELECTORS.roles.crewRole);
+          if (roleDiv) {
             roleElement = roleDiv;
           }
-        }
-      }
-
-      // Method 3: Character in main title page format
-      if (!role) {
-        const charElement = item.querySelector('[data-testid="title-cast-item__characters"]');
-        if (charElement) {
-          role = charElement.textContent.trim();
-          roleElement = charElement;
-        }
-      }
-
-      // Method 4: Generic metadata search
-      if (!role) {
-        const metadata = item.querySelector('.ipc-inline-list, [class*="metadata"]');
-        if (metadata) {
-          const allSpans = metadata.querySelectorAll('span');
-          allSpans.forEach(span => {
-            const text = span.textContent.trim();
-            if (text && text !== name && !text.includes('episode') && !text.match(/^\d{4}$/)) {
-              if (!role || text.length < role.length) {
-                role = text;
-                roleElement = metadata;
-              }
-            }
-          });
         }
       }
     }
@@ -519,19 +717,8 @@ async function showCopyDialog(section, sectionName) {
     animation: fadeIn 0.2s ease-out;
   `;
 
-  // Add animation keyframes
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-    @keyframes slideIn {
-      from { transform: translate(-50%, -45%); opacity: 0; }
-      to { transform: translate(-50%, -50%); opacity: 1; }
-    }
-  `;
-  document.head.appendChild(style);
+  // Inject animations once (reuses if already injected)
+  injectDialogAnimations();
 
   // Create dialog
   const dialog = document.createElement('div');
@@ -625,9 +812,15 @@ async function showCopyDialog(section, sectionName) {
 
   // Handle copy
   dialog.querySelector('#copy-btn').addEventListener('click', () => {
-    const count = parseInt(dialog.querySelector('#cast-count').value);
+    const count = validateCastCount(dialog.querySelector('#cast-count').value);
     const content = dialog.querySelector('#copy-content').value;
     const outputFormat = dialog.querySelector('#output-format').value;
+
+    if (count < 1) {
+      showNotification('Please enter a valid number (1-1000)', true);
+      return;
+    }
+
     copyCastData(section, count, content, outputFormat, sectionName);
     closeDialog();
   });
@@ -643,14 +836,16 @@ function copyCastData(section, count, content, outputFormat, sectionName) {
   // Extract cast members or companies from the section
   const castMembers = [];
 
-  // Find all list items in this section - use querySelectorAll from section
+  // Find all list items in this section
   let listItems;
   if (isCompanyCredits) {
-    // Company credits use different list item structure
-    listItems = section.querySelectorAll('li.ipc-metadata-list__item');
+    listItems = querySelectorAll(section, IMDB_SELECTORS.castItems.companyList);
   } else {
-    // Cast/crew credits
-    listItems = section.querySelectorAll('li[data-testid="name-credits-list-item"]');
+    listItems = querySelectorAll(
+      section,
+      IMDB_SELECTORS.castItems.creditsList,
+      IMDB_SELECTORS.castItems.fallback
+    );
   }
 
   console.log('Found list items:', listItems.length); // Debug
@@ -663,13 +858,17 @@ function copyCastData(section, count, content, outputFormat, sectionName) {
 
     if (isCompanyCredits) {
       // For company credits, look for company name links
-      nameLink = item.querySelector('a[href*="/company/"]') ||
-                 item.querySelector('a.ipc-metadata-list-item__label');
+      nameLink = querySelector(item, [
+        IMDB_SELECTORS.nameLinks.companyLink1,
+        IMDB_SELECTORS.nameLinks.companyLink2
+      ]);
     } else {
       // Get name from the link (try multiple selectors for cast/crew)
-      nameLink = item.querySelector('a.name-credits--title-text-big') ||
-                 item.querySelector('a.name-credits--title-text') ||
-                 item.querySelector('a[href*="/name/"]');
+      nameLink = querySelector(item, [
+        IMDB_SELECTORS.nameLinks.nameLink1,
+        IMDB_SELECTORS.nameLinks.nameLink2,
+        IMDB_SELECTORS.nameLinks.nameLink3
+      ]);
     }
 
     if (!nameLink) {
@@ -680,65 +879,8 @@ function copyCastData(section, count, content, outputFormat, sectionName) {
     name = nameLink.textContent.trim();
     console.log('Found name:', name); // Debug
 
-    // Get role/character from the metadata
-    let role = '';
-
-    if (isCompanyCredits) {
-      // For company credits, extract the role/description (only exists for some sections like Distributors, Special Effects)
-      const roleSpan = item.querySelector('span.ipc-metadata-list-item__list-content-item');
-      if (roleSpan) {
-        role = roleSpan.textContent.trim();
-        console.log('Found company role:', role);
-      }
-      // Note: Production Companies have no role, so role will remain empty - that's expected
-    } else {
-      // Method 1: Look for character name in Cast section (inside sc-2840b417-6 or gBAHic)
-      const charLinkDiv = item.querySelector('div[class*="sc-2840b417-6"], div.gBAHic');
-      if (charLinkDiv) {
-        const charLink = charLinkDiv.querySelector('a');
-        if (charLink) {
-          role = charLink.textContent.trim();
-          console.log('Found character name (Cast):', role);
-        }
-      }
-
-      // Method 2: Look for role in crew section (span inside sc-2840b417-7)
-      if (!role) {
-        const roleDiv = item.querySelector('div[class*="sc-2840b417-7"]');
-        if (roleDiv) {
-          const roleSpan = roleDiv.querySelector('span');
-          if (roleSpan) {
-            // Get only the span content, not nested divs
-            let spanText = '';
-            roleSpan.childNodes.forEach(node => {
-              if (node.nodeType === Node.TEXT_NODE) {
-                spanText += node.textContent;
-              }
-            });
-            role = spanText.trim();
-            console.log('Found role (Crew):', role);
-          }
-        }
-      }
-
-      // Method 3: Fallback - look in metadata container
-      if (!role) {
-        const metadata = item.querySelector('.name-credits--crew-metadata');
-        if (metadata) {
-          const allDivs = metadata.querySelectorAll('div');
-          allDivs.forEach(div => {
-            const text = div.textContent.trim();
-            // Skip if it's the name, episodes, or year
-            if (text && text !== name && !text.includes('episode') && !text.match(/^\d{4}$/)) {
-              if (!role || text.length < role.length) {
-                role = text;
-              }
-            }
-          });
-          console.log('Found role (Fallback):', role);
-        }
-      }
-    }
+    // Get role/character using consolidated utility
+    let role = extractRoleFromItem(item, isCompanyCredits);
 
     // Store as object for flexible formatting
     castMembers.push({ name, role });
@@ -959,9 +1101,15 @@ async function showCompanyCopyDialog(section, sectionName) {
 
   // Handle copy
   dialog.querySelector('#company-copy-btn').addEventListener('click', () => {
-    const count = parseInt(dialog.querySelector('#company-count').value);
+    const count = validateCastCount(dialog.querySelector('#company-count').value);
     const content = dialog.querySelector('#company-content').value;
     const outputFormat = dialog.querySelector('#company-output-format').value;
+
+    if (count < 1) {
+      showNotification('Please enter a valid number (1-1000)', true);
+      return;
+    }
+
     copyCompanyData(section, count, content, outputFormat, sectionName);
     closeDialog();
   });
@@ -1062,10 +1210,16 @@ function copyCompanyData(section, count, content, outputFormat, sectionName) {
 function showNotification(message, isError = false) {
   const notification = document.createElement('div');
   notification.textContent = message;
+
+  // Calculate responsive positioning
+  const isMobile = window.innerWidth < 768;
+  const positionCSS = isMobile
+    ? 'bottom: 20px; left: 50%; transform: translateX(-50%);'
+    : 'bottom: 20px; right: 20px;';
+
   notification.style.cssText = `
     position: fixed;
-    bottom: 20px;
-    right: 20px;
+    ${positionCSS}
     background: ${isError ? '#f44336' : '#4caf50'};
     color: white;
     padding: 15px 20px;
@@ -1073,6 +1227,8 @@ function showNotification(message, isError = false) {
     z-index: 10001;
     font-weight: 600;
     box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    max-width: 90%;
+    word-wrap: break-word;
   `;
 
   document.body.appendChild(notification);
@@ -1228,24 +1384,16 @@ if (isIMDbCreditsPage()) {
       return mutation.addedNodes.length > 0 &&
         Array.from(mutation.addedNodes).some(node => {
           // Skip if this is just a button we added
-          if (node.nodeType === 1 &&
-              (node.classList && (
-                node.classList.contains('media-links-name-copy-btn') ||
+          if (node.nodeType === 1 && node.classList) {
+            if (node.classList.contains('media-links-name-copy-btn') ||
                 node.classList.contains('media-links-role-copy-btn') ||
-                node.classList.contains('media-links-copy-btn')
-              ))) {
-            return false;
+                node.classList.contains('media-links-copy-btn')) {
+              return false;
+            }
           }
 
-          // Check for actual cast-related content
-          return node.nodeType === 1 && // Element node
-            (node.querySelector && (
-              node.querySelector('section.ipc-page-section') ||
-              node.querySelector('li[data-testid="title-cast-item"]') ||
-              node.querySelector('a[href*="/name/"]') ||
-              node.matches('section.ipc-page-section') ||
-              node.matches('li[data-testid="title-cast-item"]')
-            ));
+          // Check if node contains meaningful cast-related content
+          return containsCastRelatedContent(node);
         });
     });
 
@@ -1300,20 +1448,18 @@ if (isIMDbAwardsPage()) {
       return mutation.addedNodes.length > 0 &&
         Array.from(mutation.addedNodes).some(node => {
           // Skip if this is just a button we added
-          if (node.nodeType === 1 &&
-              (node.classList && (
-                node.classList.contains('media-links-name-copy-btn') ||
-                node.classList.contains('media-links-role-copy-btn')
-              ))) {
-            return false;
+          if (node.nodeType === 1 && node.classList) {
+            if (node.classList.contains('media-links-name-copy-btn') ||
+                node.classList.contains('media-links-role-copy-btn')) {
+              return false;
+            }
           }
 
-          // Check for actual award-related content
-          return node.nodeType === 1 && // Element node
-            (node.querySelector && (
-              node.querySelector('li[data-testid="list-item"]') ||
-              node.matches('li[data-testid="list-item"]')
-            ));
+          // Check for award-related content
+          if (node.nodeType !== 1) return false;
+          if (node.matches && node.matches('li[data-testid="list-item"]')) return true;
+          if (node.querySelector && node.querySelector('li[data-testid="list-item"]')) return true;
+          return false;
         });
     });
 

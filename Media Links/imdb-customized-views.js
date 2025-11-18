@@ -4,6 +4,22 @@
 (function() {
   'use strict';
 
+  // Debug mode - set to false for production
+  const DEBUG_MODE = false; // Change to true for debugging
+
+  // Helper function for conditional logging
+  function debugLog(...args) {
+    if (DEBUG_MODE) {
+      console.log('[MediaLinks Debug]', ...args);
+    }
+  }
+
+  function debugWarn(...args) {
+    if (DEBUG_MODE) {
+      console.warn('[MediaLinks Debug]', ...args);
+    }
+  }
+
   // Check if extension context is still valid
   function isExtensionContextValid() {
     try {
@@ -99,6 +115,13 @@
 
   /**
    * Check if role should be excluded entirely
+   *
+   * Exclusion rules:
+   * - Writers credited ONLY as "dialogue" are excluded
+   * - Writers with "dialogue only" are excluded
+   * - Writers with multiple roles that are ALL dialogue-only are excluded
+   * - Writers credited as "dialogue/writer" combo are also excluded
+   * - Other excluded roles: co-producer, director of photography, staff writer, etc.
    */
   function shouldExcludeRole(roleText, sectionName) {
     const roleLower = roleText.toLowerCase().trim();
@@ -130,8 +153,9 @@
       'junior art director'
     ];
 
-    // Writer roles to exclude
+    // Writer roles to exclude (only when they are the single role)
     const excludedWriterRoles = [
+      'story editor',
       'executive story editor',
       'staff writer'
     ];
@@ -144,7 +168,13 @@
       }
     }
 
-    // MEDIUM FIX: Consolidate dialogue checking logic
+    // Helper function to check if a role is dialogue-only and should be excluded
+    const isDialogueOnly = (role) => {
+      const r = role.toLowerCase().trim();
+      // Exclude dialogue (singular), dialogues (plural), and "dialogue only"
+      return r === 'dialogue' || r === 'dialogues' || r === 'dialogue only';
+    };
+
     // Helper function to check if a role is dialogue-related and should be excluded
     const isExcludedDialogueRole = (role) => {
       const r = role.toLowerCase().trim();
@@ -152,7 +182,29 @@
       return r.includes('dialogue') && (r === 'dialogue' || r.includes('writer'));
     };
 
-    // Exclude dialogue writers - check for dialogue as sole credit
+    // For Writers section: exclude if ONLY credited as "dialogue"
+    if (sectionName && sectionName.toLowerCase().includes('writer')) {
+      debugLog(`[shouldExcludeRole] Checking writer: "${roleText}" in section "${sectionName}"`);
+      if (!hasMultipleRoles) {
+        // Single role in writers section - exclude if it's dialogue-only
+        debugLog(`[shouldExcludeRole] Single role, checking if dialogue-only: ${isDialogueOnly(roleLower)}`);
+        if (isDialogueOnly(roleLower)) {
+          console.log(`[FILTER] Excluding dialogue-only writer: "${roleText}"`);
+          return true;
+        }
+      } else {
+        // Multiple roles - check if all roles are dialogue-related
+        const roles = roleText.split('/').map(r => normalizeRole(r));
+        const allDialogueOnly = roles.every(role => isDialogueOnly(role));
+        debugLog(`[shouldExcludeRole] Multi-role, all dialogue-only: ${allDialogueOnly}`);
+        if (allDialogueOnly) {
+          console.log(`[FILTER] Excluding dialogue-only writer: "${roleText}"`);
+          return true;
+        }
+      }
+    }
+
+    // General dialogue exclusion for other sections (keep existing logic as fallback)
     if (roleLower.includes('dialogue')) {
       if (!hasMultipleRoles) {
         // Single role - exclude if it's dialogue-related
@@ -218,38 +270,46 @@
       }
     }
 
-    // If has multiple roles, check if it contains at least one valid producer role
+    // If has multiple roles, check what we have
     if (hasMultipleRoles) {
       // Split and normalize each role
       const roles = roleText.split('/').map(r => normalizeRole(r));
 
-      // Check if all roles are from the excluded producer list
+      // Check if ALL roles are excluded producers - if so, exclude entire entry
       const allExcludedProducers = roles.every(role => excludedProducerRoles.includes(role));
-
       if (allExcludedProducers) {
+        debugLog(`Excluding multi-role (all excluded producers): "${roleText}"`);
         return true;
       }
 
-      // Check if all roles are excluded director roles
+      // Check if ALL roles are excluded directors - if so, exclude entire entry
       const allExcludedDirectors = roles.every(role =>
         excludedDirectorRoles.some(dirRole => role.includes(dirRole))
       );
-
       if (allExcludedDirectors) {
+        debugLog(`Excluding multi-role (all excluded directors): "${roleText}"`);
         return true;
       }
 
-      // Check if it has at least one main producer role
-      const hasMainProducer = roles.some(role =>
-        !excludedProducerRoles.includes(role) && role.includes('producer')
-      );
-
-      if (!hasMainProducer) {
-        return true;
+      // For producer roles with multiple entries:
+      // Include if it has at least one non-excluded producer role
+      const hasAnyProducerRole = roles.some(role => role.includes('producer'));
+      if (hasAnyProducerRole) {
+        // Has producer role(s), include it even if some are excluded (e.g., "Producer/Co-Producer")
+        return false;
       }
+
+      // If no producers in the roles but has other content, include it
+      return false;
     }
 
-    return false;
+    // Log final decision for debugging
+    const decision = false; // Fallthrough case
+    if (decision) {
+      debugLog(`Excluded role: "${roleText}" in section "${sectionName}"`);
+    }
+
+    return decision;
   }
 
   /**
@@ -318,7 +378,7 @@
   async function extractAwardsData() {
     // Auto-click all "See all" buttons to expand all award categories
     const seeAllButtons = document.querySelectorAll('.ipc-see-more__button');
-    console.log('Awards extraction: Found', seeAllButtons.length, 'see-all buttons, auto-clicking to expand...');
+    debugLog('Awards extraction: Found', seeAllButtons.length, 'see-all buttons, auto-clicking to expand...');
 
     for (const btn of seeAllButtons) {
       btn.click();
@@ -330,6 +390,7 @@
     await new Promise(resolve => setTimeout(resolve, 500));
 
     const awardsData = [];
+    const seenNames = new Set(); // Track people we've already added to avoid duplicates
 
     // Try primary selector
     let awardItems = document.querySelectorAll('li[data-testid="list-item"].ipc-metadata-list-summary-item');
@@ -342,8 +403,8 @@
       awardItems = document.querySelectorAll('li.ipc-metadata-list-summary-item');
     }
 
-    console.log('Awards extraction: Found', awardItems.length, 'award items on page');
-    console.log('Awards page DOM analysis:', {
+    debugLog('Awards extraction: Found', awardItems.length, 'award items on page');
+    debugLog('Awards page DOM analysis:', {
       'li elements': document.querySelectorAll('li').length,
       'list-item data-testids': document.querySelectorAll('[data-testid="list-item"]').length,
       'ipc-metadata elements': document.querySelectorAll('.ipc-metadata-list-summary-item').length,
@@ -357,7 +418,7 @@
 
         // Only process if it contains "Winner" - skip nominees
         if (!fullText.includes('Winner') || fullText.includes('Nominee')) {
-          if (index < 2) console.log('Debug item', index, ': Not a winner (skipping)');
+          if (index < 2) debugLog('Debug item', index, ': Not a winner (skipping)');
           return;
         }
 
@@ -418,7 +479,7 @@
         }
 
         if (index < 2) {
-          console.log('Debug item', index, ':', {
+          debugLog('Debug item', index, ':', {
             personName: personName || '(empty)',
             awardBody: awardBody || '(empty)',
             category: category || '(empty)',
@@ -427,8 +488,9 @@
           });
         }
 
-        // Add if we have at least name and award body
-        if (personName && awardBody) {
+        // Add if we have at least name and award body, and haven't seen this person before (avoid duplicates)
+        if (personName && awardBody && !seenNames.has(personName)) {
+          seenNames.add(personName); // Mark this person as seen
           const roleType = category || 'Award';
 
           awardsData.push({
@@ -439,13 +501,18 @@
             roleType: roleType,
             imdbUrl: personLink ? personLink.href : ''
           });
+        } else if (personName && seenNames.has(personName)) {
+          // Person already seen - skip duplicate
+          debugLog(`[Extract] Skipping duplicate award winner: "${personName}" (already included)`);
         }
       } catch (e) {
-        console.error('Error processing award item', index, ':', e);
+        if (e) {
+          console.error('Error processing award item', index, ':', e);
+        }
       }
     });
 
-    console.log('Awards extraction complete: Found', awardsData.length, 'winners');
+    debugLog('Awards extraction complete: Found', awardsData.length, 'winners');
     return awardsData;
   }
 
@@ -455,7 +522,7 @@
   async function extractReleaseData() {
     // Auto-click all "See all" and "more" buttons to expand all release sections
     const seeAllButtons = document.querySelectorAll('.ipc-see-more__button');
-    console.log('Release extraction: Found', seeAllButtons.length, 'see-all/more buttons, auto-clicking to expand...');
+    debugLog('Release extraction: Found', seeAllButtons.length, 'see-all/more buttons, auto-clicking to expand...');
 
     for (const btn of seeAllButtons) {
       btn.click();
@@ -467,6 +534,7 @@
     await new Promise(resolve => setTimeout(resolve, 500));
 
     const releaseData = [];
+    const seenNames = new Set(); // Track regions we've already added to avoid duplicates
 
     // Try primary selector
     let releaseItems = document.querySelectorAll('li[data-testid="list-item"].ipc-metadata-list__item');
@@ -482,8 +550,8 @@
       releaseItems = document.querySelectorAll('li[data-testid*="release"]');
     }
 
-    console.log('Release extraction: Found', releaseItems.length, 'release items on page');
-    console.log('Release page DOM analysis:', {
+    debugLog('Release extraction: Found', releaseItems.length, 'release items on page');
+    debugLog('Release page DOM analysis:', {
       'li elements': document.querySelectorAll('li').length,
       'list-item data-testids': document.querySelectorAll('[data-testid="list-item"]').length,
       'ipc-metadata-list items': document.querySelectorAll('.ipc-metadata-list__item').length,
@@ -534,15 +602,16 @@
         }
 
         if (index < 2) {
-          console.log('Debug item', index, ':', {
+          debugLog('Debug item', index, ':', {
             region: region || '(empty)',
             date: date || '(empty)',
             location: location || '(empty)'
           });
         }
 
-        // Add only India entries
-        if (region && date && region.toLowerCase() === 'india') {
+        // Add only India entries (avoid duplicates)
+        if (region && date && region.toLowerCase() === 'india' && !seenNames.has(region)) {
+          seenNames.add(region); // Mark this region as seen
           releaseData.push({
             name: region,
             role: date,
@@ -552,17 +621,19 @@
           });
         }
       } catch (e) {
-        console.error('Error processing release item', index, ':', e);
+        if (e) {
+          console.error('Error processing release item', index, ':', e);
+        }
       }
     });
 
     // If earliest entry exists and is not India, add it as well
     if (earliestEntry && earliestEntry.name.toLowerCase() !== 'india') {
       releaseData.unshift(earliestEntry);
-      console.log('Added earliest release date:', earliestEntry);
+      debugLog('Added earliest release date:', earliestEntry);
     }
 
-    console.log('Release extraction complete: Found', releaseData.length, 'release dates (India + earliest)');
+    debugLog('Release extraction complete: Found', releaseData.length, 'release dates (India + earliest)');
     return releaseData;
   }
 
@@ -622,11 +693,11 @@
             });
           }
         });
-        console.log('Color items found:', colorCount);
+        debugLog('Color items found:', colorCount);
       }
     }
 
-    console.log('Technical extraction complete: Found', technicalData.length, 'specifications');
+    debugLog('Technical extraction complete: Found', technicalData.length, 'specifications');
     return technicalData;
   }
 
@@ -661,7 +732,7 @@
       if (plotElement) {
         description = plotElement.textContent.trim();
         if (description) {
-          console.log('Found plot using selector:', selector);
+          debugLog('Found plot using selector:', selector);
           break;
         }
       }
@@ -678,7 +749,7 @@
             const text = p.textContent.trim();
             if (text && text.length > 50) { // Assume description is substantial
               description = text;
-              console.log('Found plot in hero section paragraph');
+              debugLog('Found plot in hero section paragraph');
               break;
             }
           }
@@ -686,7 +757,7 @@
       }
     }
 
-    console.log('Title page extraction complete:', {
+    debugLog('Title page extraction complete:', {
       title: title ? 'Found' : 'Not found',
       description: description ? `Found (${description.length} chars)` : 'Not found'
     });
@@ -714,7 +785,7 @@
       );
 
       if (hasAnyElement) {
-        console.log('Technical specs DOM elements found');
+        debugLog('Technical specs DOM elements found');
         return true;
       }
 
@@ -723,7 +794,7 @@
     }
 
     const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`Technical specs DOM elements not found after ${elapsedSeconds}s (page may not have technical data)`);
+    debugLog(`Technical specs DOM elements not found after ${elapsedSeconds}s (page may not have technical data)`);
     return false;
   }
 
@@ -759,11 +830,11 @@
 
       // We need at least the title; plot is optional
       if (hasTitle) {
-        console.log('Title page DOM elements found');
+        debugLog('Title page DOM elements found');
         if (hasPlot) {
-          console.log('Plot/description found');
+          debugLog('Plot/description found');
         } else {
-          console.log('Title found but plot not available (may not have description)');
+          debugLog('Title found but plot not available (may not have description)');
         }
         return true;
       }
@@ -773,7 +844,7 @@
     }
 
     const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`Title page DOM elements not found after ${elapsedSeconds}s (page may not have loaded)`);
+    debugLog(`Title page DOM elements not found after ${elapsedSeconds}s (page may not have loaded)`);
     return false;
   }
 
@@ -785,13 +856,13 @@
     while (Date.now() - startTime < maxWaitTime) {
       const castItems = document.querySelectorAll('li[data-testid="name-credits-list-item"]');
       if (castItems.length > 0) {
-        console.log('Cast/crew DOM elements found');
+        debugLog('Cast/crew DOM elements found');
         return true;
       }
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`Cast/crew DOM elements not found after ${elapsedSeconds}s (page may not have cast data)`);
+    debugLog(`Cast/crew DOM elements not found after ${elapsedSeconds}s (page may not have cast data)`);
     return false;
   }
 
@@ -803,13 +874,13 @@
     while (Date.now() - startTime < maxWaitTime) {
       const sections = document.querySelectorAll('section.ipc-page-section');
       if (sections.length > 0) {
-        console.log('Company credits DOM elements found');
+        debugLog('Company credits DOM elements found');
         return true;
       }
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`Company credits DOM elements not found after ${elapsedSeconds}s (page may not have company data)`);
+    debugLog(`Company credits DOM elements not found after ${elapsedSeconds}s (page may not have company data)`);
     return false;
   }
 
@@ -833,14 +904,14 @@
       }
 
       if (awardItems.length > 0) {
-        console.log(`Awards DOM elements found (${awardItems.length} items)`);
+        debugLog(`Awards DOM elements found (${awardItems.length} items)`);
         return true;
       }
 
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`Awards DOM elements not found after ${elapsedSeconds}s (page may not have awards data)`);
+    debugLog(`Awards DOM elements not found after ${elapsedSeconds}s (page may not have awards data)`);
     return false;
   }
 
@@ -866,13 +937,13 @@
       }
 
       if (releaseTable || releaseItems.length > 0) {
-        console.log(`Release info DOM elements found (${releaseItems.length} rows)`);
+        debugLog(`Release info DOM elements found (${releaseItems.length} rows)`);
         return true;
       }
       await new Promise(resolve => setTimeout(resolve, 500));
     }
     const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`Release info DOM elements not found after ${elapsedSeconds}s (page may not have release data)`);
+    debugLog(`Release info DOM elements not found after ${elapsedSeconds}s (page may not have release data)`);
     return false;
   }
 
@@ -881,6 +952,7 @@
    */
   function extractCompanyData() {
     const companyData = [];
+    const seenNames = new Set(); // Track companies we've already added to avoid duplicates
     const sections = document.querySelectorAll('section.ipc-page-section');
 
     sections.forEach(section => {
@@ -891,7 +963,12 @@
       const titleText = titleWrapper.querySelector('.ipc-title__text');
       if (!titleText) return;
 
-      const sectionName = titleText.textContent.trim();
+      const sectionName = titleText.textContent ? titleText.textContent.trim() : '';
+
+      // Defensive check: ensure sectionName is valid
+      if (!sectionName || typeof sectionName !== 'string') {
+        return;
+      }
 
       // Only process Production Companies section
       if (!sectionName.toLowerCase().includes('production')) {
@@ -918,14 +995,18 @@
           role = roleSpan.textContent.trim();
         }
 
-        // Only add if we got a name
-        if (name) {
+        // Only add if we got a name and haven't seen it before (avoid duplicates)
+        if (name && !seenNames.has(name)) {
+          seenNames.add(name); // Mark this company as seen
           companyData.push({
             name: name,
             role: role || '-',
             roleType: sectionName,
             imdbUrl: imdbUrl
           });
+        } else if (name && seenNames.has(name)) {
+          // Company already seen - skip duplicate
+          debugLog(`[Extract] Skipping duplicate company: "${name}" (already included)`);
         }
       });
     });
@@ -963,9 +1044,17 @@
 
   /**
    * Extract all cast members from the fullcredits page
+   *
+   * Role filtering is applied:
+   * - Writers credited ONLY as "dialogue" are filtered out
+   * - Writers with all roles being dialogue-only are filtered out
+   * - Writers with "dialogue/writer" combinations are filtered out
+   * - Other excluded roles like "co-producer", "director of photography" are filtered
+   * - The filtering is automatic and applied during extraction
    */
   function extractCastData() {
     const castData = [];
+    const seenNames = new Set(); // Track names we've already added to avoid duplicates
     const sections = document.querySelectorAll('section.ipc-page-section');
 
     console.log(`[Extract] Found ${sections.length} sections on page`);
@@ -974,20 +1063,27 @@
       // Get section name (Cast, Crew, etc.)
       const titleWrapper = section.querySelector('.ipc-title__wrapper');
       if (!titleWrapper) {
-        console.log(`[Extract] Section ${sectionIndex}: No title wrapper found, skipping`);
+        debugLog(`[Extract] Section ${sectionIndex}: No title wrapper found, skipping`);
         return;
       }
 
       const titleText = titleWrapper.querySelector('.ipc-title__text');
       if (!titleText) {
-        console.log(`[Extract] Section ${sectionIndex}: No title text found, skipping`);
+        debugLog(`[Extract] Section ${sectionIndex}: No title text found, skipping`);
         return;
       }
 
-      const sectionName = titleText.textContent.trim();
+      const sectionName = titleText.textContent ? titleText.textContent.trim() : '';
+
+      // Defensive check: ensure sectionName is valid
+      if (!sectionName || typeof sectionName !== 'string') {
+        debugLog(`[Extract] Section ${sectionIndex}: Invalid section name, skipping`);
+        return;
+      }
+
       const sectionNameLower = sectionName.toLowerCase();
 
-      console.log(`[Extract] Section ${sectionIndex}: "${sectionName}"`);
+      debugLog(`[Extract] Section ${sectionIndex}: "${sectionName}"`);
 
       // Check if this section is one we want to include
       // Only include: "Director(s)" (not "Second Unit Directors", "Assistant Directors", or "Art Directors")
@@ -1009,17 +1105,17 @@
         sectionNameLower.includes('creator');
 
       if (!isAllowedSection || isExcludedSection) {
-        console.log(`[Extract] Section "${sectionName}" skipped: isAllowed=${isAllowedSection}, isExcluded=${isExcludedSection}`);
+        debugLog(`[Extract] Section "${sectionName}" skipped: isAllowed=${isAllowedSection}, isExcluded=${isExcludedSection}`);
         return;
       }
 
-      console.log(`[Extract] Processing section: "${sectionName}"`);
+      debugLog(`[Extract] Processing section: "${sectionName}"`);
 
       // Extract list items from this section
       const listItems = section.querySelectorAll('li[data-testid="name-credits-list-item"]');
-      console.log(`[Extract] Section "${sectionName}": Found ${listItems.length} list items`);
+      debugLog(`[Extract] Section "${sectionName}": Found ${listItems.length} list items`);
 
-      listItems.forEach(item => {
+      listItems.forEach((item, itemIndex) => {
         // Get name
         const nameLink = item.querySelector('a.name-credits--title-text-big') ||
                         item.querySelector('a.name-credits--title-text') ||
@@ -1068,32 +1164,42 @@
 
         // Check if this role should be excluded entirely
         if (shouldExcludeRole(role, sectionName)) {
+          if (sectionName && sectionName.toLowerCase().includes('writer')) {
+            debugLog(`[Extract] Filtering out writer: "${name}" with role "${role}"`);
+          }
           return;
         }
 
         // Determine role type from the actual role text
         const roleType = determineRoleTypeFromRole(role, sectionName);
 
-        // Only add if we got a name
-        if (name) {
+        // Only add if we got a name and haven't seen it before (avoid duplicates)
+        if (name && !seenNames.has(name)) {
+          seenNames.add(name); // Mark this name as seen
           castData.push({
             name: name,
             role: role || '-',
             roleType: roleType,
             imdbUrl: imdbUrl
           });
+          if (sectionName && sectionName.toLowerCase().includes('writer')) {
+            debugLog(`[Extract] Including writer: "${name}" with role "${role}"`);
+          }
+        } else if (name && seenNames.has(name)) {
+          // Name already seen - skip duplicate
+          debugLog(`[Extract] Skipping duplicate: "${name}" (already included)`);
         }
       });
     });
 
-    console.log(`[Extract] Total items extracted: ${castData.length}`);
+    debugLog(`[Extract] Total items extracted: ${castData.length}`);
 
     // Log summary by role type
     const roleTypeCounts = {};
     castData.forEach(item => {
       roleTypeCounts[item.roleType] = (roleTypeCounts[item.roleType] || 0) + 1;
     });
-    console.log('[Extract] Items by role type:', roleTypeCounts);
+    debugLog('[Extract] Items by role type:', roleTypeCounts);
 
     return castData;
   }
@@ -1358,6 +1464,7 @@
   function openConsolidatedView(button) {
     try {
       // Disable button and show loading state
+      let resetButtonTimeout = null;
       if (button) {
         button.disabled = true;
         button.style.opacity = '0.6';
@@ -1366,27 +1473,38 @@
         button.textContent = '⏳ Loading...';
 
         // Re-enable button after timeout in case something goes wrong
-        setTimeout(() => {
-          button.disabled = false;
-          button.style.opacity = '1';
-          button.style.cursor = 'pointer';
-          button.textContent = originalText;
-        }, 60000); // 60 second timeout (allows time for page loads, extraction, and tab closing)
+        // Use 180 second timeout (3 minutes) to accommodate slow networks
+        resetButtonTimeout = setTimeout(() => {
+          if (button && button.disabled) {
+            button.disabled = false;
+            button.style.opacity = '1';
+            button.style.cursor = 'pointer';
+            button.textContent = originalText;
+            showConsolidatedViewNotification('⚠️ Consolidated view extraction timed out. You can try again.', 'error');
+          }
+        }, 180000); // 180 second timeout
       }
 
       // Show initial status message
       showConsolidatedViewNotification('Starting consolidated view extraction...', 'info');
 
       // Check if extension context is still valid
-      if (!isExtensionContextValid()) {
+      const handleExtensionContextError = () => {
         showConsolidatedViewNotification('❌ Extension context invalidated. Please reload the page and try again.', 'error');
-        console.warn('Extension context invalid when trying to open consolidated view');
+        console.warn('Extension context invalid');
         if (button) {
           button.disabled = false;
           button.style.opacity = '1';
           button.style.cursor = 'pointer';
           button.textContent = '🎬 Consolidated Overview';
         }
+        if (resetButtonTimeout) {
+          clearTimeout(resetButtonTimeout);
+        }
+      };
+
+      if (!isExtensionContextValid()) {
+        handleExtensionContextError();
         return;
       }
 
@@ -1407,26 +1525,11 @@
       console.log('Opening consolidated view for movie:', movieId);
 
       // Get current tab ID to return focus later
-      if (!isExtensionContextValid()) {
-        showConsolidatedViewNotification('❌ Extension context invalidated. Please reload the page and try again.', 'error');
-        if (button) {
-          button.disabled = false;
-          button.style.opacity = '1';
-          button.style.cursor = 'pointer';
-          button.textContent = '🎬 Consolidated Overview';
-        }
-        return;
-      }
+      // (context was already checked above, no need to check again)
 
       chrome.runtime.sendMessage({ type: 'getCurrentTabId' }, (response) => {
         if (!isExtensionContextValid()) {
-          showConsolidatedViewNotification('❌ Extension context invalidated. Please reload the page and try again.', 'error');
-          if (button) {
-            button.disabled = false;
-            button.style.opacity = '1';
-            button.style.cursor = 'pointer';
-            button.textContent = '🎬 Consolidated Overview';
-          }
+          handleExtensionContextError();
           return;
         }
 
@@ -1439,37 +1542,49 @@
 
         // Store movie ID and reset extraction flags
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-        // First, clear any existing data including single view temp data
-        chrome.storage.local.remove([
-          'customized-view-temp',
-          'consolidatedViewData_title',
-          'consolidatedViewData_fullcredits',
-          'consolidatedViewData_companycredits',
-          'consolidatedViewData_awards',
-          'consolidatedViewData_releaseinfo',
-          'consolidatedViewData_technical'
-        ], () => {
-          // Then set the movie ID and extraction flags
-          chrome.storage.local.set({
-            'consolidatedViewMovieId': movieId,
-            'consolidatedViewExtractingTitle': false,
-            'consolidatedViewExtractingFullcredits': false,
-            'consolidatedViewExtractingCompanycredits': false,
-            'consolidatedViewExtractingAwards': false,
-            'consolidatedViewExtractingReleaseinfo': false,
-            'consolidatedViewExtractingTechnical': false
-          }, () => {
-          if (chrome.runtime.lastError) {
-            console.error('Error saving movie ID:', chrome.runtime.lastError);
-            showConsolidatedViewNotification('❌ Failed to save data. Please try again.', 'error');
-            if (button) {
-              button.disabled = false;
-              button.style.opacity = '1';
-              button.style.cursor = 'pointer';
-              button.textContent = '🎬 Consolidated Overview';
-            }
-            return;
-          }
+          // Clear existing data first, then set new data sequentially
+          const clearStorage = new Promise((resolve) => {
+            chrome.storage.local.remove([
+              'customized-view-temp',
+              'consolidatedViewData_title',
+              'consolidatedViewData_fullcredits',
+              'consolidatedViewData_companycredits',
+              'consolidatedViewData_awards',
+              'consolidatedViewData_releaseinfo',
+              'consolidatedViewData_technical'
+            ], () => {
+              if (chrome.runtime.lastError) {
+                console.warn('Error clearing storage:', chrome.runtime.lastError);
+              }
+              resolve();
+            });
+          });
+
+          clearStorage.then(() => {
+            // Now that storage is cleared, set new values
+            chrome.storage.local.set({
+              'consolidatedViewMovieId': movieId,
+              'consolidatedViewExtractingTitle': false,
+              'consolidatedViewExtractingFullcredits': false,
+              'consolidatedViewExtractingCompanycredits': false,
+              'consolidatedViewExtractingAwards': false,
+              'consolidatedViewExtractingReleaseinfo': false,
+              'consolidatedViewExtractingTechnical': false
+            }, () => {
+              if (chrome.runtime.lastError) {
+                console.error('Error saving movie ID:', chrome.runtime.lastError);
+                showConsolidatedViewNotification('❌ Failed to save data. Please try again.', 'error');
+                if (button) {
+                  button.disabled = false;
+                  button.style.opacity = '1';
+                  button.style.cursor = 'pointer';
+                  button.textContent = '🎬 Consolidated Overview';
+                }
+                if (resetButtonTimeout) {
+                  clearTimeout(resetButtonTimeout);
+                }
+                return;
+              }
 
           console.log('Opening tabs for consolidated view extraction...');
           showConsolidatedViewNotification('📂 Opening tabs for extraction...', 'info', true);
@@ -1849,8 +1964,8 @@
 
           // Start by opening all tabs
           openAllTabs();
+            });
           });
-        });
         } else {
           console.error('Chrome storage API not available');
           showConsolidatedViewNotification('❌ Chrome storage API not available. Please reload the extension.', 'error');

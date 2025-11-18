@@ -389,7 +389,7 @@
             position: 'fixed',
             bottom: '20px', // Changed to bottom instead of top
             right: '20px',
-            zIndex: '2147483647', // Maximum z-index
+            zIndex: '10001',
             minWidth: '100px',
             height: '50px',
             padding: '12px 24px',
@@ -424,6 +424,8 @@
         button.addEventListener('mouseleave', () => {
             button.style.transform = 'scale(1)';
             button.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+            // Ensure button state is properly reset
+            updateButtonState(button);
         });
 
         button.addEventListener('click', (e) => {
@@ -545,6 +547,7 @@
         const header = panel.querySelector('div:first-child');
         const title = header ? header.querySelector('div:first-child') : null;
         const toggleBtn = header ? header.querySelector('button') : null;
+        const searchInput = document.getElementById('hotstar-episode-search');
 
         // Update theme attribute
         panel.setAttribute('data-theme', isDark ? 'dark' : 'light');
@@ -556,6 +559,8 @@
         const headerBorderColor = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
         const buttonBg = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
         const buttonBorder = isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)';
+        const searchBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)';
+        const searchBorder = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
 
         // Update panel background and border
         panel.style.backgroundColor = panelBg;
@@ -578,8 +583,15 @@
             toggleBtn.style.color = textColor;
         }
 
+        // Update search input
+        if (searchInput) {
+            searchInput.style.backgroundColor = searchBg;
+            searchInput.style.borderColor = searchBorder;
+            searchInput.style.color = textColor;
+        }
+
         // Update all episode buttons
-        const episodeButtons = episodeList ? episodeList.querySelectorAll('button') : [];
+        const episodeButtons = episodeList ? episodeList.querySelectorAll('button[data-episode-number]') : [];
         episodeButtons.forEach(btn => {
             btn.style.backgroundColor = buttonBg;
             btn.style.borderColor = buttonBorder;
@@ -791,9 +803,10 @@
             top: '50%',
             right: '20px',
             transform: 'translateY(-50%)',
-            zIndex: '2147483646',
+            zIndex: '10000',
             width: '200px',
-            height: '70vh',
+            maxHeight: '90vh',
+            minHeight: '300px',
             backgroundColor: panelBg,
             borderRadius: '12px',
             padding: '12px',
@@ -805,7 +818,8 @@
             backdropFilter: 'blur(10px)',
             border: `2px solid ${borderColor}`,
             overflow: 'hidden',
-            color: textColor
+            color: textColor,
+            boxSizing: 'border-box'
         });
 
         // Episode list container (scrollable with grid layout) - DECLARE FIRST
@@ -825,7 +839,7 @@
             paddingBottom: '8px',
             WebkitOverflowScrolling: 'touch',
             transition: 'max-height 0.2s ease, opacity 0.2s ease',
-            maxHeight: 'calc(100% - 40px)',
+            maxHeight: 'calc(100% - 88px)',
             opacity: '1',
             visibility: 'visible',
             pointerEvents: 'auto'
@@ -892,9 +906,11 @@
                 // Show: make visible and expand
                 episodeList.style.visibility = 'visible';
                 episodeList.style.pointerEvents = 'auto';
+                searchInput.style.visibility = 'visible';
+                searchInput.style.pointerEvents = 'auto';
                 // Force reflow to ensure transition takes effect
                 void episodeList.offsetHeight;
-                episodeList.style.maxHeight = 'calc(100% - 40px)';
+                episodeList.style.maxHeight = 'calc(100% - 88px)';
                 episodeList.style.opacity = '1';
                 episodeList.style.overflow = 'auto';
                 toggleBtn.textContent = '−';
@@ -904,6 +920,8 @@
                 episodeList.style.maxHeight = '0';
                 episodeList.style.opacity = '0';
                 episodeList.style.overflow = 'hidden';
+                searchInput.style.visibility = 'hidden';
+                searchInput.style.pointerEvents = 'none';
 
                 // Delay visibility change until animation completes (200ms)
                 setTimeout(() => {
@@ -918,6 +936,44 @@
         header.appendChild(title);
         header.appendChild(toggleBtn);
         panel.appendChild(header);
+
+        // Search input for episode filtering
+        const searchInput = document.createElement('input');
+        searchInput.id = 'hotstar-episode-search';
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Find episode';
+        searchInput.title = 'Search episodes - type to filter, press Enter to navigate';
+
+        const searchBorder = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
+        const searchBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)';
+        const searchFocusBorder = colors.accent || '#6366f1';
+
+        searchInput.style.cssText = `
+            width: calc(100% - 4px);
+            padding: 8px;
+            margin-bottom: 8px;
+            border: 1px solid ${searchBorder};
+            border-radius: 4px;
+            background-color: ${searchBg};
+            color: ${textColor};
+            font-size: 12px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            box-sizing: border-box;
+            transition: all 200ms ease;
+            outline: none;
+        `;
+
+        searchInput.addEventListener('focus', () => {
+            searchInput.style.borderColor = searchFocusBorder;
+            searchInput.style.boxShadow = `0 0 0 2px ${searchFocusBorder}33`;
+        });
+
+        searchInput.addEventListener('blur', () => {
+            searchInput.style.borderColor = searchBorder;
+            searchInput.style.boxShadow = 'none';
+        });
+
+        panel.appendChild(searchInput);
         panel.appendChild(episodeList);
 
         // Custom scrollbar with theme-aware colors
@@ -925,15 +981,22 @@
         const scrollbarThumb = isDark ? 'rgba(255, 255, 255, 0.3)' : 'rgba(0, 0, 0, 0.2)';
         const scrollbarThumbHover = isDark ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.4)';
 
+        // Create or update scrollbar style element (avoid duplicates)
+        let scrollbarStyle = document.getElementById('hotstar-scrollbar-style');
+        if (!scrollbarStyle) {
+            scrollbarStyle = document.createElement('style');
+            scrollbarStyle.id = 'hotstar-scrollbar-style';
+            document.head.appendChild(scrollbarStyle);
+        }
+
+        // Set scrollbar colors based on theme
         if (isCatppuccin) {
             // Use Catppuccin colors for scrollbar
             const catppuccinTrack = colors.surface0;
             const catppuccinThumb = colors.accent;
             const catppuccinThumbHover = colors.accentHover;
 
-            const style = document.createElement('style');
-            style.id = 'hotstar-scrollbar-style';
-            style.textContent = `
+            scrollbarStyle.textContent = `
                 #hotstar-episode-list::-webkit-scrollbar {
                     width: 6px;
                 }
@@ -949,11 +1012,8 @@
                     background: ${catppuccinThumbHover};
                 }
             `;
-            document.head.appendChild(style);
         } else {
-            const style = document.createElement('style');
-            style.id = 'hotstar-scrollbar-style';
-            style.textContent = `
+            scrollbarStyle.textContent = `
                 #hotstar-episode-list::-webkit-scrollbar {
                     width: 6px;
                 }
@@ -969,7 +1029,6 @@
                     background: ${scrollbarThumbHover};
                 }
             `;
-            document.head.appendChild(style);
         }
 
         document.body.appendChild(panel);
@@ -1001,6 +1060,7 @@
             if (episodeList.children.length === 0) {
                 const isDarkPanel = colors.isDark;
                 const emptyMsg = document.createElement('div');
+                emptyMsg.id = 'hotstar-episode-empty-message';
                 emptyMsg.textContent = 'No episodes loaded';
                 emptyMsg.style.cssText = `
                     color: ${isDarkPanel ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 0, 0, 0.5)'};
@@ -1014,14 +1074,16 @@
         }
 
         // Remove empty message if present
-        const existingDiv = episodeList.querySelector('div');
-        if (existingDiv && existingDiv.textContent === 'No episodes loaded') {
-            episodeList.innerHTML = '';
+        const existingMsg = document.getElementById('hotstar-episode-empty-message');
+        if (existingMsg) {
+            existingMsg.remove();
         }
 
         // Track existing episode buttons to avoid duplicates
+        // Also clear old buttons to prevent memory leaks from accumulating listeners
         const existingEpisodes = new Set();
-        episodeList.querySelectorAll('button[data-episode-number]').forEach(btn => {
+        const existingButtons = episodeList.querySelectorAll('button[data-episode-number]');
+        existingButtons.forEach(btn => {
             existingEpisodes.add(parseInt(btn.dataset.episodeNumber));
         });
 
@@ -1127,6 +1189,12 @@
         if (addedCount > 0) {
             log(`Added ${addedCount} new episode(s), total: ${episodeCards.length}`);
         }
+
+        // Re-apply current search filter after updating episode list
+        const searchInput = document.getElementById('hotstar-episode-search');
+        if (searchInput && searchInput.value) {
+            filterEpisodesBySearch(searchInput.value);
+        }
     }
 
     // Scroll to a specific episode
@@ -1161,6 +1229,135 @@
         log(`Scrolled to episode ${episodeNum}`);
     }
 
+    // Filter episodes by search term
+    function filterEpisodesBySearch(searchTerm) {
+        const episodeList = document.getElementById('hotstar-episode-list');
+        if (!episodeList) return;
+
+        const episodeButtons = episodeList.querySelectorAll('button[data-episode-number]');
+        const cleanSearch = searchTerm.trim().toLowerCase();
+
+        if (!cleanSearch) {
+            // Show all episodes if search is empty
+            episodeButtons.forEach(btn => {
+                btn.classList.remove('hotstar-episode-hidden');
+                btn.style.display = '';
+                btn.style.opacity = '0.9';
+            });
+            log(`Cleared search filter, showing all ${episodeButtons.length} episodes`);
+            return;
+        }
+
+        let visibleCount = 0;
+        let exactMatch = null;
+
+        episodeButtons.forEach(btn => {
+            const episodeNum = btn.dataset.episodeNumber;
+            const episodeText = `E${episodeNum}`;
+
+            // Check if episode number contains the search term
+            if (episodeText.toLowerCase().includes(cleanSearch) || episodeNum.toLowerCase().includes(cleanSearch)) {
+                btn.classList.remove('hotstar-episode-hidden');
+                btn.style.display = '';
+                btn.style.opacity = '0.9';
+                visibleCount++;
+
+                // Track exact match (for Enter key)
+                if (episodeNum === cleanSearch || episodeText.toLowerCase() === `e${cleanSearch}`) {
+                    exactMatch = btn;
+                }
+            } else {
+                // Hide non-matching episodes
+                btn.classList.add('hotstar-episode-hidden');
+                btn.style.display = 'none';
+            }
+        });
+
+        if (visibleCount === 0) {
+            log(`No episodes found matching "${cleanSearch}"`);
+            showNotification(`No episodes found for "${cleanSearch}"`);
+        } else {
+            log(`Found ${visibleCount} episode(s) matching "${cleanSearch}"`);
+        }
+    }
+
+    // Cleanup episode panel and related resources
+    function cleanupEpisodePanel() {
+        if (episodePanel) {
+            episodePanel.remove();
+            episodePanel = null;
+        }
+        const scrollbarStyle = document.getElementById('hotstar-scrollbar-style');
+        if (scrollbarStyle) {
+            scrollbarStyle.remove();
+        }
+        log('Episode panel cleaned up');
+    }
+
+    // Setup event listeners for search input
+    function setupSearchEventListeners() {
+        const searchInput = document.getElementById('hotstar-episode-search');
+        if (!searchInput) {
+            log('Search input element not found, retrying...');
+            setTimeout(setupSearchEventListeners, 100);
+            return;
+        }
+
+        // Real-time filtering as user types
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value;
+            filterEpisodesBySearch(searchTerm);
+        });
+
+        // Enter key: navigate to exact episode match
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const searchTerm = searchInput.value.trim();
+
+                if (!searchTerm) {
+                    showNotification('Please enter an episode number');
+                    return;
+                }
+
+                const cleanSearch = searchTerm.toLowerCase().replace(/^e/, '');
+                const episodeList = document.getElementById('hotstar-episode-list');
+
+                // Find button with exact match
+                const buttons = episodeList.querySelectorAll('button[data-episode-number]');
+                let foundButton = null;
+                let foundCard = null;
+
+                buttons.forEach(btn => {
+                    if (btn.dataset.episodeNumber === cleanSearch) {
+                        foundButton = btn;
+                    }
+                });
+
+                if (foundButton) {
+                    // Find the corresponding episode card in the DOM
+                    const episodeCards = document.querySelectorAll('li[data-testid="episode-card"]');
+                    const episodeIndex = parseInt(foundButton.dataset.episodeIndex);
+
+                    if (episodeIndex < episodeCards.length) {
+                        foundCard = episodeCards[episodeIndex];
+                        scrollToEpisode(foundCard, cleanSearch);
+                        searchInput.blur();
+                        log(`Navigated to exact episode ${cleanSearch}`);
+                    } else {
+                        log(`ERROR: Could not find episode card at index ${episodeIndex}`);
+                        showNotification(`Could not navigate to episode ${cleanSearch}`);
+                    }
+                } else {
+                    showNotification(`Episode ${cleanSearch} not found`);
+                    log(`Episode ${cleanSearch} not found in loaded episodes`);
+                }
+            }
+        });
+
+        log('Search event listeners set up');
+    }
+
     // Initialize
     function init() {
         log('Initializing auto View More clicker for Hotstar');
@@ -1182,10 +1379,12 @@
         if (document.body) {
             createControlButton();
             createEpisodePanel();
+            setupSearchEventListeners();
         } else {
             document.addEventListener('DOMContentLoaded', () => {
                 createControlButton();
                 createEpisodePanel();
+                setupSearchEventListeners();
             });
         }
 
@@ -1242,6 +1441,10 @@
 
         // Listen for visibility changes
         document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        // Clean up on page navigation
+        window.addEventListener('beforeunload', cleanupEpisodePanel);
+        document.addEventListener('pagehide', cleanupEpisodePanel);
 
         log('='.repeat(60));
         log('Auto-clicker initialized and will work in background tabs');
@@ -1372,6 +1575,25 @@
             });
             console.log(`Found ${matches.length} elements containing "${searchText}"`);
             return matches;
+        },
+        // Episode search functions
+        filterEpisodes: (searchTerm) => {
+            filterEpisodesBySearch(searchTerm);
+        },
+        clearSearch: () => {
+            const searchInput = document.getElementById('hotstar-episode-search');
+            if (searchInput) {
+                searchInput.value = '';
+                filterEpisodesBySearch('');
+                log('Search cleared');
+            }
+        },
+        searchEpisode: (episodeNumber) => {
+            const searchInput = document.getElementById('hotstar-episode-search');
+            if (searchInput) {
+                searchInput.value = episodeNumber.toString();
+                filterEpisodesBySearch(episodeNumber.toString());
+            }
         }
     };
 
@@ -1379,5 +1601,7 @@
     log('Use window.hotstarAutoViewMore.findAllButtons() to see all buttons on page');
     log('Use window.hotstarAutoViewMore.searchByText("view more") to search for specific text');
     log('Use window.hotstarAutoViewMore.refreshEpisodeList() to manually refresh episode list');
-    log('Episode navigation panel is on the right side - click episode numbers to jump!');
+    log('Use window.hotstarAutoViewMore.filterEpisodes(term) to search episodes by number');
+    log('Use window.hotstarAutoViewMore.clearSearch() to clear the episode search');
+    log('Episode navigation panel is on the right side - type to search, press Enter to navigate!');
 })();

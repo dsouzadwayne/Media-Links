@@ -203,6 +203,7 @@ function processCrewTab(crewTab, colors) {
       if (textSlugList && textSlugList.classList.contains('text-sluglist')) {
         addBulkCopyButton(heading, crewTab, colors, roleName, textSlugList);
       }
+      // Note: Some sections may not have text-sluglist; this is normal
     }
   });
 
@@ -223,6 +224,7 @@ function processDetailsTab(detailsTab, colors) {
       if (textSlugList && textSlugList.classList.contains('text-sluglist')) {
         addBulkCopyButton(heading, detailsTab, colors, sectionName, textSlugList);
       }
+      // Note: Some sections like "Alternative Titles" may not have text-sluglist; this is normal
     }
   });
 
@@ -243,6 +245,7 @@ function processGenresTab(genresTab, colors) {
       if (textSlugList && textSlugList.classList.contains('text-sluglist')) {
         addBulkCopyButton(heading, genresTab, colors, sectionName, textSlugList);
       }
+      // Note: Some sections may not have text-sluglist; this is normal
     }
   });
 
@@ -633,6 +636,15 @@ function copyCastData(castMembers, count, content, outputFormat, sectionName) {
 
     case 'comma':
       // Comma separated: Name:Role,Name:Role
+      text = limitedMembers.map(member => {
+        if (content === 'name-only') return member.name;
+        if (content === 'role-only') return member.role || '(No role info)';
+        return member.role ? `${member.name}:${member.role}` : member.name;
+      }).join(',');
+      break;
+
+    case 'colon':
+      // Colon format: Name:Role,Name:Role
       text = limitedMembers.map(member => {
         if (content === 'name-only') return member.name;
         if (content === 'role-only') return member.role || '(No role info)';

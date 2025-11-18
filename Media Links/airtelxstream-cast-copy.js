@@ -10,6 +10,52 @@
         theme: 'light' // Will be updated from storage
     };
 
+    // Configurable timing constants
+    const TIMING = {
+        dialogLoadDelay: 1500,
+        tabRetryInterval: 500,
+        maxTabRetries: 5,
+        navigationDelay: 500
+    };
+
+    // Observer tracking
+    const OBSERVERS = {
+        mutation: null,
+        theme: null,
+        tab: null,
+        error: null
+    };
+
+    // Check if Chrome storage API is available
+    function isChromeStorageAvailable() {
+        try {
+            return typeof chrome !== 'undefined' &&
+                   typeof chrome.storage !== 'undefined' &&
+                   typeof chrome.storage.sync !== 'undefined';
+        } catch (error) {
+            log('Chrome storage check error:', error);
+            return false;
+        }
+    }
+
+    // Escape special characters in HTML attributes
+    function escapeAttribute(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/'/g, '&#39;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+    }
+
+    // Escape HTML special characters to prevent injection
+    function escapeHTML(str) {
+        if (typeof str !== 'string') return '';
+        const div = document.createElement('div');
+        div.textContent = str;  // textContent automatically escapes
+        return div.innerHTML;
+    }
+
     // Theme colors mapping
     const THEME_COLORS = {
         light: {
@@ -60,12 +106,9 @@
         }
     }
 
-    // Get current theme
+    // Get current theme - checks DOM first (most up-to-date), then config
     function getCurrentTheme() {
-        if (CONFIG.theme && CONFIG.theme !== 'light') {
-            return THEME_COLORS[CONFIG.theme] || THEME_COLORS.light;
-        }
-
+        // First priority: Check DOM attributes (most up-to-date source)
         const htmlElement = document.documentElement;
         const dataTheme = htmlElement.getAttribute('data-theme');
         const bodyTheme = document.body.getAttribute('data-theme');
@@ -73,6 +116,7 @@
 
         let theme = dataTheme || bodyTheme || null;
 
+        // Try to extract theme from class names if not found in attributes
         if (!theme) {
             for (const themeKey of Object.keys(THEME_COLORS)) {
                 if (classTheme.includes(themeKey)) {
@@ -82,7 +126,8 @@
             }
         }
 
-        theme = theme || 'light';
+        // Finally, use CONFIG.theme if DOM detection found nothing
+        theme = theme || CONFIG.theme || 'light';
         return THEME_COLORS[theme] || THEME_COLORS.light;
     }
 
@@ -136,33 +181,58 @@
 
     // Copy text to clipboard
     function copyToClipboard(text, successMessage) {
+        // Check if clipboard API is available
+        if (!navigator.clipboard) {
+            showToast('Clipboard not available (HTTPS required)', 'error');
+            log('Clipboard API not available');
+            return;
+        }
+
         navigator.clipboard.writeText(text).then(() => {
             log('Copied to clipboard:', text);
             showToast(successMessage || 'Copied to clipboard', 'success');
         }).catch((error) => {
             log('Error copying to clipboard:', error);
-            showToast('Failed to copy', 'error');
+            showToast('Failed to copy: ' + (error.message || 'Unknown error'), 'error');
         });
+    }
+
+    // Helper function to verify it's actually a cast section
+    function hasMinimumCastTiles(element) {
+        const tiles = element.querySelectorAll('.staring-tile, .starring-tile, section[role="link"]');
+        // Must have at least 1 tile to be considered valid cast section
+        return tiles.length >= 1;
     }
 
     // Find the cast section using multiple selectors
     function findCastSection() {
-        // Try multiple selectors for different page layouts
-        const selectors = [
-            '.staring-rail-wrapper',  // Original structure from your HTML
-            '.starring-rail-wrapper',  // Possible typo correction
-            '[class*="starring"]',     // Any class containing "starring"
-            '[class*="cast"]',         // Any class containing "cast"
-            '.cast-section',           // From WebFetch
-            '[class*="artist"]',       // Artist related
-            '.cdp-cast-section',       // Common pattern
-            '.rail-wrapper'            // Generic rail
+        // Try specific selectors first (most reliable)
+        const specificSelectors = [
+            '.staring-rail-wrapper',
+            '.starring-rail-wrapper',
+            '.cdp-cast-section',
+            '[class*="cast"][class*="rail"]',  // Must have BOTH cast AND rail
         ];
 
-        for (const selector of selectors) {
+        // Try specific selectors
+        for (const selector of specificSelectors) {
             const element = document.querySelector(selector);
-            if (element) {
+            if (element && hasMinimumCastTiles(element)) {
                 log(`Found cast section using selector: ${selector}`);
+                return element;
+            }
+        }
+
+        // Fallback to more generic selectors only if no specific ones matched
+        const fallbackSelectors = [
+            '[class*="artist"]',
+            '.rail-wrapper',
+        ];
+
+        for (const selector of fallbackSelectors) {
+            const element = document.querySelector(selector);
+            if (element && hasMinimumCastTiles(element)) {
+                log(`Found cast section using fallback selector: ${selector}`);
                 return element;
             }
         }
@@ -212,9 +282,13 @@
                     }
                 }
 
+                // Sanitize name to prevent HTML injection
+                name = escapeHTML(name);
+
                 // Get role type (Actor, Director, etc.)
                 const roleTypeElem = tile.querySelector('.role-type');
-                const roleType = roleTypeElem ? roleTypeElem.textContent.trim() : '';
+                let roleType = roleTypeElem ? roleTypeElem.textContent.trim() : '';
+                roleType = escapeHTML(roleType);  // Sanitize role too
 
                 if (name) {
                     castData.push({
@@ -253,10 +327,31 @@
         return formatted.trim();
     }
 
+    // Fallback light theme colors
+    function getDialogColors_Light() {
+        return {
+            background: '#ffffff',
+            text: '#1a1a1a',
+            border: '#e0e0e0',
+            inputBg: '#f8f8f8',
+            inputBorder: '#d0d0d0',
+            cancelBg: '#e5e5e5',
+            cancelHover: '#d5d5d5',
+            cancelText: '#333333'
+        };
+    }
+
     // Get dialog colors based on current theme
     function getDialogColors() {
         const theme = getCurrentTheme();
-        const isDark = theme.bg !== '#ffffff';
+
+        // Verify theme exists and has required properties
+        if (!theme || typeof theme !== 'object') {
+            log('Warning: Invalid theme object, using light theme colors');
+            return getDialogColors_Light();
+        }
+
+        const isDark = theme.bg && theme.bg !== '#ffffff';
 
         if (isDark) {
             return {
@@ -270,16 +365,7 @@
                 cancelText: '#c7d2fe'
             };
         } else {
-            return {
-                background: '#ffffff',
-                text: '#1a1a1a',
-                border: '#e0e0e0',
-                inputBg: '#f8f8f8',
-                inputBorder: '#d0d0d0',
-                cancelBg: '#e5e5e5',
-                cancelHover: '#d5d5d5',
-                cancelText: '#333333'
-            };
+            return getDialogColors_Light();
         }
     }
 
@@ -374,17 +460,13 @@
                 <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Number of cast members:</label>
                 <input type="number" id="airtel-cast-count" min="1" max="${castData.length}" value="${Math.min(defaults.count, castData.length)}"
                     style="width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px; font-size: 14px;
-                    background: ${dialogColors.inputBg}; color: ${dialogColors.text}; transition: all 0.2s;"
-                    onfocus="this.style.borderColor='${colors.primary}'; this.style.boxShadow='0 0 0 3px ${colors.primary}33'"
-                    onblur="this.style.borderColor='${dialogColors.inputBorder}'; this.style.boxShadow='none'">
+                    background: ${dialogColors.inputBg}; color: ${dialogColors.text}; transition: all 0.2s; box-sizing: border-box;">
             </div>
             <div style="margin-bottom: 18px;">
                 <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Content:</label>
                 <select id="airtel-copy-content"
                     style="width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px; font-size: 14px;
-                    background: ${dialogColors.inputBg}; color: ${dialogColors.text}; cursor: pointer; transition: all 0.2s;"
-                    onfocus="this.style.borderColor='${colors.primary}'; this.style.boxShadow='0 0 0 3px ${colors.primary}33'"
-                    onblur="this.style.borderColor='${dialogColors.inputBorder}'; this.style.boxShadow='none'">
+                    background: ${dialogColors.inputBg}; color: ${dialogColors.text}; cursor: pointer; transition: all 0.2s; box-sizing: border-box;">
                     <option value="name-role" ${defaults.content === 'name-role' ? 'selected' : ''}>Name + Role Type</option>
                     <option value="name-only" ${defaults.content === 'name-only' ? 'selected' : ''}>Name Only</option>
                     <option value="role-only" ${defaults.content === 'role-only' ? 'selected' : ''}>Role Type Only</option>
@@ -394,9 +476,7 @@
                 <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Output Format:</label>
                 <select id="airtel-output-format"
                     style="width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px; font-size: 14px;
-                    background: ${dialogColors.inputBg}; color: ${dialogColors.text}; cursor: pointer; transition: all 0.2s;"
-                    onfocus="this.style.borderColor='${colors.primary}'; this.style.boxShadow='0 0 0 3px ${colors.primary}33'"
-                    onblur="this.style.borderColor='${dialogColors.inputBorder}'; this.style.boxShadow='none'">
+                    background: ${dialogColors.inputBg}; color: ${dialogColors.text}; cursor: pointer; transition: all 0.2s; box-sizing: border-box;">
                     <option value="newline" ${defaults.output === 'newline' ? 'selected' : ''}>Line by line (Name - Role)</option>
                     <option value="comma" ${defaults.output === 'comma' ? 'selected' : ''}>Comma separated (Name:Role,Name:Role)</option>
                     <option value="csv" ${defaults.output === 'csv' ? 'selected' : ''}>CSV (Name,Role per line)</option>
@@ -407,16 +487,12 @@
             <div style="display: flex; gap: 12px;">
                 <button id="airtel-copy-btn"
                     style="flex: 1; padding: 14px; background: ${colors.primary}; border: none; border-radius: 8px; cursor: pointer;
-                    font-weight: 700; font-size: 15px; color: #ffffff; transition: all 0.2s; box-shadow: 0 2px 8px ${colors.primary}44;"
-                    onmouseover="this.style.background='${colors.primaryHover}'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px ${colors.primary}66'"
-                    onmouseout="this.style.background='${colors.primary}'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px ${colors.primary}44'">
+                    font-weight: 700; font-size: 15px; color: #ffffff; transition: all 0.2s; box-shadow: 0 2px 8px ${colors.primary}44;">
                     Copy
                 </button>
                 <button id="airtel-cancel-btn"
                     style="flex: 1; padding: 14px; background: ${dialogColors.cancelBg}; border: none; border-radius: 8px; cursor: pointer;
-                    font-weight: 600; font-size: 15px; color: ${dialogColors.cancelText}; transition: all 0.2s;"
-                    onmouseover="this.style.background='${dialogColors.cancelHover}'; this.style.transform='translateY(-2px)'"
-                    onmouseout="this.style.background='${dialogColors.cancelBg}'; this.style.transform='translateY(0)'">
+                    font-weight: 600; font-size: 15px; color: ${dialogColors.cancelText}; transition: all 0.2s;">
                     Cancel
                 </button>
             </div>
@@ -434,6 +510,73 @@
                 backdrop.parentNode.removeChild(backdrop);
             }
         };
+
+        // Add focus/blur listeners to number input
+        const castCountInput = dialog.querySelector('#airtel-cast-count');
+        if (castCountInput) {
+            castCountInput.addEventListener('focus', () => {
+                castCountInput.style.borderColor = colors.primary;
+                castCountInput.style.boxShadow = `0 0 0 3px ${colors.primary}33`;
+            });
+            castCountInput.addEventListener('blur', () => {
+                castCountInput.style.borderColor = dialogColors.inputBorder;
+                castCountInput.style.boxShadow = 'none';
+            });
+        }
+
+        // Add focus/blur listeners to content select
+        const contentSelect = dialog.querySelector('#airtel-copy-content');
+        if (contentSelect) {
+            contentSelect.addEventListener('focus', () => {
+                contentSelect.style.borderColor = colors.primary;
+                contentSelect.style.boxShadow = `0 0 0 3px ${colors.primary}33`;
+            });
+            contentSelect.addEventListener('blur', () => {
+                contentSelect.style.borderColor = dialogColors.inputBorder;
+                contentSelect.style.boxShadow = 'none';
+            });
+        }
+
+        // Add focus/blur listeners to output format select
+        const outputFormatSelect = dialog.querySelector('#airtel-output-format');
+        if (outputFormatSelect) {
+            outputFormatSelect.addEventListener('focus', () => {
+                outputFormatSelect.style.borderColor = colors.primary;
+                outputFormatSelect.style.boxShadow = `0 0 0 3px ${colors.primary}33`;
+            });
+            outputFormatSelect.addEventListener('blur', () => {
+                outputFormatSelect.style.borderColor = dialogColors.inputBorder;
+                outputFormatSelect.style.boxShadow = 'none';
+            });
+        }
+
+        // Add hover listeners to copy button
+        const copyBtn = dialog.querySelector('#airtel-copy-btn');
+        if (copyBtn) {
+            copyBtn.addEventListener('mouseenter', () => {
+                copyBtn.style.background = colors.primaryHover;
+                copyBtn.style.transform = 'translateY(-2px)';
+                copyBtn.style.boxShadow = `0 4px 12px ${colors.primary}66`;
+            });
+            copyBtn.addEventListener('mouseleave', () => {
+                copyBtn.style.background = colors.primary;
+                copyBtn.style.transform = 'translateY(0)';
+                copyBtn.style.boxShadow = `0 2px 8px ${colors.primary}44`;
+            });
+        }
+
+        // Add hover listeners to cancel button
+        const cancelBtn = dialog.querySelector('#airtel-cancel-btn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('mouseenter', () => {
+                cancelBtn.style.background = dialogColors.cancelHover;
+                cancelBtn.style.transform = 'translateY(-2px)';
+            });
+            cancelBtn.addEventListener('mouseleave', () => {
+                cancelBtn.style.background = dialogColors.cancelBg;
+                cancelBtn.style.transform = 'translateY(0)';
+            });
+        }
 
         // Close on backdrop click
         backdrop.addEventListener('click', closeDialog);
@@ -466,6 +609,12 @@
 
         if (limitedCast.length === 0) {
             showToast('No cast members found', 'error');
+            return;
+        }
+
+        // Check clipboard availability first
+        if (!navigator.clipboard) {
+            showToast('Clipboard not available (HTTPS required)', 'error');
             return;
         }
 
@@ -538,7 +687,7 @@
             log('Copied cast data:', text);
         }).catch(err => {
             log('Failed to copy:', err);
-            showToast('Failed to copy to clipboard', 'error');
+            showToast('Failed to copy: ' + (err.message || 'Unknown error'), 'error');
         });
     }
 
@@ -837,9 +986,19 @@
     // Load theme from storage
     function loadThemeFromStorage() {
         return new Promise((resolve) => {
+            if (!isChromeStorageAvailable()) {
+                log('Chrome storage not available, using default theme');
+                CONFIG.theme = 'light';
+                resolve(CONFIG.theme);
+                return;
+            }
+
             try {
                 chrome.storage.sync.get(['theme'], (result) => {
-                    if (result && result.theme) {
+                    if (chrome.runtime.lastError) {
+                        log('Storage error:', chrome.runtime.lastError);
+                        CONFIG.theme = 'light';
+                    } else if (result && result.theme) {
                         CONFIG.theme = result.theme;
                         log('Loaded theme from storage:', CONFIG.theme);
                     } else {
@@ -849,6 +1008,7 @@
                 });
             } catch (error) {
                 log('Could not access chrome storage:', error);
+                CONFIG.theme = 'light';
                 resolve(CONFIG.theme);
             }
         });
@@ -856,6 +1016,11 @@
 
     // Setup theme listener
     function setupThemeListener() {
+        // Disconnect existing observer
+        if (OBSERVERS.theme) {
+            OBSERVERS.theme.disconnect();
+        }
+
         const htmlElement = document.documentElement;
         const observer = new MutationObserver((mutations) => {
             mutations.forEach((mutation) => {
@@ -878,6 +1043,7 @@
             });
         }
 
+        OBSERVERS.theme = observer;
         log('Theme listener set up');
     }
 
@@ -899,6 +1065,13 @@
 
     // Setup MutationObserver to detect when cast section loads
     function setupObserver() {
+        // Disconnect existing observer
+        if (OBSERVERS.mutation) {
+            OBSERVERS.mutation.disconnect();
+        }
+
+        let debounceTimeout = null;
+
         const observer = new MutationObserver((mutations) => {
             let shouldCheck = false;
 
@@ -925,8 +1098,8 @@
             });
 
             if (shouldCheck) {
-                clearTimeout(observer.timeout);
-                observer.timeout = setTimeout(() => {
+                clearTimeout(debounceTimeout);
+                debounceTimeout = setTimeout(() => {
                     log('New cast section detected, adding functionality');
                     const castSection = findCastSection();
                     if (castSection) {
@@ -935,7 +1108,7 @@
                     } else {
                         log('Cast section still not found after mutation');
                     }
-                }, 500);
+                }, TIMING.navigationDelay);
             }
         });
 
@@ -944,6 +1117,7 @@
             subtree: true
         });
 
+        OBSERVERS.mutation = observer;
         log('MutationObserver set up for cast section detection');
         return observer;
     }
@@ -971,6 +1145,11 @@
 
     // Setup observer for the error page retry button
     function setupErrorRetryObserver() {
+        // Disconnect existing error observer
+        if (OBSERVERS.error) {
+            OBSERVERS.error.disconnect();
+        }
+
         const bottomTileHolder = document.querySelector('#bottom-tile-holder, .bottom-tile-area');
         if (!bottomTileHolder) {
             log('Bottom tile holder not found');
@@ -996,7 +1175,7 @@
                             addCopyButton();
                             addClickToCopyToCastNames();
                         }
-                    }, 2000);
+                    }, TIMING.dialogLoadDelay);
                 });
             }
         });
@@ -1006,73 +1185,85 @@
             subtree: true
         });
 
+        OBSERVERS.error = errorObserver;
         log('Error retry observer set up');
     }
 
     // Setup tab observer to detect when Cast & more tab is clicked
     function setupTabObserver() {
-        const tabsHolder = document.querySelector('#tabs-holder, .tab-holder-area');
-        if (!tabsHolder) {
-            log('Tabs holder not found, will retry in 500ms');
-            setTimeout(setupTabObserver, 500);
-            return;
-        }
+        // Wait for tabs to be available, with maximum retries
+        let retries = 0;
+        const maxRetries = TIMING.maxTabRetries;
 
-        const castTab = document.querySelector('#cdp-tab-2');
-        if (!castTab) {
-            log('Cast & more tab not found, will retry in 500ms');
-            setTimeout(setupTabObserver, 500);
-            return;
-        }
+        const waitForTabs = () => {
+            const tabsHolder = document.querySelector('#tabs-holder, .tab-holder-area');
+            const castTab = document.querySelector('#cdp-tab-2');
 
-        log('Setting up tab observer for Cast & more tab');
-
-        // Create observer for tab class changes
-        const tabObserver = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.attributeName === 'class') {
-                    const target = mutation.target;
-                    if (target.id === 'cdp-tab-2' && target.classList.contains('active')) {
-                        log('Cast & more tab activated, waiting for content to load');
-                        // Wait a bit for content to load, then add buttons
-                        setTimeout(() => {
-                            const castSection = findCastSection();
-                            if (castSection) {
-                                log('Cast section loaded, adding functionality');
-                                addCopyButton();
-                                addClickToCopyToCastNames();
-                            } else {
-                                log('Cast section not loaded yet (may show error page), waiting for retry or DOM changes');
-                                // Setup error retry observer
-                                setupErrorRetryObserver();
-                            }
-                        }, 1500);
-                    }
-                }
-            });
-        });
-
-        tabObserver.observe(castTab, {
-            attributes: true,
-            attributeFilter: ['class']
-        });
-
-        log('Tab observer set up successfully');
-
-        // Also add click listener to the cast tab
-        castTab.addEventListener('click', () => {
-            log('Cast & more tab clicked, waiting for content');
-            setTimeout(() => {
-                const castSection = findCastSection();
-                if (castSection) {
-                    addCopyButton();
-                    addClickToCopyToCastNames();
+            if (!tabsHolder || !castTab) {
+                retries++;
+                if (retries < maxRetries) {
+                    log(`Tabs not found, retry ${retries}/${maxRetries}`);
+                    setTimeout(waitForTabs, TIMING.tabRetryInterval);
                 } else {
-                    log('Content not loaded, setting up error retry observer');
-                    setupErrorRetryObserver();
+                    log('Max retries for tabs reached, giving up');
                 }
-            }, 1500);
-        });
+                return;
+            }
+
+            log('Setting up tab observer for Cast & more tab');
+
+            // Create observer for tab class changes
+            const tabObserver = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.attributeName === 'class') {
+                        const target = mutation.target;
+                        if (target.id === 'cdp-tab-2' && target.classList.contains('active')) {
+                            log('Cast & more tab activated, waiting for content to load');
+                            // Wait a bit for content to load, then add buttons
+                            setTimeout(() => {
+                                const castSection = findCastSection();
+                                if (castSection) {
+                                    log('Cast section loaded, adding functionality');
+                                    addCopyButton();
+                                    addClickToCopyToCastNames();
+                                } else {
+                                    log('Cast section not loaded yet (may show error page), waiting for retry or DOM changes');
+                                    // Setup error retry observer
+                                    setupErrorRetryObserver();
+                                }
+                            }, TIMING.dialogLoadDelay);
+                        }
+                    }
+                });
+            });
+
+            tabObserver.observe(castTab, {
+                attributes: true,
+                attributeFilter: ['class']
+            });
+
+            OBSERVERS.tab = tabObserver;
+
+            log('Tab observer set up successfully');
+
+            // Also add click listener to the cast tab
+            castTab.addEventListener('click', () => {
+                log('Cast & more tab clicked, waiting for content');
+                setTimeout(() => {
+                    const castSection = findCastSection();
+                    if (castSection) {
+                        addCopyButton();
+                        addClickToCopyToCastNames();
+                    } else {
+                        log('Content not loaded, setting up error retry observer');
+                        setupErrorRetryObserver();
+                    }
+                }, TIMING.dialogLoadDelay);
+            });
+        };
+
+        // Start waiting for tabs
+        waitForTabs();
     }
 
     // Initialize
@@ -1107,7 +1298,7 @@
 
                     // Setup general observer for dynamic content
                     setupObserver();
-                }, 1000);
+                }, TIMING.dialogLoadDelay);
             });
         } else {
             setTimeout(() => {
@@ -1123,7 +1314,7 @@
 
                 // Setup general observer for dynamic content
                 setupObserver();
-            }, 1000);
+            }, TIMING.dialogLoadDelay);
         }
     }
 
@@ -1198,6 +1389,17 @@
         console.log('=== End Debug ===');
     }
 
+    // Cleanup all observers
+    function cleanupObservers() {
+        Object.keys(OBSERVERS).forEach(key => {
+            if (OBSERVERS[key]) {
+                OBSERVERS[key].disconnect();
+                OBSERVERS[key] = null;
+            }
+        });
+        log('All observers disconnected');
+    }
+
     // Expose control to window for debugging
     window.airtelxstreamCastCopy = {
         refresh: () => {
@@ -1208,7 +1410,8 @@
         format: formatCastData,
         test: testCastSection,
         enableDebug: () => { CONFIG.debug = true; log('Debug enabled'); },
-        disableDebug: () => { CONFIG.debug = false; }
+        disableDebug: () => { CONFIG.debug = false; },
+        cleanup: cleanupObservers
     };
 
     log('Cast copy feature initialized');

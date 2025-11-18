@@ -3,6 +3,14 @@
 (function() {
   'use strict';
 
+  // Z-index layering constants
+  const Z_INDEX = {
+    TOOLTIP: 10000,
+    DIALOG_BACKDROP: 99999,
+    DIALOG: 100000,
+    NOTIFICATION: 100001
+  };
+
   // Check if extension context is still valid
   function isExtensionContextValid() {
     try {
@@ -361,6 +369,20 @@
     });
   }
 
+  // Helper function to process all Apple TV elements at once
+  function processAllAppleTVElements(colors, isLivePage) {
+    console.log('Processing all Apple TV elements...');
+    processSavedPageCastAndCrew(colors);
+
+    if (isLivePage) {
+      processTitle(colors);
+      processPersonnel(colors);
+      processDescription(colors);
+      processMetadata(colors);
+      processEpisodes(colors);
+    }
+  }
+
   // SAVED PAGE PROCESSING FUNCTIONS
   function processSavedPageCastAndCrew(colors) {
     console.log('Processing saved page Cast & Crew...');
@@ -389,7 +411,7 @@
       // Add bulk copy button to the header
       const button = document.createElement('button');
       button.className = 'media-links-appletv-bulk-copy-btn';
-      button.innerHTML = '📋 Copy All';
+      button.textContent = '📋 Copy All';
       button.style.cssText = `
         margin-left: 10px;
         padding: 6px 12px;
@@ -541,6 +563,78 @@
     });
   }
 
+  // Helper function to safely create dialog inputs
+  function createDialogInput(id, type, min, max, value, placeholder, dialogColors, colors, label) {
+    const container = document.createElement('div');
+    container.style.marginBottom = '18px';
+
+    const labelEl = document.createElement('label');
+    labelEl.textContent = label;
+    labelEl.style.cssText = `display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;`;
+    container.appendChild(labelEl);
+
+    const input = document.createElement('input');
+    input.type = type;
+    input.id = id;
+    if (min) input.min = min;
+    if (max) input.max = max;
+    if (value) input.value = value;
+    if (placeholder) input.placeholder = placeholder;
+
+    input.style.cssText = `width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px;
+      font-size: 14px; background: ${dialogColors.inputBg}; color: ${dialogColors.text}; transition: all 0.2s;`;
+
+    input.addEventListener('focus', () => {
+      input.style.borderColor = colors.button;
+      input.style.boxShadow = `0 0 0 3px ${colors.button}33`;
+    });
+
+    input.addEventListener('blur', () => {
+      input.style.borderColor = dialogColors.inputBorder;
+      input.style.boxShadow = 'none';
+    });
+
+    container.appendChild(input);
+    return container;
+  }
+
+  // Helper function to safely create dialog select
+  function createDialogSelect(id, options, defaultValue, dialogColors, colors, label) {
+    const container = document.createElement('div');
+    container.style.marginBottom = '25px';
+
+    const labelEl = document.createElement('label');
+    labelEl.textContent = label;
+    labelEl.style.cssText = `display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;`;
+    container.appendChild(labelEl);
+
+    const select = document.createElement('select');
+    select.id = id;
+    select.style.cssText = `width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px;
+      font-size: 14px; background: ${dialogColors.inputBg}; color: ${dialogColors.text}; cursor: pointer; transition: all 0.2s;`;
+
+    options.forEach(opt => {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.label;
+      if (opt.value === defaultValue) option.selected = true;
+      select.appendChild(option);
+    });
+
+    select.addEventListener('focus', () => {
+      select.style.borderColor = colors.button;
+      select.style.boxShadow = `0 0 0 3px ${colors.button}33`;
+    });
+
+    select.addEventListener('blur', () => {
+      select.style.borderColor = dialogColors.inputBorder;
+      select.style.boxShadow = 'none';
+    });
+
+    container.appendChild(select);
+    return container;
+  }
+
   async function showSavedPageCopyDialog(container) {
     const colors = await getThemeColors();
     const dialogColors = getDialogColors(colors);
@@ -602,7 +696,7 @@
       width: 100%;
       height: 100%;
       background: rgba(0,0,0,0.7);
-      z-index: 99999;
+      z-index: ${Z_INDEX.DIALOG_BACKDROP};
       backdrop-filter: blur(4px);
       animation: fadeIn 0.2s ease-out;
     `;
@@ -618,63 +712,92 @@
       padding: 30px;
       border-radius: 12px;
       box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-      z-index: 100000;
+      z-index: ${Z_INDEX.DIALOG};
       min-width: 400px;
       max-width: 500px;
       border: 1px solid ${dialogColors.border};
       animation: slideIn 0.3s ease-out;
     `;
 
-    dialog.innerHTML = `
-      <h3 style="margin: 0 0 20px 0; color: ${dialogColors.text}; font-size: 20px; font-weight: 700; border-bottom: 2px solid ${colors.button}; padding-bottom: 10px;">
-        📋 Copy Cast & Crew
-      </h3>
-      <div style="margin-bottom: 18px;">
-        <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Number of items:</label>
-        <input type="number" id="appletv-saved-item-count" min="1" max="1000" value="${Math.min(defaults.count, items.length)}"
-          style="width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px; font-size: 14px;
-          background: ${dialogColors.inputBg}; color: ${dialogColors.text}; transition: all 0.2s;"
-          onfocus="this.style.borderColor='${colors.button}'; this.style.boxShadow='0 0 0 3px ${colors.button}33'"
-          onblur="this.style.borderColor='${dialogColors.inputBorder}'; this.style.boxShadow='none'">
-      </div>
-      <div style="margin-bottom: 18px;">
-        <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Include Roles:</label>
-        <label style="display: flex; align-items: center; cursor: pointer;">
-          <input type="checkbox" id="appletv-saved-include-roles" ${defaults.includeRoles ? 'checked' : ''}
-            style="margin-right: 8px; width: 18px; height: 18px; cursor: pointer;">
-          <span style="color: ${dialogColors.text};">Include character/role names</span>
-        </label>
-      </div>
-      <div style="margin-bottom: 25px;">
-        <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Output Format:</label>
-        <select id="appletv-saved-output-format"
-          style="width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px; font-size: 14px;
-          background: ${dialogColors.inputBg}; color: ${dialogColors.text}; cursor: pointer; transition: all 0.2s;"
-          onfocus="this.style.borderColor='${colors.button}'; this.style.boxShadow='0 0 0 3px ${colors.button}33'"
-          onblur="this.style.borderColor='${dialogColors.inputBorder}'; this.style.boxShadow='none'">
-          <option value="newline" ${defaults.output === 'newline' ? 'selected' : ''}>Line by line</option>
-          <option value="comma" ${defaults.output === 'comma' ? 'selected' : ''}>Comma separated</option>
-          <option value="colon" ${defaults.output === 'colon' ? 'selected' : ''}>Name:Role format</option>
-          <option value="json" ${defaults.output === 'json' ? 'selected' : ''}>JSON Array</option>
-        </select>
-      </div>
-      <div style="display: flex; gap: 12px;">
-        <button id="appletv-saved-copy-btn"
-          style="flex: 1; padding: 14px; background: ${colors.button}; border: none; border-radius: 8px; cursor: pointer;
-          font-weight: 700; font-size: 15px; color: ${colors.buttonText}; transition: all 0.2s; box-shadow: 0 2px 8px ${colors.button}44;"
-          onmouseover="this.style.background='${colors.buttonHover}'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px ${colors.button}66'"
-          onmouseout="this.style.background='${colors.button}'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px ${colors.button}44'">
-          Copy
-        </button>
-        <button id="appletv-saved-cancel-btn"
-          style="flex: 1; padding: 14px; background: ${dialogColors.cancelBg}; border: none; border-radius: 8px; cursor: pointer;
-          font-weight: 600; font-size: 15px; color: ${dialogColors.cancelText}; transition: all 0.2s;"
-          onmouseover="this.style.background='${dialogColors.cancelHover}'; this.style.transform='translateY(-2px)'"
-          onmouseout="this.style.background='${dialogColors.cancelBg}'; this.style.transform='translateY(0)'">
-          Cancel
-        </button>
-      </div>
-    `;
+
+    // Build dialog content using safe DOM methods
+    const header = document.createElement('h3');
+    header.textContent = '📋 Copy Cast & Crew';
+    header.style.cssText = `margin: 0 0 20px 0; color: ${dialogColors.text}; font-size: 20px; font-weight: 700; border-bottom: 2px solid ${colors.button}; padding-bottom: 10px;`;
+
+    const itemCountInput = createDialogInput('appletv-saved-item-count', 'number', '1', '1000', Math.min(defaults.count, items.length), null, dialogColors, colors, 'Number of items:');
+
+    const includeRolesDiv = document.createElement('div');
+    includeRolesDiv.style.marginBottom = '18px';
+    const rolesLabel = document.createElement('label');
+    rolesLabel.textContent = 'Include Roles:';
+    rolesLabel.style.cssText = `display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;`;
+    const rolesCheckboxLabel = document.createElement('label');
+    rolesCheckboxLabel.style.cssText = 'display: flex; align-items: center; cursor: pointer;';
+    const rolesCheckbox = document.createElement('input');
+    rolesCheckbox.type = 'checkbox';
+    rolesCheckbox.id = 'appletv-saved-include-roles';
+    rolesCheckbox.checked = defaults.includeRoles;
+    rolesCheckbox.style.marginRight = '8px';
+    rolesCheckbox.style.width = '18px';
+    rolesCheckbox.style.height = '18px';
+    rolesCheckbox.style.cursor = 'pointer';
+    const rolesSpan = document.createElement('span');
+    rolesSpan.textContent = 'Include character/role names';
+    rolesSpan.style.color = dialogColors.text;
+    rolesCheckboxLabel.appendChild(rolesCheckbox);
+    rolesCheckboxLabel.appendChild(rolesSpan);
+    includeRolesDiv.appendChild(rolesLabel);
+    includeRolesDiv.appendChild(rolesCheckboxLabel);
+
+    const outputFormatSelect = createDialogSelect('appletv-saved-output-format', [
+      { value: 'newline', label: 'Line by line' },
+      { value: 'comma', label: 'Comma separated' },
+      { value: 'colon', label: 'Name:Role format' },
+      { value: 'json', label: 'JSON Array' }
+    ], defaults.output, dialogColors, colors, 'Output Format:');
+
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = 'display: flex; gap: 12px;';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.id = 'appletv-saved-copy-btn';
+    copyBtn.textContent = 'Copy';
+    copyBtn.style.cssText = `flex: 1; padding: 14px; background: ${colors.button}; border: none; border-radius: 8px; cursor: pointer;
+      font-weight: 700; font-size: 15px; color: ${colors.buttonText}; transition: all 0.2s; box-shadow: 0 2px 8px ${colors.button}44;`;
+    copyBtn.addEventListener('mouseover', () => {
+      copyBtn.style.background = colors.buttonHover;
+      copyBtn.style.transform = 'translateY(-2px)';
+      copyBtn.style.boxShadow = `0 4px 12px ${colors.button}66`;
+    });
+    copyBtn.addEventListener('mouseout', () => {
+      copyBtn.style.background = colors.button;
+      copyBtn.style.transform = 'translateY(0)';
+      copyBtn.style.boxShadow = `0 2px 8px ${colors.button}44`;
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.id = 'appletv-saved-cancel-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = `flex: 1; padding: 14px; background: ${dialogColors.cancelBg}; border: none; border-radius: 8px; cursor: pointer;
+      font-weight: 600; font-size: 15px; color: ${dialogColors.cancelText}; transition: all 0.2s;`;
+    cancelBtn.addEventListener('mouseover', () => {
+      cancelBtn.style.background = dialogColors.cancelHover;
+      cancelBtn.style.transform = 'translateY(-2px)';
+    });
+    cancelBtn.addEventListener('mouseout', () => {
+      cancelBtn.style.background = dialogColors.cancelBg;
+      cancelBtn.style.transform = 'translateY(0)';
+    });
+
+    buttonContainer.appendChild(copyBtn);
+    buttonContainer.appendChild(cancelBtn);
+
+    dialog.appendChild(header);
+    dialog.appendChild(itemCountInput);
+    dialog.appendChild(includeRolesDiv);
+    dialog.appendChild(outputFormatSelect);
+    dialog.appendChild(buttonContainer);
 
     document.body.appendChild(backdrop);
     document.body.appendChild(dialog);
@@ -693,7 +816,7 @@
     backdrop.addEventListener('click', closeDialog);
 
     // Handle copy
-    dialog.querySelector('#appletv-saved-copy-btn').addEventListener('click', () => {
+    copyBtn.addEventListener('click', () => {
       const count = parseInt(dialog.querySelector('#appletv-saved-item-count').value);
       const includeRoles = dialog.querySelector('#appletv-saved-include-roles').checked;
       const outputFormat = dialog.querySelector('#appletv-saved-output-format').value;
@@ -745,7 +868,7 @@
   function createInlineCopyButton(text, colors, label) {
     const button = document.createElement('button');
     button.className = 'media-links-appletv-inline-copy';
-    button.innerHTML = '📋';
+    button.textContent = '📋';
     button.title = `Copy ${label}`;
     button.style.cssText = `
       margin-left: 8px;
@@ -796,7 +919,7 @@
   function addBulkCopyButton(heading, container, colors, sectionName, selector) {
     const button = document.createElement('button');
     button.className = 'media-links-appletv-bulk-copy-btn';
-    button.innerHTML = '📋 Copy';
+    button.textContent = '📋 Copy';
     button.style.cssText = `
       margin-left: 10px;
       padding: 6px 12px;
@@ -854,7 +977,7 @@
       border-radius: 4px;
       font-size: 12px;
       font-weight: 600;
-      z-index: 10000;
+      z-index: ${Z_INDEX.TOOLTIP};
       pointer-events: none;
       box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     `;
@@ -933,7 +1056,7 @@
       width: 100%;
       height: 100%;
       background: rgba(0,0,0,0.7);
-      z-index: 99999;
+      z-index: ${Z_INDEX.DIALOG_BACKDROP};
       backdrop-filter: blur(4px);
       animation: fadeIn 0.2s ease-out;
     `;
@@ -966,55 +1089,67 @@
       padding: 30px;
       border-radius: 12px;
       box-shadow: 0 10px 40px rgba(0,0,0,0.4);
-      z-index: 100000;
+      z-index: ${Z_INDEX.DIALOG};
       min-width: 400px;
       max-width: 500px;
       border: 1px solid ${dialogColors.border};
       animation: slideIn 0.3s ease-out;
     `;
 
-    dialog.innerHTML = `
-      <h3 style="margin: 0 0 20px 0; color: ${dialogColors.text}; font-size: 20px; font-weight: 700; border-bottom: 2px solid ${colors.button}; padding-bottom: 10px;">
-        📋 Copy ${sectionName}
-      </h3>
-      <div style="margin-bottom: 18px;">
-        <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Number of items:</label>
-        <input type="number" id="appletv-item-count" min="1" max="1000" value="${Math.min(defaults.count, items.length)}"
-          style="width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px; font-size: 14px;
-          background: ${dialogColors.inputBg}; color: ${dialogColors.text}; transition: all 0.2s;"
-          onfocus="this.style.borderColor='${colors.button}'; this.style.boxShadow='0 0 0 3px ${colors.button}33'"
-          onblur="this.style.borderColor='${dialogColors.inputBorder}'; this.style.boxShadow='none'">
-      </div>
-      <div style="margin-bottom: 25px;">
-        <label style="display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;">Output Format:</label>
-        <select id="appletv-output-format"
-          style="width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px; font-size: 14px;
-          background: ${dialogColors.inputBg}; color: ${dialogColors.text}; cursor: pointer; transition: all 0.2s;"
-          onfocus="this.style.borderColor='${colors.button}'; this.style.boxShadow='0 0 0 3px ${colors.button}33'"
-          onblur="this.style.borderColor='${dialogColors.inputBorder}'; this.style.boxShadow='none'">
-          <option value="newline" ${defaults.output === 'newline' ? 'selected' : ''}>Line by line</option>
-          <option value="comma" ${defaults.output === 'comma' ? 'selected' : ''}>Comma separated</option>
-          <option value="colon" ${defaults.output === 'colon' ? 'selected' : ''}>Name:Role format</option>
-          <option value="json" ${defaults.output === 'json' ? 'selected' : ''}>JSON Array</option>
-        </select>
-      </div>
-      <div style="display: flex; gap: 12px;">
-        <button id="appletv-copy-btn"
-          style="flex: 1; padding: 14px; background: ${colors.button}; border: none; border-radius: 8px; cursor: pointer;
-          font-weight: 700; font-size: 15px; color: ${colors.buttonText}; transition: all 0.2s; box-shadow: 0 2px 8px ${colors.button}44;"
-          onmouseover="this.style.background='${colors.buttonHover}'; this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px ${colors.button}66'"
-          onmouseout="this.style.background='${colors.button}'; this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px ${colors.button}44'">
-          Copy
-        </button>
-        <button id="appletv-cancel-btn"
-          style="flex: 1; padding: 14px; background: ${dialogColors.cancelBg}; border: none; border-radius: 8px; cursor: pointer;
-          font-weight: 600; font-size: 15px; color: ${dialogColors.cancelText}; transition: all 0.2s;"
-          onmouseover="this.style.background='${dialogColors.cancelHover}'; this.style.transform='translateY(-2px)'"
-          onmouseout="this.style.background='${dialogColors.cancelBg}'; this.style.transform='translateY(0)'">
-          Cancel
-        </button>
-      </div>
-    `;
+    // Build dialog content using safe DOM methods
+    const header = document.createElement('h3');
+    header.textContent = `📋 Copy ${sectionName}`;
+    header.style.cssText = `margin: 0 0 20px 0; color: ${dialogColors.text}; font-size: 20px; font-weight: 700; border-bottom: 2px solid ${colors.button}; padding-bottom: 10px;`;
+
+    const itemCountInput = createDialogInput('appletv-item-count', 'number', '1', '1000', Math.min(defaults.count, items.length), null, dialogColors, colors, 'Number of items:');
+
+    const outputFormatSelect = createDialogSelect('appletv-output-format', [
+      { value: 'newline', label: 'Line by line' },
+      { value: 'comma', label: 'Comma separated' },
+      { value: 'colon', label: 'Name:Role format' },
+      { value: 'json', label: 'JSON Array' }
+    ], defaults.output, dialogColors, colors, 'Output Format:');
+
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = 'display: flex; gap: 12px;';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.id = 'appletv-copy-btn';
+    copyBtn.textContent = 'Copy';
+    copyBtn.style.cssText = `flex: 1; padding: 14px; background: ${colors.button}; border: none; border-radius: 8px; cursor: pointer;
+      font-weight: 700; font-size: 15px; color: ${colors.buttonText}; transition: all 0.2s; box-shadow: 0 2px 8px ${colors.button}44;`;
+    copyBtn.addEventListener('mouseover', () => {
+      copyBtn.style.background = colors.buttonHover;
+      copyBtn.style.transform = 'translateY(-2px)';
+      copyBtn.style.boxShadow = `0 4px 12px ${colors.button}66`;
+    });
+    copyBtn.addEventListener('mouseout', () => {
+      copyBtn.style.background = colors.button;
+      copyBtn.style.transform = 'translateY(0)';
+      copyBtn.style.boxShadow = `0 2px 8px ${colors.button}44`;
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.id = 'appletv-cancel-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = `flex: 1; padding: 14px; background: ${dialogColors.cancelBg}; border: none; border-radius: 8px; cursor: pointer;
+      font-weight: 600; font-size: 15px; color: ${dialogColors.cancelText}; transition: all 0.2s;`;
+    cancelBtn.addEventListener('mouseover', () => {
+      cancelBtn.style.background = dialogColors.cancelHover;
+      cancelBtn.style.transform = 'translateY(-2px)';
+    });
+    cancelBtn.addEventListener('mouseout', () => {
+      cancelBtn.style.background = dialogColors.cancelBg;
+      cancelBtn.style.transform = 'translateY(0)';
+    });
+
+    buttonContainer.appendChild(copyBtn);
+    buttonContainer.appendChild(cancelBtn);
+
+    dialog.appendChild(header);
+    dialog.appendChild(itemCountInput);
+    dialog.appendChild(outputFormatSelect);
+    dialog.appendChild(buttonContainer);
 
     document.body.appendChild(backdrop);
     document.body.appendChild(dialog);
@@ -1033,15 +1168,15 @@
     backdrop.addEventListener('click', closeDialog);
 
     // Handle copy
-    dialog.querySelector('#appletv-copy-btn').addEventListener('click', () => {
-      const count = parseInt(dialog.querySelector('#appletv-item-count').value);
-      const outputFormat = dialog.querySelector('#appletv-output-format').value;
+    copyBtn.addEventListener('click', () => {
+      const count = parseInt(document.querySelector('#appletv-item-count').value);
+      const outputFormat = document.querySelector('#appletv-output-format').value;
       copyData(items, count, outputFormat, sectionName);
       closeDialog();
     });
 
     // Handle cancel
-    dialog.querySelector('#appletv-cancel-btn').addEventListener('click', closeDialog);
+    cancelBtn.addEventListener('click', closeDialog);
   }
 
   function copyData(items, count, outputFormat, sectionName) {
@@ -1093,7 +1228,7 @@
       color: white;
       padding: 15px 20px;
       border-radius: 8px;
-      z-index: 100001;
+      z-index: ${Z_INDEX.NOTIFICATION};
       font-weight: 600;
       box-shadow: 0 4px 12px rgba(0,0,0,0.3);
       animation: slideIn 0.3s ease-out;
@@ -1122,6 +1257,9 @@
     protocol: window.location.protocol
   });
 
+  // Cache the theme colors promise to prevent multiple calls and race conditions
+  const cachedThemeColorsPromise = getThemeColors();
+
   // Initialize: Add copy buttons for pages with Cast & Crew
   const hasCastAndCrew = hasAppleTVCastAndCrew(); // This works for both saved and live pages
 
@@ -1136,47 +1274,19 @@
         return;
       }
 
-      const colors = getThemeColors();
+      const colors = cachedThemeColorsPromise;
 
-      // Initial processing with multiple delays to catch dynamic loading
+      // Initial processing with consolidated delays to catch dynamic loading
       colors.then(c => {
         console.log('Got theme colors:', c);
 
-        // Process Cast & Crew
-        processSavedPageCastAndCrew(c);
+        // Process all elements immediately
+        processAllAppleTVElements(c, isAppleTVShowPage());
 
-        // If on live Apple TV+, also process other elements
-        if (isAppleTVShowPage()) {
-          processTitle(c);
-          processPersonnel(c);
-          processDescription(c);
-          processMetadata(c);
-          processEpisodes(c);
-        }
-
-        // Try again after 1 second
+        // Try again after 1 second for delayed DOM elements
         setTimeout(() => {
-          processSavedPageCastAndCrew(c);
-          if (isAppleTVShowPage()) {
-            processTitle(c);
-            processPersonnel(c);
-            processDescription(c);
-            processMetadata(c);
-            processEpisodes(c);
-          }
+          processAllAppleTVElements(c, isAppleTVShowPage());
         }, 1000);
-
-        // Try again after 2 seconds
-        setTimeout(() => {
-          processSavedPageCastAndCrew(c);
-          if (isAppleTVShowPage()) {
-            processTitle(c);
-            processPersonnel(c);
-            processDescription(c);
-            processMetadata(c);
-            processEpisodes(c);
-          }
-        }, 2000);
       });
 
       // Watch for dynamic content loading
@@ -1200,6 +1310,17 @@
       observer.observe(document.body, {
         childList: true,
         subtree: true
+      });
+
+      // Clean up observer when page is unloaded
+      window.addEventListener('beforeunload', () => {
+        observer.disconnect();
+        clearTimeout(debounceTimer);
+      });
+
+      window.addEventListener('pagehide', () => {
+        observer.disconnect();
+        clearTimeout(debounceTimer);
       });
     }).catch(err => {
       console.error('Error getting copy button settings:', err);

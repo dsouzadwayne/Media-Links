@@ -75,7 +75,7 @@
       "pages": ["sandbox.html"]
    },
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "0.821",
+   "version": "0.822",
    "web_accessible_resources": [
       {
          "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html", "offscreen.html", "consolidated-view-page.html", "consolidated-view-page.js", "comparison-view-page.html", "comparison-view-page.js", "customized-views.js", "theme-manager.js", "settings-utils.js", "hotstar-episode-copy.js", "hotstar-show-title-copy.js", "airtelxstream-episode-copy.js", "airtelxstream-cast-copy.js"],
