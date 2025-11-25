@@ -26,6 +26,7 @@
           <li><a href="#copy-visibility" class="sidebar-link" data-section="copy-visibility">👁️ Copy Visibility</a></li>
           <li><a href="#customized-view-pages" class="sidebar-link" data-section="customized-view-pages">📋 Customized View</a></li>
           <li><a href="#comparison-feature" class="sidebar-link" data-section="comparison-feature">⚔️ Comparison</a></li>
+          <li><a href="#hotstar-settings" class="sidebar-link" data-section="hotstar-settings">🎬 Hotstar</a></li>
           <li><a href="#advanced" class="sidebar-link" data-section="advanced">⚡ Advanced</a></li>
         </ul>
       </nav>
@@ -308,6 +309,25 @@
                 <option value="table">Markdown Table</option>
               </select>
             </div>
+          </div>
+        </div>
+
+        <!-- Date Format Settings -->
+        <div class="setting-group">
+          <h3 class="group-title">Date Format</h3>
+
+          <div class="setting-item">
+            <label for="hotstar-date-format" class="setting-label">
+              <span class="label-text">Default Date Format</span>
+              <span class="label-description">Choose the format for copying dates across all views (Wikipedia, IMDb, Hotstar, etc.)</span>
+            </label>
+            <select id="hotstar-date-format" class="setting-input">
+              <option value="DD MMM YYYY">DD MMM YYYY (e.g., 25 Nov 2025)</option>
+              <option value="YYYY-MM-DD">YYYY-MM-DD (e.g., 2025-11-25)</option>
+              <option value="MM/DD/YYYY">MM/DD/YYYY (e.g., 11/25/2025)</option>
+              <option value="DD/MM/YYYY">DD/MM/YYYY (e.g., 25/11/2025)</option>
+              <option value="MMM DD, YYYY">MMM DD, YYYY (e.g., Nov 25, 2025)</option>
+            </select>
           </div>
         </div>
 
@@ -637,6 +657,26 @@
         </div>
       </section>
 
+      <!-- Hotstar Settings Section -->
+      <section class="settings-section" id="hotstar-settings">
+        <div class="section-header">
+          <h2>🎬 Hotstar</h2>
+          <p class="section-description">Customize Hotstar episode features</p>
+        </div>
+
+        <!-- Hotstar Auto View More -->
+        <div class="setting-item">
+          <label class="setting-label">
+            <span class="label-text">Pause Hotstar Auto View More</span>
+            <span class="label-description">When enabled, pauses automatic clicking of "View More Episodes" buttons on Hotstar</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="hotstar-auto-viewmore-paused">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </section>
+
       <!-- Advanced Settings Section -->
       <section class="settings-section" id="advanced">
         <div class="section-header">
@@ -651,18 +691,6 @@
           </label>
           <label class="toggle">
             <input type="checkbox" id="show-copy-webpage-btn">
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <!-- Hotstar Auto View More -->
-        <div class="setting-item">
-          <label class="setting-label">
-            <span class="label-text">Pause Hotstar Auto View More</span>
-            <span class="label-description">When enabled, pauses automatic clicking of "View More Episodes" buttons on Hotstar</span>
-          </label>
-          <label class="toggle">
-            <input type="checkbox" id="hotstar-auto-viewmore-paused">
             <span class="toggle-slider"></span>
           </label>
         </div>
@@ -699,11 +727,11 @@
               <span class="label-description">Text used to separate content from different tabs</span>
             </label>
             <select id="copy-separator" class="setting-input">
-              <option value="\n\n---\n\n">Horizontal Line (---)</option>
-              <option value="\n\n===\n\n">Double Line (===)</option>
-              <option value="\n\n">Double Newline</option>
-              <option value="\n\n***\n\n">Asterisks (***)</option>
-              <option value="\n\n========================================\n\n">Long Line</option>
+              <option value="horizontal-line">Horizontal Line (---)</option>
+              <option value="double-line">Double Line (===)</option>
+              <option value="double-newline">Double Newline</option>
+              <option value="asterisks">Asterisks (***)</option>
+              <option value="long-line">Long Line</option>
             </select>
           </div>
         </div>

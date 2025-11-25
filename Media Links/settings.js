@@ -110,7 +110,7 @@ async function loadSettings() {
     } else {
       // Fallback to direct chrome.storage if SettingsUtils not available
       const defaults = getDefaultSettings();
-      return new Promise((resolve) => {
+      await new Promise((resolve) => {
         chrome.storage.sync.get(defaults, (result) => {
           currentSettings = { ...defaults, ...result };
           resolve();
@@ -128,73 +128,102 @@ async function loadSettings() {
 
 // Apply settings to UI elements
 function applySettingsToUI() {
-  document.getElementById('theme-select').value = currentSettings.theme;
-  document.getElementById('default-search-engine').value = currentSettings.defaultSearchEngine;
-  document.getElementById('default-profile').value = currentSettings.defaultProfile || '';
-  document.getElementById('auto-open-results').checked = currentSettings.autoOpenResults;
-  document.getElementById('tab-delay').value = currentSettings.tabDelay;
-  document.getElementById('show-preview').checked = currentSettings.showPreview;
-  document.getElementById('default-cast-count').value = currentSettings.defaultCastCount;
-  document.getElementById('default-content-format').value = currentSettings.defaultContentFormat;
-  document.getElementById('default-output-format').value = currentSettings.defaultOutputFormat;
-  document.getElementById('debug-mode').checked = currentSettings.debugMode;
-  document.getElementById('show-copy-webpage-btn').checked = currentSettings.showCopyWebpageBtn !== undefined ? currentSettings.showCopyWebpageBtn : false;
-  document.getElementById('hotstar-auto-viewmore-paused').checked = currentSettings.hotstarAutoViewMorePaused !== undefined ? currentSettings.hotstarAutoViewMorePaused : false;
-  document.getElementById('customized-view-limit').value = currentSettings.customizedViewLimit || 8;
+  // Helper function to safely set element values
+  const safeSetValue = (elementId, value, isCheckbox = false) => {
+    const element = document.getElementById(elementId);
+    if (element) {
+      if (isCheckbox) {
+        element.checked = value;
+      } else {
+        element.value = value;
+      }
+    } else {
+      console.warn(`Element with id '${elementId}' not found`);
+    }
+  };
+
+  const safeSetChecked = (elementId, value) => {
+    safeSetValue(elementId, value, true);
+  };
+
+  // Basic settings
+  safeSetValue('theme-select', currentSettings.theme);
+  safeSetValue('default-search-engine', currentSettings.defaultSearchEngine);
+  safeSetValue('default-profile', currentSettings.defaultProfile || '');
+  safeSetChecked('auto-open-results', currentSettings.autoOpenResults);
+  safeSetValue('tab-delay', currentSettings.tabDelay);
+  safeSetChecked('show-preview', currentSettings.showPreview);
+  safeSetValue('default-cast-count', currentSettings.defaultCastCount);
+  safeSetValue('default-content-format', currentSettings.defaultContentFormat);
+  safeSetValue('default-output-format', currentSettings.defaultOutputFormat);
+  safeSetChecked('debug-mode', currentSettings.debugMode);
+  safeSetChecked('show-copy-webpage-btn', currentSettings.showCopyWebpageBtn !== undefined ? currentSettings.showCopyWebpageBtn : false);
+  safeSetChecked('hotstar-auto-viewmore-paused', currentSettings.hotstarAutoViewMorePaused !== undefined ? currentSettings.hotstarAutoViewMorePaused : false);
+  safeSetValue('hotstar-date-format', currentSettings.hotstarDateFormat || 'DD MMM YYYY');
+  safeSetValue('customized-view-limit', currentSettings.customizedViewLimit || 8);
 
   // Copy webpage format settings
-  const copyFormats = currentSettings.copyFormats || {};
-  document.getElementById('copy-include-title').checked = copyFormats.includeTitle !== false;
-  document.getElementById('copy-include-url').checked = copyFormats.includeURL !== false;
-  document.getElementById('copy-separator').value = copyFormats.separator || '\n\n---\n\n';
+  const copyFormats = currentSettings.copyFormats;
+  if (copyFormats && typeof copyFormats === 'object') {
+    safeSetChecked('copy-include-title', copyFormats.includeTitle !== false);
+    safeSetChecked('copy-include-url', copyFormats.includeURL !== false);
+    // Convert stored separator string to option value
+    safeSetValue('copy-separator', getSeparatorOption(copyFormats.separator || '\n\n---\n\n'));
+  } else {
+    // Use defaults if copyFormats is missing
+    safeSetChecked('copy-include-title', true);
+    safeSetChecked('copy-include-url', true);
+    safeSetValue('copy-separator', 'horizontal-line');
+  }
 
   // Copy button visibility settings
-  document.getElementById('show-imdb-cast').checked = currentSettings.showImdbCast;
-  document.getElementById('show-imdb-company').checked = currentSettings.showImdbCompany;
-  document.getElementById('show-imdb-awards').checked = currentSettings.showImdbAwards;
-  document.getElementById('show-imdb-main').checked = currentSettings.showImdbMain;
-  document.getElementById('show-wiki-cast').checked = currentSettings.showWikiCast;
-  document.getElementById('show-wiki-tables').checked = currentSettings.showWikiTables;
-  document.getElementById('wiki-output-format').value = currentSettings.wikiOutputFormat;
-  document.getElementById('show-letterboxd-cast').checked = currentSettings.showLetterboxdCast;
-  document.getElementById('letterboxd-cast-count').value = currentSettings.letterboxdCastCount;
-  document.getElementById('letterboxd-output-format').value = currentSettings.letterboxdOutputFormat;
-  document.getElementById('letterboxd-include-roles').checked = currentSettings.letterboxdIncludeRoles;
-  document.getElementById('show-appletv-cast').checked = currentSettings.showAppleTVCast;
+  safeSetChecked('show-imdb-cast', currentSettings.showImdbCast);
+  safeSetChecked('show-imdb-company', currentSettings.showImdbCompany);
+  safeSetChecked('show-imdb-awards', currentSettings.showImdbAwards);
+  safeSetChecked('show-imdb-main', currentSettings.showImdbMain);
+  safeSetChecked('show-wiki-cast', currentSettings.showWikiCast);
+  safeSetChecked('show-wiki-tables', currentSettings.showWikiTables);
+  safeSetValue('wiki-output-format', currentSettings.wikiOutputFormat);
+  safeSetChecked('show-letterboxd-cast', currentSettings.showLetterboxdCast);
+  safeSetValue('letterboxd-cast-count', currentSettings.letterboxdCastCount);
+  safeSetValue('letterboxd-output-format', currentSettings.letterboxdOutputFormat);
+  safeSetChecked('letterboxd-include-roles', currentSettings.letterboxdIncludeRoles);
+  safeSetChecked('show-appletv-cast', currentSettings.showAppleTVCast);
 
   // Apple TV+ specific settings
-  document.getElementById('appletv-cast-count').value = currentSettings.appleTVCastCount;
-  document.getElementById('appletv-output-format').value = currentSettings.appleTVOutputFormat;
-  document.getElementById('appletv-include-roles').checked = currentSettings.appleTVIncludeRoles;
+  safeSetValue('appletv-cast-count', currentSettings.appleTVCastCount);
+  safeSetValue('appletv-output-format', currentSettings.appleTVOutputFormat);
+  safeSetChecked('appletv-include-roles', currentSettings.appleTVIncludeRoles);
 
   // BookMyShow specific settings
-  document.getElementById('show-bookmyshow-copy').checked = currentSettings.showBookMyShowCopy !== false;
-  document.getElementById('bookmyshow-cast-count').value = currentSettings.bookMyShowCastCount;
-  document.getElementById('bookmyshow-output-format').value = currentSettings.bookMyShowOutputFormat;
-  document.getElementById('bookmyshow-include-roles').checked = currentSettings.bookMyShowIncludeRoles;
+  safeSetChecked('show-bookmyshow-copy', currentSettings.showBookMyShowCopy !== false);
+  safeSetValue('bookmyshow-cast-count', currentSettings.bookMyShowCastCount);
+  safeSetValue('bookmyshow-output-format', currentSettings.bookMyShowOutputFormat);
+  safeSetChecked('bookmyshow-include-roles', currentSettings.bookMyShowIncludeRoles);
 
   // Customized view settings
-  document.getElementById('show-customized-view-btn').checked = currentSettings.showCustomizedViewBtn !== false;
-  document.getElementById('auto-open-individual-view').checked = currentSettings.autoOpenIndividualView !== false;
-  document.getElementById('show-consolidated-view-btn').checked = currentSettings.showConsolidatedViewBtn !== false;
-  document.getElementById('auto-open-consolidated-view').checked = currentSettings.autoOpenConsolidatedView !== false;
+  safeSetChecked('show-customized-view-btn', currentSettings.showCustomizedViewBtn !== false);
+  safeSetChecked('auto-open-individual-view', currentSettings.autoOpenIndividualView !== false);
+  safeSetChecked('show-consolidated-view-btn', currentSettings.showConsolidatedViewBtn !== false);
+  safeSetChecked('auto-open-consolidated-view', currentSettings.autoOpenConsolidatedView !== false);
 
   // Wikipedia customized view settings
-  document.getElementById('show-wiki-customized-view-btn').checked = currentSettings.showWikiCustomizedViewBtn !== false;
-  document.getElementById('auto-open-wiki-view').checked = currentSettings.autoOpenWikiView !== false;
+  safeSetChecked('show-wiki-customized-view-btn', currentSettings.showWikiCustomizedViewBtn !== false);
+  safeSetChecked('auto-open-wiki-view', currentSettings.autoOpenWikiView !== false);
 
   // Comparison feature settings
-  document.getElementById('enable-comparison-feature').checked = currentSettings.enableComparisonFeature === true;
-  document.getElementById('show-comparison-btn-wiki').checked = currentSettings.showComparisonBtnWiki !== false;
-  document.getElementById('show-comparison-btn-imdb').checked = currentSettings.showComparisonBtnImdb !== false;
-  document.getElementById('auto-open-comparison').checked = currentSettings.autoOpenComparison !== false;
+  safeSetChecked('enable-comparison-feature', currentSettings.enableComparisonFeature === true);
+  safeSetChecked('show-comparison-btn-wiki', currentSettings.showComparisonBtnWiki !== false);
+  safeSetChecked('show-comparison-btn-imdb', currentSettings.showComparisonBtnImdb !== false);
+  safeSetChecked('auto-open-comparison', currentSettings.autoOpenComparison !== false);
 
   // Toggle comparison settings subsection based on enable state
   toggleComparisonSettings(currentSettings.enableComparisonFeature === true);
 
   // Set default view columns
   const defaultColumns = currentSettings.defaultViewColumns || ['name', 'role', 'roleType'];
-  document.querySelectorAll('.view-column-checkbox').forEach(checkbox => {
+  const columnCheckboxes = document.querySelectorAll('.view-column-checkbox');
+  columnCheckboxes.forEach(checkbox => {
     checkbox.checked = defaultColumns.includes(checkbox.value);
   });
 
@@ -206,6 +235,12 @@ function loadProfiles() {
   chrome.storage.sync.get(['profiles'], (result) => {
     const profiles = result.profiles || {};
     const select = document.getElementById('default-profile');
+
+    // Safety check - element must exist
+    if (!select) {
+      console.warn('default-profile element not found');
+      return;
+    }
 
     // Clear existing options except the first one
     select.innerHTML = '<option value="">No default (load last used)</option>';
@@ -231,32 +266,44 @@ function applyTheme(theme) {
 
 // Attach event listeners
 function attachEventListeners() {
+  // Helper function to safely get element and attach listener
+  const safeAddListener = (elementId, eventType, handler) => {
+    const element = document.getElementById(elementId);
+    if (element) {
+      element.addEventListener(eventType, handler);
+    } else {
+      console.warn(`Element with id '${elementId}' not found`);
+    }
+  };
+
   // Theme change
-  document.getElementById('theme-select').addEventListener('change', (e) => {
+  safeAddListener('theme-select', 'change', (e) => {
     applyTheme(e.target.value);
     markUnsaved();
   });
 
   // Comparison feature toggle
-  document.getElementById('enable-comparison-feature').addEventListener('change', (e) => {
+  safeAddListener('enable-comparison-feature', 'change', (e) => {
     toggleComparisonSettings(e.target.checked);
     markUnsaved();
   });
 
-  // All input changes
-  const inputs = document.querySelectorAll('input, select');
-  inputs.forEach(input => {
-    input.addEventListener('change', markUnsaved);
-  });
+  // Use event delegation for all input changes (single listener instead of many)
+  // This prevents duplicate listeners from stacking when the page is reopened
+  document.addEventListener('change', (e) => {
+    if (e.target.matches('input, select')) {
+      markUnsaved();
+    }
+  }, { once: false });
 
   // Save button
-  document.getElementById('save-btn').addEventListener('click', saveSettings);
+  safeAddListener('save-btn', 'click', saveSettings);
 
   // Cancel button
-  document.getElementById('cancel-btn').addEventListener('click', async () => {
+  safeAddListener('cancel-btn', 'click', async () => {
     if (hasUnsavedChanges) {
       if (confirm('You have unsaved changes. Are you sure you want to cancel?')) {
-        await loadSettings(); // Reload original settings
+        await loadSettings();
         window.close();
       }
     } else {
@@ -265,10 +312,10 @@ function attachEventListeners() {
   });
 
   // Close button
-  document.getElementById('close-btn').addEventListener('click', async () => {
+  safeAddListener('close-btn', 'click', async () => {
     if (hasUnsavedChanges) {
       if (confirm('You have unsaved changes. Are you sure you want to close?')) {
-        await loadSettings(); // Reload original settings before closing
+        await loadSettings();
         window.close();
       }
     } else {
@@ -277,7 +324,7 @@ function attachEventListeners() {
   });
 
   // Reset button
-  document.getElementById('reset-btn').addEventListener('click', resetSettings);
+  safeAddListener('reset-btn', 'click', resetSettings);
 
   // Profile buttons
   const saveProfileBtn = document.getElementById('save-profile-btn');
@@ -322,72 +369,95 @@ function toggleComparisonSettings(enabled) {
     if (enabled) {
       subsection.style.opacity = '1';
       subsection.style.pointerEvents = 'auto';
+      subsection.setAttribute('aria-disabled', 'false');
+      // Enable all inputs
+      const inputs = subsection.querySelectorAll('input, select');
+      inputs.forEach(input => {
+        input.disabled = false;
+      });
     } else {
       subsection.style.opacity = '0.5';
       subsection.style.pointerEvents = 'none';
+      subsection.setAttribute('aria-disabled', 'true');
+      // Disable all inputs to prevent keyboard focus
+      const inputs = subsection.querySelectorAll('input, select');
+      inputs.forEach(input => {
+        input.disabled = true;
+      });
     }
   }
 }
 
 // Save settings
 function saveSettings() {
-  // Collect all settings
+  // Helper function to safely get element values with fallbacks
+  const getSafeValue = (elementId, type = 'value') => {
+    const element = document.getElementById(elementId);
+    if (!element) {
+      console.warn(`Element '${elementId}' not found - using fallback`);
+      return type === 'checked' ? false : '';
+    }
+    return type === 'checked' ? element.checked : element.value;
+  };
+
+  // Collect all settings with safe DOM access
   const newSettings = {
-    theme: document.getElementById('theme-select').value,
-    defaultSearchEngine: document.getElementById('default-search-engine').value,
-    defaultProfile: document.getElementById('default-profile').value,
-    autoOpenResults: document.getElementById('auto-open-results').checked,
-    tabDelay: parseInt(document.getElementById('tab-delay').value, 10) || 150,
-    showPreview: document.getElementById('show-preview').checked,
-    defaultCastCount: parseInt(document.getElementById('default-cast-count').value, 10) || 5,
-    defaultContentFormat: document.getElementById('default-content-format').value,
-    defaultOutputFormat: document.getElementById('default-output-format').value,
-    debugMode: document.getElementById('debug-mode').checked,
-    showCopyWebpageBtn: document.getElementById('show-copy-webpage-btn').checked,
-    hotstarAutoViewMorePaused: document.getElementById('hotstar-auto-viewmore-paused').checked,
-    customizedViewLimit: parseInt(document.getElementById('customized-view-limit').value, 10) || 8,
+    theme: getSafeValue('theme-select'),
+    defaultSearchEngine: getSafeValue('default-search-engine'),
+    defaultProfile: getSafeValue('default-profile'),
+    autoOpenResults: getSafeValue('auto-open-results', 'checked'),
+    tabDelay: validateNumericInput(getSafeValue('tab-delay'), 0, 5000, 150),
+    showPreview: getSafeValue('show-preview', 'checked'),
+    defaultCastCount: validateNumericInput(getSafeValue('default-cast-count'), 1, 1000, 5),
+    defaultContentFormat: getSafeValue('default-content-format'),
+    defaultOutputFormat: getSafeValue('default-output-format'),
+    debugMode: getSafeValue('debug-mode', 'checked'),
+    showCopyWebpageBtn: getSafeValue('show-copy-webpage-btn', 'checked'),
+    hotstarAutoViewMorePaused: getSafeValue('hotstar-auto-viewmore-paused', 'checked'),
+    hotstarDateFormat: getSafeValue('hotstar-date-format'),
+    customizedViewLimit: validateNumericInput(getSafeValue('customized-view-limit'), 1, 1000, 8),
     // Copy webpage format settings
     copyFormats: {
-      includeTitle: document.getElementById('copy-include-title').checked,
-      includeURL: document.getElementById('copy-include-url').checked,
-      separator: document.getElementById('copy-separator').value
+      includeTitle: getSafeValue('copy-include-title', 'checked'),
+      includeURL: getSafeValue('copy-include-url', 'checked'),
+      separator: getSeparatorValue(getSafeValue('copy-separator'))
     },
     // Copy button visibility settings
-    showImdbCast: document.getElementById('show-imdb-cast').checked,
-    showImdbCompany: document.getElementById('show-imdb-company').checked,
-    showImdbAwards: document.getElementById('show-imdb-awards').checked,
-    showImdbMain: document.getElementById('show-imdb-main').checked,
-    showWikiCast: document.getElementById('show-wiki-cast').checked,
-    showWikiTables: document.getElementById('show-wiki-tables').checked,
-    wikiOutputFormat: document.getElementById('wiki-output-format').value,
-    showLetterboxdCast: document.getElementById('show-letterboxd-cast').checked,
-    letterboxdCastCount: parseInt(document.getElementById('letterboxd-cast-count').value, 10) || 10,
-    letterboxdOutputFormat: document.getElementById('letterboxd-output-format').value,
-    letterboxdIncludeRoles: document.getElementById('letterboxd-include-roles').checked,
-    showAppleTVCast: document.getElementById('show-appletv-cast').checked,
+    showImdbCast: getSafeValue('show-imdb-cast', 'checked'),
+    showImdbCompany: getSafeValue('show-imdb-company', 'checked'),
+    showImdbAwards: getSafeValue('show-imdb-awards', 'checked'),
+    showImdbMain: getSafeValue('show-imdb-main', 'checked'),
+    showWikiCast: getSafeValue('show-wiki-cast', 'checked'),
+    showWikiTables: getSafeValue('show-wiki-tables', 'checked'),
+    wikiOutputFormat: getSafeValue('wiki-output-format'),
+    showLetterboxdCast: getSafeValue('show-letterboxd-cast', 'checked'),
+    letterboxdCastCount: validateNumericInput(getSafeValue('letterboxd-cast-count'), 1, 1000, 10),
+    letterboxdOutputFormat: getSafeValue('letterboxd-output-format'),
+    letterboxdIncludeRoles: getSafeValue('letterboxd-include-roles', 'checked'),
+    showAppleTVCast: getSafeValue('show-appletv-cast', 'checked'),
     // Apple TV+ specific settings
-    appleTVCastCount: parseInt(document.getElementById('appletv-cast-count').value, 10) || 10,
-    appleTVOutputFormat: document.getElementById('appletv-output-format').value,
-    appleTVIncludeRoles: document.getElementById('appletv-include-roles').checked,
+    appleTVCastCount: validateNumericInput(getSafeValue('appletv-cast-count'), 1, 1000, 10),
+    appleTVOutputFormat: getSafeValue('appletv-output-format'),
+    appleTVIncludeRoles: getSafeValue('appletv-include-roles', 'checked'),
     // BookMyShow specific settings
-    showBookMyShowCopy: document.getElementById('show-bookmyshow-copy').checked,
-    bookMyShowCastCount: parseInt(document.getElementById('bookmyshow-cast-count').value, 10) || 10,
-    bookMyShowOutputFormat: document.getElementById('bookmyshow-output-format').value,
-    bookMyShowIncludeRoles: document.getElementById('bookmyshow-include-roles').checked,
+    showBookMyShowCopy: getSafeValue('show-bookmyshow-copy', 'checked'),
+    bookMyShowCastCount: validateNumericInput(getSafeValue('bookmyshow-cast-count'), 1, 1000, 10),
+    bookMyShowOutputFormat: getSafeValue('bookmyshow-output-format'),
+    bookMyShowIncludeRoles: getSafeValue('bookmyshow-include-roles', 'checked'),
     // Customized view settings
-    showCustomizedViewBtn: document.getElementById('show-customized-view-btn').checked,
-    autoOpenIndividualView: document.getElementById('auto-open-individual-view').checked,
-    showConsolidatedViewBtn: document.getElementById('show-consolidated-view-btn').checked,
-    autoOpenConsolidatedView: document.getElementById('auto-open-consolidated-view').checked,
+    showCustomizedViewBtn: getSafeValue('show-customized-view-btn', 'checked'),
+    autoOpenIndividualView: getSafeValue('auto-open-individual-view', 'checked'),
+    showConsolidatedViewBtn: getSafeValue('show-consolidated-view-btn', 'checked'),
+    autoOpenConsolidatedView: getSafeValue('auto-open-consolidated-view', 'checked'),
     defaultViewColumns: Array.from(document.querySelectorAll('.view-column-checkbox:checked')).map(cb => cb.value),
     // Wikipedia customized view settings
-    showWikiCustomizedViewBtn: document.getElementById('show-wiki-customized-view-btn').checked,
-    autoOpenWikiView: document.getElementById('auto-open-wiki-view').checked,
+    showWikiCustomizedViewBtn: getSafeValue('show-wiki-customized-view-btn', 'checked'),
+    autoOpenWikiView: getSafeValue('auto-open-wiki-view', 'checked'),
     // Comparison feature settings
-    enableComparisonFeature: document.getElementById('enable-comparison-feature').checked,
-    showComparisonBtnWiki: document.getElementById('show-comparison-btn-wiki').checked,
-    showComparisonBtnImdb: document.getElementById('show-comparison-btn-imdb').checked,
-    autoOpenComparison: document.getElementById('auto-open-comparison').checked
+    enableComparisonFeature: getSafeValue('enable-comparison-feature', 'checked'),
+    showComparisonBtnWiki: getSafeValue('show-comparison-btn-wiki', 'checked'),
+    showComparisonBtnImdb: getSafeValue('show-comparison-btn-imdb', 'checked'),
+    autoOpenComparison: getSafeValue('auto-open-comparison', 'checked')
   };
 
   // Save to storage using SettingsUtils with validation
@@ -474,20 +544,65 @@ async function resetSettings() {
 // Show status message
 function showStatus(message, type = 'info') {
   const statusEl = document.getElementById('save-status');
-  statusEl.textContent = message;
-  statusEl.className = 'save-status ' + type;
+  if (statusEl) {
+    statusEl.textContent = message;
+    statusEl.className = 'save-status ' + type;
 
-  // Clear success messages after 3 seconds
-  if (type === 'success') {
-    setTimeout(() => {
-      statusEl.textContent = '';
-      statusEl.className = 'save-status';
-    }, 3000);
+    // Clear success messages after 3 seconds
+    if (type === 'success') {
+      setTimeout(() => {
+        statusEl.textContent = '';
+        statusEl.className = 'save-status';
+      }, 3000);
+    }
   }
+}
+
+// Validate numeric inputs
+function validateNumericInput(value, min, max, defaultVal) {
+  const num = parseInt(value, 10);
+  if (isNaN(num)) return defaultVal;
+  if (num < min) return min;
+  if (num > max) return max;
+  return num;
+}
+
+// Convert separator option values to actual strings with newlines
+function getSeparatorValue(optionValue) {
+  const separators = {
+    'horizontal-line': '\n\n---\n\n',
+    'double-line': '\n\n===\n\n',
+    'double-newline': '\n\n',
+    'asterisks': '\n\n***\n\n',
+    'long-line': '\n\n========================================\n\n'
+  };
+  return separators[optionValue] || '\n\n---\n\n';
+}
+
+// Convert separator string back to option value
+function getSeparatorOption(separatorString) {
+  const mapping = {
+    '\n\n---\n\n': 'horizontal-line',
+    '\n\n===\n\n': 'double-line',
+    '\n\n': 'double-newline',
+    '\n\n***\n\n': 'asterisks',
+    '\n\n========================================\n\n': 'long-line'
+  };
+  return mapping[separatorString] || 'horizontal-line';
 }
 
 // Profile Settings Functions
 function loadProfileSettings() {
+  // Show loading indicator
+  const profileContainer = document.getElementById('profile-container');
+  if (profileContainer) {
+    const profileSettingsEls = profileContainer.querySelectorAll('.profile-settings');
+    profileSettingsEls.forEach(el => {
+      el.style.opacity = '0.6';
+      el.style.pointerEvents = 'none';
+    });
+  }
+
   chrome.storage.sync.get(['profileSettings'], (result) => {
     profileSettings = result.profileSettings || {};
 
@@ -496,13 +611,27 @@ function loadProfileSettings() {
       initializeProfileUI(i);
     }
 
+    // Hide loading indicator
+    if (profileContainer) {
+      const profileSettingsEls = profileContainer.querySelectorAll('.profile-settings');
+      profileSettingsEls.forEach(el => {
+        el.style.opacity = '1';
+        el.style.pointerEvents = 'auto';
+      });
+    }
+
     // Set up profile selector
     const profileSelect = document.getElementById('profile-select');
     if (profileSelect) {
       profileSelect.addEventListener('change', (e) => {
         currentProfile = parseInt(e.target.value, 10);
         document.querySelectorAll('.profile-content').forEach(p => p.classList.remove('active'));
-        document.getElementById(`profile${currentProfile}`).classList.add('active');
+        const activeProfile = document.getElementById(`profile${currentProfile}`);
+        if (activeProfile) {
+          activeProfile.classList.add('active');
+        }
+        // Mark changes when switching profiles
+        markUnsaved();
       });
     }
   });
@@ -547,13 +676,23 @@ function initializeProfileUI(profileNum) {
 
 function saveProfileSettings() {
   const profileKey = `profile${currentProfile}`;
-  if (!profileSettings[profileKey]) {
+
+  // Initialize profileSettings if it doesn't exist
+  if (!profileSettings || typeof profileSettings !== 'object') {
+    profileSettings = {};
+  }
+
+  // Initialize the specific profile if it doesn't exist
+  if (!profileSettings[profileKey] || typeof profileSettings[profileKey] !== 'object') {
     profileSettings[profileKey] = {};
   }
 
+  // Now safely iterate
   document.querySelectorAll(`#profile${currentProfile} .query-setting`).forEach(checkbox => {
     const pattern = checkbox.dataset.pattern;
-    profileSettings[profileKey][pattern] = checkbox.checked;
+    if (pattern) {  // Extra safety check
+      profileSettings[profileKey][pattern] = checkbox.checked;
+    }
   });
 
   chrome.storage.sync.set({ profileSettings: profileSettings }, () => {
@@ -656,9 +795,13 @@ function initializeSidebarNavigation() {
 // Listen for storage changes from other tabs/windows
 chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'sync') {
-    // Reload settings if changed elsewhere
+    // Reload settings if changed elsewhere and no unsaved changes
     if (!hasUnsavedChanges) {
-      loadSettings();
+      loadSettings().then(() => {
+        showStatus('✓ Settings updated from another window', 'info');
+      });
+    } else {
+      showStatus('⚠ Settings changed elsewhere (not applied - you have unsaved changes)', 'warning');
     }
   }
 });

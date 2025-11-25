@@ -29,6 +29,7 @@ window.SettingsUtils = (() => {
 
     // Hotstar Settings
     hotstarAutoViewMorePaused: false,
+    hotstarDateFormat: 'DD MMM YYYY',
 
     // IMDb Settings
     showImdbCast: true,
@@ -141,6 +142,11 @@ window.SettingsUtils = (() => {
     hotstarAutoViewMorePaused: {
       type: 'boolean',
       default: false
+    },
+    hotstarDateFormat: {
+      type: 'string',
+      enum: ['DD MMM YYYY', 'YYYY-MM-DD', 'MM/DD/YYYY', 'DD/MM/YYYY', 'MMM DD, YYYY'],
+      default: 'DD MMM YYYY'
     },
     showImdbCast: {
       type: 'boolean',
@@ -321,10 +327,11 @@ window.SettingsUtils = (() => {
     } else {
       // Validate separator is valid (can process escape sequences)
       try {
-        // Test that separator can be processed
+        // Test that separator can be processed - replace will always return a string
         const testSeparator = validated.separator.replace(/\\n/g, '\n');
-        if (typeof testSeparator !== 'string') {
-          throw new Error('Invalid separator format');
+        // No need to check type - it's always a string after replace()
+        if (testSeparator.length === 0) {
+          throw new Error('Separator cannot be empty');
         }
       } catch (e) {
         console.warn('copyFormats.separator is invalid:', e.message);

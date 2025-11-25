@@ -45,6 +45,12 @@
       // Storage key for preferences - sanitize pagePath to prevent injection
       this.storageKey = `view-prefs-${sanitizeStorageKey(this.pagePath)}`;
 
+      // Event listeners tracking - to prevent memory leaks on re-render
+      this.cellListeners = [];
+
+      // Debouncing flag for async copy operations
+      this.copyInProgress = false;
+
       // Set up MutationObserver to clean up removed dropdowns
       this.setupDropdownCleanupObserver();
     }
@@ -91,14 +97,17 @@
       }
 
       // HIGH SEVERITY FIX: Auto-disconnect when container is removed
-      const containerRemovalObserver = new MutationObserver((mutations) => {
+      // CRITICAL FIX: Store observer reference for cleanup
+      this.containerRemovalObserver = new MutationObserver((mutations) => {
         mutations.forEach((mutation) => {
           if (mutation.removedNodes.length > 0) {
             Array.from(mutation.removedNodes).forEach((node) => {
               if (node === this.container || (node.contains && node.contains(this.container))) {
                 console.log('CustomizedView: Container removed, cleaning up observer');
                 this.destroy();
-                containerRemovalObserver.disconnect();
+                if (this.containerRemovalObserver) {
+                  this.containerRemovalObserver.disconnect();
+                }
               }
             });
           }
@@ -107,7 +116,7 @@
 
       // Observe parent for removal
       if (this.container?.parentNode) {
-        containerRemovalObserver.observe(this.container.parentNode, {
+        this.containerRemovalObserver.observe(this.container.parentNode, {
           childList: true,
           subtree: false
         });
@@ -115,14 +124,27 @@
     }
 
     /**
-     * Clean up observer when view is destroyed
+     * Clean up observer and listeners when view is destroyed
      */
     destroy() {
+      // Clean up cell click listeners
+      this.cellListeners.forEach(({ element, handler }) => {
+        element.removeEventListener('click', handler);
+      });
+      this.cellListeners = [];
+      console.log('CustomizedView: Cell listeners cleaned up');
+
       // HIGH SEVERITY FIX: Properly clean up observer
       if (this.dropdownObserver) {
         this.dropdownObserver.disconnect();
         this.dropdownObserver = null;
         console.log('CustomizedView: Observer cleaned up');
+      }
+
+      // Clean up container removal observer if it exists
+      if (this.containerRemovalObserver) {
+        this.containerRemovalObserver.disconnect();
+        this.containerRemovalObserver = null;
       }
     }
 
@@ -448,6 +470,60 @@
     }
 
     /**
+     * Copy a single date value with optional formatting
+     * Supports date formatting from user preferences
+     */
+    async copyDateValue(dateString, columnName = 'Date') {
+      try {
+        // Check if DateFormattingUtils is available
+        if (typeof window.DateFormattingUtils === 'undefined') {
+          console.warn('DateFormattingUtils not available, copying raw date string');
+          navigator.clipboard.writeText(dateString).then(() => {
+            this.showCopyNotification(`Copied ${columnName}`);
+          }).catch(err => {
+            console.error('Failed to copy:', err);
+            alert('Failed to copy to clipboard');
+          });
+          return;
+        }
+
+        // Try to parse and reformat the date
+        const userFormat = await window.DateFormattingUtils.getUserDateFormat();
+        const formattedDate = window.DateFormattingUtils.parseAndFormat(dateString, userFormat);
+
+        // Use formatted date if parsing succeeded, otherwise use original
+        const textToCopy = formattedDate || dateString;
+
+        navigator.clipboard.writeText(textToCopy).then(() => {
+          this.showCopyNotification(`Copied ${columnName}: ${textToCopy}`);
+        }).catch(err => {
+          console.error('Failed to copy:', err);
+          alert('Failed to copy to clipboard');
+        });
+      } catch (error) {
+        console.error('Error in copyDateValue:', error);
+        // Fallback: just copy the raw string
+        navigator.clipboard.writeText(dateString).catch(err => {
+          console.error('Fallback copy failed:', err);
+          alert('Failed to copy to clipboard');
+        });
+      }
+    }
+
+    /**
+     * Detect if a column contains dates
+     */
+    isDateColumn(columnName, roleType) {
+      const dateKeywords = ['date', 'release', 'year'];
+      const columnLower = columnName.toLowerCase();
+      const roleTypeLower = (roleType || '').toLowerCase();
+
+      return dateKeywords.some(keyword =>
+        columnLower.includes(keyword) || roleTypeLower.includes(keyword)
+      );
+    }
+
+    /**
      * Show a copy notification
      */
     showCopyNotification(text) {
@@ -580,8 +656,14 @@
         try {
           if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
             chrome.storage.sync.get(['customizedViewLimit'], (result) => {
-              const limit = result.customizedViewLimit || 8;
-              resolve(limit);
+              // BUG FIX: Check for storage errors
+              if (chrome.runtime.lastError) {
+                console.warn('Error loading customizedViewLimit:', chrome.runtime.lastError);
+                resolve(8);
+              } else {
+                const limit = result.customizedViewLimit || 8;
+                resolve(limit);
+              }
             });
           } else {
             resolve(8);
@@ -1036,7 +1118,8 @@
 
         this.columns.forEach(col => {
           const td = document.createElement('td');
-          const cellValue = item[col] || '-';
+          // BUG FIX: Don't replace legitimate falsy values (0, false, '') with '-'
+          const cellValue = (item[col] !== undefined && item[col] !== null) ? item[col] : '-';
           td.textContent = cellValue;
           td.style.cssText = `
             padding: 10px 12px;
@@ -1057,26 +1140,69 @@
             td.style.color = 'var(--text-primary)';
           });
 
-          // Add click to copy
-          td.addEventListener('click', (e) => {
+          // Add click to copy (with date formatting support)
+          // CRITICAL FIX: Store listener handler for cleanup on re-render
+          // MEDIUM FIX: Add debouncing to prevent multiple simultaneous copies
+          const clickHandler = async (e) => {
             e.stopPropagation();
-            navigator.clipboard.writeText(cellValue).then(() => {
-              // Show feedback
-              td.style.backgroundColor = 'var(--accent)';
-              td.style.color = 'white';
 
-              // Show notification
-              self.showCopyNotification(cellValue);
+            // Debounce: prevent multiple simultaneous copy operations
+            if (self.copyInProgress) {
+              return;
+            }
 
-              setTimeout(() => {
-                // Reset to transparent and original color
-                td.style.backgroundColor = 'transparent';
-                td.style.color = 'var(--text-primary)';
-              }, 600);
-            }).catch(err => {
-              console.error('Failed to copy:', err);
-            });
-          });
+            try {
+              self.copyInProgress = true;
+
+              // Check if this is a date column
+              const isDate = self.isDateColumn(col, roleType);
+              const textToCopy = cellValue;
+
+              // If it's a date column and DateFormattingUtils is available, try to format it
+              let finalText = textToCopy;
+              if (isDate && typeof window.DateFormattingUtils !== 'undefined' && textToCopy !== '-') {
+                const userFormat = await window.DateFormattingUtils.getUserDateFormat();
+                const formatted = window.DateFormattingUtils.parseAndFormat(textToCopy, userFormat);
+                // BUG FIX: Warn if date parsing fails
+                if (!formatted) {
+                  console.warn(`Failed to parse date: "${textToCopy}" in format "${userFormat}"`);
+                }
+                finalText = formatted || textToCopy; // Use formatted if available, else original
+              }
+
+              navigator.clipboard.writeText(finalText).then(() => {
+                // Show feedback
+                td.style.backgroundColor = 'var(--accent)';
+                td.style.color = 'white';
+
+                // Show notification with indication if date was formatted
+                const notifText = isDate && finalText !== textToCopy ?
+                  `${finalText} (formatted)` : finalText;
+                self.showCopyNotification(notifText);
+
+                setTimeout(() => {
+                  // Reset to transparent and original color
+                  td.style.backgroundColor = 'transparent';
+                  td.style.color = 'var(--text-primary)';
+                }, 600);
+              }).catch(err => {
+                console.error('Failed to copy:', err);
+              });
+            } catch (error) {
+              console.error('Error in cell copy:', error);
+              // Fallback: just copy the raw value
+              navigator.clipboard.writeText(cellValue).catch(err => {
+                console.error('Fallback copy failed:', err);
+              });
+            } finally {
+              // Reset debounce flag
+              self.copyInProgress = false;
+            }
+          };
+
+          td.addEventListener('click', clickHandler);
+          // Track listener for cleanup
+          self.cellListeners.push({ element: td, handler: clickHandler });
 
           row.appendChild(td);
         });
@@ -1154,6 +1280,9 @@
       // Replace existing container or insert new
       const existingContainer = document.getElementById(this.containerId);
       if (existingContainer) {
+        // CRITICAL FIX: Clean up all old event listeners before re-rendering
+        this.destroy();
+
         // Clean up event listeners from the old container before removing it
         const dropdowns = existingContainer.querySelectorAll('[data-copy-dropdown]');
         dropdowns.forEach(dropdown => {
@@ -1178,6 +1307,9 @@
             document.body.appendChild(container);
           }
         }
+
+        // Reset cellListeners array for next render
+        this.cellListeners = [];
       } else {
         // First render: append instead of replace
         if (document.body) {

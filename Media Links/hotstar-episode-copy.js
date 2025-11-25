@@ -59,6 +59,66 @@
         }
     }
 
+    // Check if Clipboard API is available
+    function isClipboardAPIAvailable() {
+        return !!(navigator.clipboard && navigator.clipboard.writeText);
+    }
+
+    // Date formatting utility
+    function formatDate(dateString, format) {
+        try {
+            // Parse the date string (expects format like "25 Nov 2025")
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const parts = dateString.trim().split(' ');
+
+            if (parts.length !== 3) {
+                log('Invalid date format:', dateString);
+                return dateString;
+            }
+
+            const day = parseInt(parts[0], 10);
+            const monthStr = parts[1];
+            const year = parseInt(parts[2], 10);
+
+            const monthIndex = months.indexOf(monthStr);
+            if (isNaN(day) || monthIndex === -1 || isNaN(year)) {
+                log('Could not parse date components:', { day, monthStr, year });
+                return dateString;
+            }
+
+            // Create date object (month is 0-indexed in JS)
+            const date = new Date(year, monthIndex, day);
+
+            // Format according to user's preference
+            switch (format) {
+                case 'DD MMM YYYY': {
+                    const pad = (n) => String(n).padStart(2, '0');
+                    return `${pad(date.getDate())} ${months[date.getMonth()]} ${date.getFullYear()}`;
+                }
+                case 'YYYY-MM-DD': {
+                    const pad = (n) => String(n).padStart(2, '0');
+                    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+                }
+                case 'MM/DD/YYYY': {
+                    const pad = (n) => String(n).padStart(2, '0');
+                    return `${pad(date.getMonth() + 1)}/${pad(date.getDate())}/${date.getFullYear()}`;
+                }
+                case 'DD/MM/YYYY': {
+                    const pad = (n) => String(n).padStart(2, '0');
+                    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
+                }
+                case 'MMM DD, YYYY': {
+                    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+                }
+                default:
+                    return dateString;
+            }
+        } catch (error) {
+            log('Error formatting date:', error);
+            return dateString;
+        }
+    }
+
     // Get current theme
     function getCurrentTheme() {
         try {
@@ -148,7 +208,13 @@
             toast.style.backgroundColor = primaryColor;
         }
 
-        document.body.appendChild(toast);
+        // Safely append toast to body if it exists
+        if (document.body) {
+            document.body.appendChild(toast);
+        } else {
+            // Fallback: append to document element if body doesn't exist yet
+            document.documentElement.appendChild(toast);
+        }
 
         setTimeout(() => {
             toast.style.opacity = '0';
@@ -200,9 +266,12 @@
         if (type === 'title') {
             button.innerHTML = '<span>T</span>';
             button.title = 'Copy episode title';
-        } else {
+        } else if (type === 'description') {
             button.innerHTML = '<span>D</span>';
             button.title = 'Copy episode description';
+        } else if (type === 'date') {
+            button.innerHTML = '<span>📅</span>';
+            button.title = 'Copy episode date';
         }
 
         // Hover effects
@@ -225,8 +294,10 @@
             e.stopPropagation();
             if (type === 'title') {
                 copyEpisodeTitle(episodeCard, button, successColor);
-            } else {
+            } else if (type === 'description') {
                 copyEpisodeDescription(episodeCard, button, successColor);
+            } else if (type === 'date') {
+                copyEpisodeDate(episodeCard, button, successColor);
             }
         });
 
@@ -243,10 +314,40 @@
             button.style.borderColor = primaryColor;
             button.style.color = primaryColor;
 
-            // Update hover state colors
-            button.addEventListener('mouseenter', () => {
-                button.style.backgroundColor = primaryColor;
-                button.style.boxShadow = `0 2px 6px ${primaryColor}4d`;
+            // Remove all existing event listeners by cloning the element
+            // This prevents duplicate listeners from stacking
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+
+            // Re-attach the click handler that was lost during cloning
+            const buttonType = newButton.dataset.buttonType;
+            const episodeCard = newButton.closest('li[data-testid="episode-card"]');
+
+            if (episodeCard) {
+                newButton.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (buttonType === 'title') {
+                        copyEpisodeTitle(episodeCard, newButton, successColor);
+                    } else if (buttonType === 'description') {
+                        copyEpisodeDescription(episodeCard, newButton, successColor);
+                    } else if (buttonType === 'date') {
+                        copyEpisodeDate(episodeCard, newButton, successColor);
+                    }
+                });
+            }
+
+            // Add fresh hover state colors
+            newButton.addEventListener('mouseenter', () => {
+                newButton.style.backgroundColor = primaryColor;
+                newButton.style.boxShadow = `0 2px 6px ${primaryColor}4d`;
+            });
+
+            newButton.addEventListener('mouseleave', () => {
+                newButton.style.backgroundColor = 'transparent';
+                newButton.style.color = primaryColor;
+                newButton.style.transform = 'scale(1)';
+                newButton.style.boxShadow = 'none';
             });
         });
 
@@ -263,6 +364,13 @@
             if (!title) {
                 showToast('No title found', 'error');
                 log('No title found for episode');
+                return;
+            }
+
+            // Check if Clipboard API is available
+            if (!isClipboardAPIAvailable()) {
+                showToast('Clipboard API not available in your browser', 'error');
+                log('Clipboard API not available');
                 return;
             }
 
@@ -313,6 +421,13 @@
             // Copy ONLY the description text (not the title)
             const textToCopy = description;
 
+            // Check if Clipboard API is available
+            if (!isClipboardAPIAvailable()) {
+                showToast('Clipboard API not available in your browser', 'error');
+                log('Clipboard API not available');
+                return;
+            }
+
             // Copy to clipboard
             navigator.clipboard.writeText(textToCopy).then(() => {
                 log('Copied description for:', title);
@@ -336,6 +451,85 @@
         } catch (error) {
             log('Error in copyEpisodeDescription:', error);
             showToast('Error copying description', 'error');
+        }
+    }
+
+    // Extract and copy episode date
+    function copyEpisodeDate(episodeCard, button, successColor) {
+        try {
+            // Find episode title (for logging)
+            const titleElement = episodeCard.querySelector('h3');
+            const title = titleElement ? titleElement.textContent.trim() : 'Unknown Episode';
+            const primaryColor = getThemeColor('primary');
+
+            // Find the date element - look for span with the date text
+            // The date is in a span with class like "ON_IMAGE LABEL_CAPTION1_SEMIBOLD"
+            // We need to find the right span that contains the date in format "DD MMM YYYY"
+            let dateText = '';
+            const dateSpans = episodeCard.querySelectorAll('span[data-testid="textTag"] span');
+
+            // Look for the date pattern (DD MMM YYYY or similar)
+            // Support both English and potentially other month abbreviations
+            for (const span of dateSpans) {
+                const text = span.textContent.trim();
+                // More flexible regex that matches: DD MMM YYYY format (any 3+ letter month)
+                if (/^\d{1,2}\s[A-Za-z]{3,}\s\d{4}$/.test(text)) {
+                    dateText = text;
+                    break;
+                }
+            }
+
+            if (!dateText) {
+                showToast('No date found', 'error');
+                log('No date found for episode:', title);
+                return;
+            }
+
+            // Load the date format preference from storage
+            chrome.storage.sync.get(['hotstarDateFormat'], (result) => {
+                // Check for storage errors
+                if (chrome.runtime.lastError) {
+                    log('Storage error:', chrome.runtime.lastError);
+                    showToast('Error reading storage', 'error');
+                    return;
+                }
+
+                const dateFormat = result.hotstarDateFormat || 'DD MMM YYYY';
+                const formattedDate = formatDate(dateText, dateFormat);
+
+                // Check if Clipboard API is available
+                if (!isClipboardAPIAvailable()) {
+                    showToast('Clipboard API not available in your browser', 'error');
+                    log('Clipboard API not available');
+                    return;
+                }
+
+                // Copy to clipboard
+                navigator.clipboard.writeText(formattedDate).then(() => {
+                    log('Copied date for:', title, '-> ', formattedDate);
+                    showToast(`Date copied: ${formattedDate}`, 'success');
+
+                    // Visual feedback - capture current values inside the promise
+                    const originalHTML = button.innerHTML;
+                    const originalBorderColor = button.style.borderColor;
+
+                    button.innerHTML = '<span>✓</span>';
+                    button.style.borderColor = successColor;
+                    button.style.color = successColor;
+
+                    setTimeout(() => {
+                        button.innerHTML = originalHTML;
+                        button.style.borderColor = originalBorderColor;
+                        button.style.color = primaryColor;
+                    }, 1500);
+                }).catch((error) => {
+                    log('Error copying to clipboard:', error);
+                    showToast('Failed to copy', 'error');
+                });
+            });
+        } catch (error) {
+            log('Error in copyEpisodeDate:', error);
+            showToast('Error copying date', 'error');
         }
     }
 
@@ -398,6 +592,10 @@
                 const descButton = createCopyButton(card, 'description');
                 buttonWrapper.appendChild(descButton);
 
+                // Create date copy button
+                const dateButton = createCopyButton(card, 'date');
+                buttonWrapper.appendChild(dateButton);
+
                 // Insert buttons right after the description element
                 // This is the most reliable approach that works with all DOM variations
                 descElement.insertAdjacentElement('afterend', buttonWrapper);
@@ -418,8 +616,20 @@
         }
     }
 
+    // Store observer globally for cleanup
+    let episodeObserver = null;
+
     // Set up MutationObserver to watch for new episodes (when scrolling loads more)
     function setupObserver() {
+        // Disconnect existing observer if it exists
+        if (episodeObserver) {
+            if (episodeObserver.timeout) {
+                clearTimeout(episodeObserver.timeout);
+            }
+            episodeObserver.disconnect();
+            log('Disconnected existing MutationObserver');
+        }
+
         const observer = new MutationObserver((mutations) => {
             let hasNewCards = false;
 
@@ -472,6 +682,21 @@
             }
         } else {
             log('Could not set up MutationObserver');
+        }
+
+        // Store reference for cleanup
+        episodeObserver = observer;
+    }
+
+    // Cleanup function for when page unloads or extension is disabled
+    function cleanup() {
+        if (episodeObserver) {
+            // Clear any pending timeout first
+            if (episodeObserver.timeout) {
+                clearTimeout(episodeObserver.timeout);
+            }
+            episodeObserver.disconnect();
+            log('MutationObserver disconnected and cleaned up');
         }
     }
 
@@ -545,6 +770,9 @@
     // Initialize
     function init() {
         log('Initializing episode description copy feature');
+
+        // Set up cleanup for when page unloads
+        window.addEventListener('beforeunload', cleanup);
 
         // Set up theme listeners
         setupThemeListener();
