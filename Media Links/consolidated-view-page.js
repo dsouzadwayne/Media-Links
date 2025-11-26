@@ -51,6 +51,22 @@
           'consolidatedViewData_releaseinfo',
           'consolidatedViewData_technical'
         ], (consolidatedResult) => {
+          // BUG FIX: Check for storage errors first
+          if (chrome.runtime.lastError) {
+            console.error('Error loading consolidated data:', chrome.runtime.lastError);
+            viewMode = null;
+            resolve({ mode: null, data: null });
+            return;
+          }
+
+          // BUG FIX: Validate consolidatedResult is an object
+          if (!consolidatedResult || typeof consolidatedResult !== 'object') {
+            console.warn('Invalid consolidated result:', consolidatedResult);
+            viewMode = null;
+            resolve({ mode: null, data: null });
+            return;
+          }
+
           const hasConsolidatedData = consolidatedResult['consolidatedViewData_title'] ||
                                       consolidatedResult['consolidatedViewData_fullcredits'] ||
                                       consolidatedResult['consolidatedViewData_companycredits'] ||
@@ -600,10 +616,22 @@
       if (navDiv) {
         navDiv.style.display = 'flex';
 
+        // Get all nav buttons
+        const wikiBtn = document.getElementById('nav-wiki-view');
+        const imdbBtn = document.getElementById('nav-imdb-view');
+        const comparisonBtn = document.getElementById('nav-comparison-view');
+
+        // Remove active from all first
+        wikiBtn?.classList.remove('active');
+        imdbBtn?.classList.remove('active');
+        comparisonBtn?.classList.remove('active');
+
         // Update active tab based on source
         if (source === 'wikipedia') {
-          document.getElementById('nav-wiki-view')?.classList.add('active');
-          document.getElementById('nav-imdb-view')?.classList.remove('active');
+          wikiBtn?.classList.add('active');
+        } else if (source === 'comparison') {
+          // This is IMDb view from comparison
+          imdbBtn?.classList.add('active');
         }
       }
     }
@@ -681,36 +709,77 @@
   /**
    * Switch to Wikipedia view from consolidated view
    */
-  window.switchToWikipediaViewFromConsolidated = function() {
+  function switchToWikipediaViewFromConsolidated() {
     // Get comparison data from storage
     chrome.storage.local.get(['comparison-data'], (result) => {
       if (result['comparison-data'] && result['comparison-data'].sourceA) {
         // Convert Wikipedia data to flat format
         const flatData = convertWikipediaDataToViewFormat(result['comparison-data'].sourceA);
 
-        // Store Wikipedia data
-        chrome.storage.local.set({
-          'customized-view-temp': {
-            data: flatData,
-            source: 'Wikipedia',
-            title: result['comparison-data'].sourceAName || 'Wikipedia',
-            columns: ['name', 'role', 'roleType'],
-            pageSource: 'Wikipedia'
-          }
-        }, () => {
-          // Reload with wikipedia source parameter
-          window.location.href = chrome.runtime.getURL('consolidated-view-page.html?source=wikipedia');
+        // Clear conflicting IMDb consolidated keys first
+        chrome.storage.local.remove([
+          'consolidatedViewData_fullcredits',
+          'consolidatedViewData_companycredits',
+          'consolidatedViewData_awards',
+          'consolidatedViewData_releaseinfo',
+          'consolidatedViewData_technical',
+          'consolidatedViewData_title',
+          'consolidatedViewMovieId'
+        ], () => {
+          // Store Wikipedia data
+          chrome.storage.local.set({
+            'customized-view-temp': {
+              data: flatData,
+              source: 'Wikipedia',
+              title: result['comparison-data'].sourceAName || 'Wikipedia',
+              columns: ['name', 'role', 'roleType'],
+              pageSource: 'Wikipedia'
+            }
+          }, () => {
+            // Reload with wikipedia source parameter
+            window.location.href = chrome.runtime.getURL('consolidated-view-page.html?source=wikipedia');
+          });
         });
       } else {
         alert('Wikipedia data not available');
       }
     });
-  };
+  }
+
+  /**
+   * Switch to IMDb view from consolidated/wikipedia view
+   */
+  function switchToIMDbViewFromConsolidated() {
+    // Get comparison data from storage
+    chrome.storage.local.get(['comparison-data'], (result) => {
+      if (result['comparison-data'] && result['comparison-data'].sourceB) {
+        const imdbData = result['comparison-data'].sourceB;
+
+        // Clear conflicting Wikipedia single-view key first
+        chrome.storage.local.remove(['customized-view-temp'], () => {
+          // Store IMDb consolidated data for the consolidated view page
+          chrome.storage.local.set({
+            'consolidatedViewData_fullcredits': imdbData.fullcredits || [],
+            'consolidatedViewData_companycredits': imdbData.companycredits || [],
+            'consolidatedViewData_awards': imdbData.awards || [],
+            'consolidatedViewData_releaseinfo': imdbData.releaseinfo || [],
+            'consolidatedViewData_technical': imdbData.technical || [],
+            'consolidatedViewMovieId': 'comparison-view'
+          }, () => {
+            // Reload with comparison source parameter
+            window.location.href = chrome.runtime.getURL('consolidated-view-page.html?source=comparison');
+          });
+        });
+      } else {
+        alert('IMDb data not available');
+      }
+    });
+  }
 
   /**
    * Switch to comparison view from consolidated view
    */
-  window.switchToComparisonFromConsolidated = function() {
+  function switchToComparisonViewFromConsolidated() {
     // Check if comparison data exists
     chrome.storage.local.get(['comparison-data'], (result) => {
       if (result['comparison-data']) {
@@ -720,13 +789,35 @@
         alert('Comparison data not available. Please start a new comparison from IMDb or Wikipedia.');
       }
     });
-  };
+  }
+
+  /**
+   * Setup navigation button event listeners (CSP-compliant)
+   */
+  function setupConsolidatedNavigationListeners() {
+    const wikiBtn = document.getElementById('nav-wiki-view');
+    const imdbBtn = document.getElementById('nav-imdb-view');
+    const comparisonBtn = document.getElementById('nav-comparison-view');
+
+    if (wikiBtn) {
+      wikiBtn.addEventListener('click', switchToWikipediaViewFromConsolidated);
+    }
+
+    if (imdbBtn) {
+      imdbBtn.addEventListener('click', switchToIMDbViewFromConsolidated);
+    }
+
+    if (comparisonBtn) {
+      comparisonBtn.addEventListener('click', switchToComparisonViewFromConsolidated);
+    }
+  }
 
   // Load when page is ready
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', async () => {
       await initializeTheme();
       setupThemeListeners();
+      setupConsolidatedNavigationListeners();
       initialize();
       checkIfFromComparison();
     });
@@ -734,6 +825,7 @@
     (async () => {
       await initializeTheme();
       setupThemeListeners();
+      setupConsolidatedNavigationListeners();
       initialize();
       checkIfFromComparison();
     })();

@@ -27,6 +27,10 @@
     let episodePanel = null;
     let episodePanelVisible = true;
 
+    // Track intervals for cleanup on page unload
+    let checkIntervalId = null;
+    let updateEpisodeIntervalId = null;
+
     // Debug logging
     function log(...args) {
         if (CONFIG.debug) {
@@ -1294,6 +1298,35 @@
         log('Episode panel cleaned up');
     }
 
+    // BUG FIX: Comprehensive cleanup function for all resources
+    function cleanupAllResources() {
+        // Clear all intervals to prevent memory leaks
+        if (checkIntervalId) {
+            clearInterval(checkIntervalId);
+            checkIntervalId = null;
+            log('Cleared check interval');
+        }
+        if (updateEpisodeIntervalId) {
+            clearInterval(updateEpisodeIntervalId);
+            updateEpisodeIntervalId = null;
+            log('Cleared episode update interval');
+        }
+        if (observerTimeout) {
+            clearTimeout(observerTimeout);
+            observerTimeout = null;
+        }
+
+        // Clear processedButtons to free memory
+        processedButtons.clear();
+        log('Cleared processedButtons set');
+
+        // Cleanup UI elements
+        cleanupEpisodePanel();
+        removeControlButton();
+
+        log('All resources cleaned up');
+    }
+
     // Setup event listeners for search input
     function setupSearchEventListeners() {
         const searchInput = document.getElementById('hotstar-episode-search');
@@ -1339,13 +1372,14 @@
                     const episodeCards = document.querySelectorAll('li[data-testid="episode-card"]');
                     const episodeIndex = parseInt(foundButton.dataset.episodeIndex);
 
-                    if (episodeIndex < episodeCards.length) {
+                    // BUG FIX: Validate episodeIndex is a valid non-negative integer within bounds
+                    if (!isNaN(episodeIndex) && episodeIndex >= 0 && episodeIndex < episodeCards.length) {
                         foundCard = episodeCards[episodeIndex];
                         scrollToEpisode(foundCard, cleanSearch);
                         searchInput.blur();
                         log(`Navigated to exact episode ${cleanSearch}`);
                     } else {
-                        log(`ERROR: Could not find episode card at index ${episodeIndex}`);
+                        log(`ERROR: Invalid episode index ${episodeIndex} (parsed from "${foundButton.dataset.episodeIndex}"), episodeCards.length=${episodeCards.length}`);
                         showNotification(`Could not navigate to episode ${cleanSearch}`);
                     }
                 } else {
@@ -1414,8 +1448,9 @@
             processViewMoreButtons();
         }, 2000);
 
+        // BUG FIX: Store interval IDs for cleanup on page unload
         // Set up periodic checks (works in background too)
-        setInterval(() => {
+        checkIntervalId = setInterval(() => {
             if (clickCount < CONFIG.maxClicks) {
                 // Process regardless of visibility state if workInBackground is true
                 // Also check if not paused
@@ -1428,7 +1463,7 @@
         }, CONFIG.checkInterval);
 
         // Update episode list every 200ms to catch newly loaded episodes
-        setInterval(() => {
+        updateEpisodeIntervalId = setInterval(() => {
             updateEpisodeList();
         }, 200);
 
@@ -1442,9 +1477,17 @@
         // Listen for visibility changes
         document.addEventListener('visibilitychange', handleVisibilityChange);
 
-        // Clean up on page navigation
-        window.addEventListener('beforeunload', cleanupEpisodePanel);
-        document.addEventListener('pagehide', cleanupEpisodePanel);
+        // BUG FIX: Clean up ALL resources on page navigation (not just panel)
+        window.addEventListener('beforeunload', cleanupAllResources);
+        document.addEventListener('pagehide', cleanupAllResources);
+        // Also listen for visibilitychange to hidden as a fallback
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                // Don't cleanup on tab switch, only on actual navigation
+                // But do clean up processedButtons periodically
+                cleanupStaleButtonReferences();
+            }
+        });
 
         log('='.repeat(60));
         log('Auto-clicker initialized and will work in background tabs');

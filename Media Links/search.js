@@ -336,10 +336,16 @@ const loadSettings = () => {
 
 const saveCurrentProfileSettings = () => {
   document.querySelectorAll(`#profile${currentProfile} .query-setting`).forEach(checkbox => {
-    const profileNum = parseInt(checkbox.dataset.profileNum);
-    const wordCount = parseInt(checkbox.dataset.wordCount);
+    const profileNum = parseInt(checkbox.dataset.profileNum, 10);
+    const wordCount = parseInt(checkbox.dataset.wordCount, 10);
     const pattern = checkbox.dataset.pattern;
-    
+
+    // BUG FIX: Validate parsed values to prevent NaN keys
+    if (isNaN(profileNum) || isNaN(wordCount) || !pattern) {
+      console.warn('Invalid checkbox data:', { profileNum, wordCount, pattern });
+      return; // Skip invalid checkboxes
+    }
+
     const profileKey = `profile${profileNum}`;
     if (!profileSettings[profileKey]) {
       profileSettings[profileKey] = {};
@@ -347,7 +353,7 @@ const saveCurrentProfileSettings = () => {
     if (!profileSettings[profileKey][wordCount]) {
       profileSettings[profileKey][wordCount] = {};
     }
-    
+
     profileSettings[profileKey][wordCount][pattern] = checkbox.checked;
   });
   

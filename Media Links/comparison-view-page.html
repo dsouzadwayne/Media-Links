@@ -135,6 +135,90 @@
             color: #ef4444;
         }
 
+        .stat-conflict {
+            background: rgba(249, 115, 22, 0.2);
+            color: #f97316;
+        }
+
+        /* Section Dividers */
+        .section-divider td {
+            background: var(--hover-color);
+            font-weight: 700;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-primary);
+            opacity: 0.8;
+            padding: 8px 12px;
+            border-bottom: 2px solid var(--accent);
+        }
+
+        /* Row Types */
+        .row-exact-match {
+            background: rgba(34, 197, 94, 0.08);
+        }
+
+        .row-exact-match:hover {
+            background: rgba(34, 197, 94, 0.18);
+        }
+
+        .row-conflict {
+            background: rgba(249, 115, 22, 0.08);
+        }
+
+        .row-conflict:hover {
+            background: rgba(249, 115, 22, 0.18);
+        }
+
+        .row-wiki-only {
+            background: rgba(59, 130, 246, 0.08);
+        }
+
+        .row-wiki-only:hover {
+            background: rgba(59, 130, 246, 0.18);
+        }
+
+        .row-imdb-only {
+            background: rgba(239, 68, 68, 0.08);
+        }
+
+        .row-imdb-only:hover {
+            background: rgba(239, 68, 68, 0.18);
+        }
+
+        /* Source Badges (in table cells) */
+        .comparison-table .source-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .source-both {
+            background: rgba(34, 197, 94, 0.2);
+            color: #22c55e;
+        }
+
+        .source-wiki {
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+        }
+
+        .source-imdb {
+            background: rgba(239, 68, 68, 0.2);
+            color: #ef4444;
+        }
+
+        /* Conflict Indicator */
+        .conflict-indicator {
+            color: #f97316;
+            font-weight: bold;
+            margin-left: 4px;
+        }
+
         .comparison-table {
             width: 100%;
             border-collapse: collapse;
@@ -305,6 +389,96 @@
         .nav-tab-icon {
             margin-right: 6px;
         }
+
+        /* Copy button styles */
+        .category-title-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .copy-category-btn {
+            padding: 6px 12px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .copy-category-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .copy-section-btn {
+            padding: 4px 8px;
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--text-primary);
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+            opacity: 0.7;
+            transition: all 0.2s;
+        }
+
+        .copy-section-btn:hover {
+            opacity: 1;
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .copy-row-btn {
+            padding: 4px 8px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            opacity: 0.5;
+            transition: all 0.2s;
+        }
+
+        .copy-row-btn:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        .action-cell {
+            text-align: center;
+        }
+
+        .divider-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* Toast animation */
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeOut {
+            from {
+                opacity: 1;
+            }
+            to {
+                opacity: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -322,10 +496,10 @@
 
         <!-- Navigation Tabs -->
         <div class="view-navigation">
-            <button class="nav-tab" id="nav-wiki" onclick="switchToWikipediaView()">
+            <button class="nav-tab" id="nav-wiki">
                 <span class="nav-tab-icon">📖</span> Wikipedia View
             </button>
-            <button class="nav-tab" id="nav-imdb" onclick="switchToIMDbView()">
+            <button class="nav-tab" id="nav-imdb">
                 <span class="nav-tab-icon">🎬</span> IMDb View
             </button>
             <button class="nav-tab active" id="nav-comparison">

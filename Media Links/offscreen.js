@@ -70,9 +70,12 @@ const setupMessageListeners = () => {
       return;
     }
 
-    // Validate origin for security - accept only messages from this extension
-    // Now it's safe to call includes()
-    if (event.origin !== 'null' && !event.origin.includes('chrome-extension')) {
+    // BUG FIX: Stricter origin validation for security
+    // Accept 'null' origin (sandboxed iframe) or exact chrome-extension protocol match
+    const isNullOrigin = event.origin === 'null';
+    const isChromeExtension = event.origin.startsWith('chrome-extension://');
+
+    if (!isNullOrigin && !isChromeExtension) {
       console.warn('Offscreen: Rejected message from untrusted origin:', event.origin);
       return;
     }
@@ -160,6 +163,12 @@ const setupMessageListeners = () => {
  */
 const waitForSandboxReady = () => {
   return new Promise((resolve, reject) => {
+    // BUG FIX: Check sandboxFrame exists before accessing contentWindow
+    if (!sandboxFrame) {
+      reject(new Error('Sandbox iframe element not found in DOM'));
+      return;
+    }
+
     if (sandboxFrame.contentWindow) {
       resolve();
       return;
@@ -172,7 +181,12 @@ const waitForSandboxReady = () => {
 
     sandboxFrame.addEventListener('load', () => {
       clearTimeout(timeout);
-      resolve();
+      // BUG FIX: Double-check contentWindow after load event
+      if (sandboxFrame.contentWindow) {
+        resolve();
+      } else {
+        reject(new Error('Sandbox iframe loaded but contentWindow is null'));
+      }
     }, { once: true });
 
     sandboxFrame.addEventListener('error', () => {

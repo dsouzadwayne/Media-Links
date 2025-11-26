@@ -238,6 +238,117 @@
   }
 
   /**
+   * Create and show a status notification
+   */
+  function showComparisonStatus(message, type = 'info') {
+    // Remove existing notification
+    const existing = document.getElementById('comparison-status-notification');
+    if (existing) existing.remove();
+
+    const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+    const notification = document.createElement('div');
+    notification.id = 'comparison-status-notification';
+    notification.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      padding: 16px 24px;
+      background: ${type === 'error' ? '#ef4444' : type === 'success' ? '#22c55e' : isDarkMode ? '#1e1e1e' : '#ffffff'};
+      color: ${type === 'error' || type === 'success' ? '#ffffff' : isDarkMode ? '#ffffff' : '#000000'};
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+      z-index: 10001;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+      font-size: 14px;
+      font-weight: 500;
+      max-width: 400px;
+      border: 2px solid ${type === 'error' ? '#dc2626' : type === 'success' ? '#16a34a' : '#8b5cf6'};
+      animation: slideIn 0.3s ease-out;
+    `;
+
+    // Add animation keyframes
+    if (!document.getElementById('comparison-status-styles')) {
+      const style = document.createElement('style');
+      style.id = 'comparison-status-styles';
+      style.textContent = `
+        @keyframes slideIn {
+          from { transform: translateX(100%); opacity: 0; }
+          to { transform: translateX(0); opacity: 1; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    notification.innerHTML = message;
+    document.body.appendChild(notification);
+
+    return notification;
+  }
+
+  /**
+   * Update status notification
+   */
+  function updateComparisonStatus(message, type = 'info') {
+    const existing = document.getElementById('comparison-status-notification');
+    if (existing) {
+      const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      existing.innerHTML = message;
+      existing.style.background = type === 'error' ? '#ef4444' : type === 'success' ? '#22c55e' : isDarkMode ? '#1e1e1e' : '#ffffff';
+      existing.style.color = type === 'error' || type === 'success' ? '#ffffff' : isDarkMode ? '#ffffff' : '#000000';
+      existing.style.borderColor = type === 'error' ? '#dc2626' : type === 'success' ? '#16a34a' : '#8b5cf6';
+    } else {
+      showComparisonStatus(message, type);
+    }
+  }
+
+  /**
+   * Remove status notification
+   */
+  function removeComparisonStatus() {
+    const existing = document.getElementById('comparison-status-notification');
+    if (existing) {
+      existing.style.animation = 'slideIn 0.3s ease-out reverse';
+      setTimeout(() => existing.remove(), 300);
+    }
+  }
+
+  /**
+   * Listen for comparison progress messages from background
+   */
+  function setupComparisonProgressListener() {
+    chrome.runtime.onMessage.addListener((message) => {
+      if (message.type === 'comparisonProgress') {
+        const { step, detail } = message;
+        console.log('Comparison progress:', step, detail);
+
+        // Map step to icon
+        let icon = '⏳';
+        if (step === 'complete') icon = '✅';
+        else if (step === 'error') icon = '❌';
+        else if (step.startsWith('imdb')) icon = '🎬';
+        else if (step === 'wikipedia') icon = '📖';
+        else if (step === 'comparing') icon = '🔄';
+
+        const type = step === 'error' ? 'error' : step === 'complete' ? 'success' : 'info';
+
+        updateComparisonStatus(`
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="font-size: 24px;">${icon}</div>
+            <div>
+              <div style="font-weight: 700; margin-bottom: 4px;">Comparison in Progress</div>
+              <div style="font-size: 12px; opacity: 0.8;">${detail}</div>
+            </div>
+          </div>
+        `, type);
+      }
+    });
+  }
+
+  // Setup the listener
+  setupComparisonProgressListener();
+
+  /**
    * Initiate comparison
    */
   async function initiateComparison(currentPageInfo) {
@@ -251,9 +362,20 @@
         return;
       }
 
-      // Set timeout promise
+      // Show initial status
+      showComparisonStatus(`
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="font-size: 24px;">🔄</div>
+          <div>
+            <div style="font-weight: 700; margin-bottom: 4px;">Starting Comparison</div>
+            <div style="font-size: 12px; opacity: 0.8;">Initializing...</div>
+          </div>
+        </div>
+      `);
+
+      // Set timeout promise - 3 minutes to allow for IMDb tab extraction
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Comparison request timed out')), 10000);
+        setTimeout(() => reject(new Error('Comparison request timed out')), 180000);
       });
 
       // Send message with timeout
@@ -277,7 +399,7 @@
             } else if (response && response.success) {
               resolve(response);
             } else {
-              reject(new Error('Comparison failed'));
+              reject(new Error(response?.error || 'Comparison failed'));
             }
           }
         );
@@ -285,11 +407,38 @@
 
       // Race between message and timeout
       await Promise.race([messagePromise, timeoutPromise]);
+
+      // Show success
+      updateComparisonStatus(`
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="font-size: 24px;">✅</div>
+          <div>
+            <div style="font-weight: 700; margin-bottom: 4px;">Comparison Complete!</div>
+            <div style="font-size: 12px; opacity: 0.8;">Opening comparison view...</div>
+          </div>
+        </div>
+      `, 'success');
+
+      // Remove notification after a delay
+      setTimeout(() => removeComparisonStatus(), 2000);
+
       console.log('Comparison started');
 
     } catch (error) {
       console.error('Comparison initiation error:', error);
-      alert(`Error: ${error.message}`);
+
+      updateComparisonStatus(`
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="font-size: 24px;">❌</div>
+          <div>
+            <div style="font-weight: 700; margin-bottom: 4px;">Comparison Failed</div>
+            <div style="font-size: 12px; opacity: 0.8;">${error.message}</div>
+          </div>
+        </div>
+      `, 'error');
+
+      // Remove error notification after 5 seconds
+      setTimeout(() => removeComparisonStatus(), 5000);
     }
   }
 
@@ -389,13 +538,15 @@
 
     button.addEventListener('click', async () => {
       button.disabled = true;
-      button.textContent = '⏳ Starting comparison...';
+      button.textContent = '⏳ Comparing...';
 
       try {
         await initiateComparison(currentPageInfo);
       } catch (error) {
         console.error('Comparison error:', error);
-        alert(`Error: ${error.message}`);
+        // Error is already shown via notification in initiateComparison
+      } finally {
+        // Re-enable button after completion
         button.disabled = false;
         button.innerHTML = buttonText;
       }

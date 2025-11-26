@@ -51,8 +51,11 @@ function extractIMDbId(url) {
 
 /**
  * Extract consolidated IMDb data from all pages (fullcredits, companycredits, awards, releaseinfo, technical)
+ * Opens tabs as active (foreground) like the consolidated overview does
+ * @param {string} imdbId - The IMDb ID
+ * @param {function} sendProgress - Optional callback to send progress updates
  */
-async function extractConsolidatedIMDbData(imdbId) {
+async function extractConsolidatedIMDbData(imdbId, sendProgress = () => {}) {
   console.log(`Extracting consolidated IMDb data for ${imdbId}`);
 
   // Define extraction pages
@@ -68,25 +71,71 @@ async function extractConsolidatedIMDbData(imdbId) {
   const consolidatedData = {};
 
   try {
-    // 1. Open all extraction tabs
-    console.log('Opening IMDb tabs for extraction...');
-    for (const page of extractionPages) {
-      const tab = await chrome.tabs.create({ url: page.url, active: false });
+    // 1. Open all extraction tabs as active (foreground) tabs - like the consolidated overview
+    console.log('Opening IMDb tabs for extraction (active/foreground)...');
+    for (let i = 0; i < extractionPages.length; i++) {
+      const page = extractionPages[i];
+      sendProgress('imdb-open', `Opening ${page.name} (${i + 1}/${extractionPages.length})...`);
+      const tab = await chrome.tabs.create({ url: page.url, active: true });
       openedTabs.push({ tab, page });
       console.log(`Opened ${page.name} tab (ID: ${tab.id})`);
 
-      // Stagger tab opening
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Stagger tab opening by 300ms like consolidated overview
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
 
-    // 2. Wait for tabs to load
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    // 2. Wait for all tabs to fully load
+    console.log('Waiting for all tabs to load...');
+    sendProgress('imdb-loading', 'Waiting for IMDb pages to load...');
+
+    // Helper function to check if a tab is loaded
+    const isTabLoaded = async (tabId) => {
+      try {
+        const tab = await chrome.tabs.get(tabId);
+        return tab.status === 'complete';
+      } catch (e) {
+        return false;
+      }
+    };
+
+    // Wait for all tabs to be loaded (poll every 500ms, max 60 seconds)
+    let allLoaded = false;
+    let loadAttempts = 0;
+    const maxLoadAttempts = 120; // 60 seconds
+
+    while (!allLoaded && loadAttempts < maxLoadAttempts) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      loadAttempts++;
+
+      const loadStates = await Promise.all(
+        openedTabs.map(({ tab }) => isTabLoaded(tab.id))
+      );
+
+      allLoaded = loadStates.every(loaded => loaded);
+
+      if (loadAttempts % 10 === 0) {
+        const loadedCount = loadStates.filter(l => l).length;
+        console.log(`Tab loading progress: ${loadedCount}/${openedTabs.length} loaded (${loadAttempts * 0.5}s elapsed)`);
+      }
+    }
+
+    if (!allLoaded) {
+      console.warn('Not all tabs loaded within timeout, proceeding anyway...');
+    } else {
+      console.log('All IMDb tabs loaded successfully');
+    }
+
+    // Additional wait for content scripts to initialize
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     // 3. Extract data from each tab
     console.log('Extracting data from IMDb tabs...');
-    for (const { tab, page } of openedTabs) {
+    sendProgress('imdb-extract', 'Extracting data from IMDb pages...');
+    for (let i = 0; i < openedTabs.length; i++) {
+      const { tab, page } = openedTabs[i];
       try {
         console.log(`Sending extraction message to ${page.name} tab`);
+        sendProgress('imdb-extract', `Extracting ${page.name} (${i + 1}/${openedTabs.length})...`);
 
         // Initialize maxChecks
         let maxChecks = 40; // 20 seconds max (reduced from 60 for better UX)
@@ -178,6 +227,7 @@ async function extractConsolidatedIMDbData(imdbId) {
 
     // 4. Close all opened tabs
     console.log('Closing IMDb tabs...');
+    sendProgress('imdb-cleanup', 'Closing IMDb tabs...');
     for (const { tab } of openedTabs) {
       try {
         await chrome.tabs.remove(tab.id);
@@ -265,10 +315,16 @@ function compareData(wikipediaData, imdbData) {
 
   /**
    * Normalize name for comparison
+   * Handles variations like "J.J. Abrams" vs "JJ Abrams"
    */
   function normalizeName(name) {
     if (!name) return '';
-    return name.toLowerCase().trim().replace(/\s+/g, ' ');
+    return name
+      .toLowerCase()
+      .trim()
+      .replace(/\./g, '')        // Remove periods (J.J. -> JJ)
+      .replace(/[''`]/g, '')     // Remove apostrophes
+      .replace(/\s+/g, ' ');     // Collapse multiple spaces
   }
 
   /**
@@ -318,6 +374,7 @@ function compareData(wikipediaData, imdbData) {
 
   /**
    * Flatten IMDb consolidated data into lists
+   * Note: IMDb data uses 'roleType' field (e.g., "Cast", "Directors", "Writers", "Producers")
    */
   function flattenIMDbData(imdbData) {
     const flattened = {
@@ -328,100 +385,321 @@ function compareData(wikipediaData, imdbData) {
       productionCompanies: []
     };
 
-    // Flatten fullcredits data
+    // Flatten fullcredits data - use roleType field (not section)
     if (imdbData.fullcredits && Array.isArray(imdbData.fullcredits)) {
       imdbData.fullcredits.forEach(item => {
-        if (item.section) {
-          const sectionLower = item.section.toLowerCase();
-          if (sectionLower.includes('cast') || sectionLower === 'actor' || sectionLower === 'actress') {
-            flattened.cast.push(item);
-          } else if (sectionLower.includes('director')) {
-            flattened.directors.push(item);
-          } else if (sectionLower.includes('producer')) {
-            flattened.producers.push(item);
-          } else if (sectionLower.includes('writ')) {
-            flattened.writers.push(item);
-          }
+        // Check roleType field first (this is what imdb-customized-views.js sets)
+        const roleType = (item.roleType || item.section || '').toLowerCase();
+
+        if (roleType.includes('cast') || roleType === 'actor' || roleType === 'actress') {
+          flattened.cast.push(item);
+        } else if (roleType.includes('director') && !roleType.includes('executive')) {
+          flattened.directors.push(item);
+        } else if (roleType.includes('producer')) {
+          flattened.producers.push(item);
+        } else if (roleType.includes('writer')) {
+          flattened.writers.push(item);
         }
       });
     }
 
-    // Add company credits
+    // Add company credits - use roleType or section field
     if (imdbData.companycredits && Array.isArray(imdbData.companycredits)) {
-      flattened.productionCompanies = imdbData.companycredits.filter(c =>
-        c.section && c.section.toLowerCase().includes('production')
-      );
+      flattened.productionCompanies = imdbData.companycredits.filter(c => {
+        const roleType = (c.roleType || c.section || '').toLowerCase();
+        return roleType.includes('production');
+      });
     }
 
     return flattened;
   }
 
-  // Flatten IMDb data
-  const flatIMDb = flattenIMDbData(imdbData);
+  /**
+   * Consolidate both Wikipedia and IMDb data into unified format
+   * Each entry has: { name, role, roleType, source }
+   */
+  function consolidateBothSources(wikipediaData, imdbData) {
+    const consolidated = {
+      cast: [],
+      directors: [],
+      producers: [],
+      writers: [],
+      productionCompanies: []
+    };
 
-  // Compare cast
-  comparison.cast = compareLists(
-    wikipediaData.cast || [],
-    flatIMDb.cast,
+    // Process Wikipedia data
+    if (wikipediaData.cast && Array.isArray(wikipediaData.cast)) {
+      wikipediaData.cast.forEach(item => {
+        consolidated.cast.push({
+          name: item.name || '',
+          role: item.role || item.character || 'Cast',
+          roleType: item.roleType || 'Cast',
+          source: 'Wikipedia'
+        });
+      });
+    }
+
+    if (wikipediaData.directors && Array.isArray(wikipediaData.directors)) {
+      wikipediaData.directors.forEach(item => {
+        const name = typeof item === 'string' ? item : (item.name || '');
+        const role = typeof item === 'string' ? 'Director' : (item.role || 'Director');
+        consolidated.directors.push({
+          name: name,
+          role: role,
+          roleType: 'Directing',
+          source: 'Wikipedia'
+        });
+      });
+    }
+
+    if (wikipediaData.producers && Array.isArray(wikipediaData.producers)) {
+      wikipediaData.producers.forEach(item => {
+        const name = typeof item === 'string' ? item : (item.name || '');
+        const role = typeof item === 'string' ? 'Producer' : (item.role || 'Producer');
+        consolidated.producers.push({
+          name: name,
+          role: role,
+          roleType: 'Producing',
+          source: 'Wikipedia'
+        });
+      });
+    }
+
+    if (wikipediaData.writers && Array.isArray(wikipediaData.writers)) {
+      wikipediaData.writers.forEach(item => {
+        const name = typeof item === 'string' ? item : (item.name || '');
+        const role = typeof item === 'string' ? 'Writer' : (item.role || 'Writer');
+        consolidated.writers.push({
+          name: name,
+          role: role,
+          roleType: 'Writing',
+          source: 'Wikipedia'
+        });
+      });
+    }
+
+    if (wikipediaData.productionCompanies && Array.isArray(wikipediaData.productionCompanies)) {
+      wikipediaData.productionCompanies.forEach(item => {
+        const name = typeof item === 'string' ? item : (item.name || '');
+        consolidated.productionCompanies.push({
+          name: name,
+          role: 'Production Company',
+          roleType: 'Production',
+          source: 'Wikipedia'
+        });
+      });
+    }
+
+    // Process IMDb data (flatten first)
+    const flatIMDb = flattenIMDbData(imdbData);
+
+    flatIMDb.cast.forEach(item => {
+      consolidated.cast.push({
+        name: item.name || '',
+        role: item.role || item.character || 'Cast',
+        roleType: item.roleType || 'Cast',
+        source: 'IMDb'
+      });
+    });
+
+    flatIMDb.directors.forEach(item => {
+      consolidated.directors.push({
+        name: item.name || '',
+        role: item.role || 'Director',
+        roleType: item.roleType || 'Directing',
+        source: 'IMDb'
+      });
+    });
+
+    flatIMDb.producers.forEach(item => {
+      consolidated.producers.push({
+        name: item.name || '',
+        role: item.role || 'Producer',
+        roleType: item.roleType || 'Producing',
+        source: 'IMDb'
+      });
+    });
+
+    flatIMDb.writers.forEach(item => {
+      consolidated.writers.push({
+        name: item.name || '',
+        role: item.role || 'Writer',
+        roleType: item.roleType || 'Writing',
+        source: 'IMDb'
+      });
+    });
+
+    flatIMDb.productionCompanies.forEach(item => {
+      consolidated.productionCompanies.push({
+        name: item.name || '',
+        role: item.role || 'Production Company',
+        roleType: item.roleType || 'Production',
+        source: 'IMDb'
+      });
+    });
+
+    return consolidated;
+  }
+
+  /**
+   * Enhanced comparison that handles same-name-different-role conflicts
+   * Returns: { common, wikiOnly, imdbOnly }
+   */
+  function compareListEnhanced(wikiList, imdbList, nameField = 'name') {
+    const result = {
+      common: [],
+      wikiOnly: [],
+      imdbOnly: []
+    };
+
+    // Create normalized name -> IMDb items map (can have multiple items per name)
+    const imdbByName = new Map();
+    imdbList.forEach(item => {
+      const normalizedName = normalizeName(item[nameField]);
+      if (!imdbByName.has(normalizedName)) {
+        imdbByName.set(normalizedName, []);
+      }
+      imdbByName.get(normalizedName).push(item);
+    });
+
+    const processedImdbNames = new Set();
+
+    // Process Wikipedia entries
+    wikiList.forEach(wikiItem => {
+      const normalizedName = normalizeName(wikiItem[nameField]);
+
+      if (imdbByName.has(normalizedName)) {
+        const imdbItems = imdbByName.get(normalizedName);
+        processedImdbNames.add(normalizedName);
+
+        // Check if any IMDb item has matching role
+        const normalizedWikiRole = normalizeName(wikiItem.role || '');
+        const exactMatch = imdbItems.find(imdbItem =>
+          normalizeName(imdbItem.role || '') === normalizedWikiRole
+        );
+
+        if (exactMatch) {
+          // Exact match - same name AND same role
+          result.common.push({
+            name: wikiItem.name,
+            role: wikiItem.role,
+            roleType: wikiItem.roleType,
+            matchType: 'exact',
+            sources: ['Wikipedia', 'IMDb'],
+            conflictFlag: false
+          });
+        } else {
+          // Name matches but role differs - add BOTH entries with conflict flag
+          result.common.push({
+            name: wikiItem.name,
+            role: wikiItem.role,
+            roleType: wikiItem.roleType,
+            matchType: 'name-only',
+            sources: ['Wikipedia'],
+            conflictFlag: true
+          });
+
+          // Add all IMDb entries with different roles
+          imdbItems.forEach(imdbItem => {
+            result.common.push({
+              name: imdbItem.name,
+              role: imdbItem.role,
+              roleType: imdbItem.roleType,
+              matchType: 'name-only',
+              sources: ['IMDb'],
+              conflictFlag: true
+            });
+          });
+        }
+      } else {
+        // Wikipedia only
+        result.wikiOnly.push({
+          name: wikiItem.name,
+          role: wikiItem.role,
+          roleType: wikiItem.roleType,
+          sources: ['Wikipedia']
+        });
+      }
+    });
+
+    // Find IMDb-only entries (not matched with Wikipedia)
+    imdbList.forEach(imdbItem => {
+      const normalizedName = normalizeName(imdbItem[nameField]);
+      if (!processedImdbNames.has(normalizedName)) {
+        result.imdbOnly.push({
+          name: imdbItem.name,
+          role: imdbItem.role,
+          roleType: imdbItem.roleType,
+          sources: ['IMDb']
+        });
+      }
+    });
+
+    return result;
+  }
+
+  // Consolidate both sources into unified format
+  const consolidated = consolidateBothSources(wikipediaData, imdbData);
+
+  // Compare cast using enhanced comparison
+  comparison.cast = compareListEnhanced(
+    consolidated.cast.filter(item => item.source === 'Wikipedia'),
+    consolidated.cast.filter(item => item.source === 'IMDb'),
     'name'
   );
 
   // Compare directors
-  comparison.directors = compareLists(
-    wikipediaData.directors || [],
-    flatIMDb.directors,
+  comparison.directors = compareListEnhanced(
+    consolidated.directors.filter(item => item.source === 'Wikipedia'),
+    consolidated.directors.filter(item => item.source === 'IMDb'),
     'name'
   );
 
   // Compare producers
-  comparison.producers = compareLists(
-    wikipediaData.producers || [],
-    flatIMDb.producers,
+  comparison.producers = compareListEnhanced(
+    consolidated.producers.filter(item => item.source === 'Wikipedia'),
+    consolidated.producers.filter(item => item.source === 'IMDb'),
     'name'
   );
 
   // Compare writers
-  comparison.writers = compareLists(
-    wikipediaData.writers || [],
-    flatIMDb.writers,
+  comparison.writers = compareListEnhanced(
+    consolidated.writers.filter(item => item.source === 'Wikipedia'),
+    consolidated.writers.filter(item => item.source === 'IMDb'),
     'name'
   );
 
   // Compare production companies
-  comparison.production = compareLists(
-    wikipediaData.productionCompanies || [],
-    flatIMDb.productionCompanies,
+  comparison.production = compareListEnhanced(
+    consolidated.productionCompanies.filter(item => item.source === 'Wikipedia'),
+    consolidated.productionCompanies.filter(item => item.source === 'IMDb'),
     'name'
   );
 
   // Add other metadata (runtime, countries, languages, release dates)
-  // These will be added as simple comparisons
+  // These use simple structure with common/wikiOnly/imdbOnly format
   comparison.runtime = {
-    same: [],
-    different: [],
-    sourceA: { unique: wikipediaData.runtime || [] },
-    sourceB: { unique: imdbData.technical || [] }
+    common: [],
+    wikiOnly: (wikipediaData.runtime || []).map(r => ({ name: r, sources: ['Wikipedia'] })),
+    imdbOnly: (imdbData.technical || []).map(r => ({ name: typeof r === 'string' ? r : r.name, sources: ['IMDb'] }))
   };
 
   comparison.countries = {
-    same: [],
-    different: [],
-    sourceA: { unique: wikipediaData.countries || [] },
-    sourceB: { unique: [] }
+    common: [],
+    wikiOnly: (wikipediaData.countries || []).map(c => ({ name: c, sources: ['Wikipedia'] })),
+    imdbOnly: []
   };
 
   comparison.languages = {
-    same: [],
-    different: [],
-    sourceA: { unique: wikipediaData.languages || [] },
-    sourceB: { unique: [] }
+    common: [],
+    wikiOnly: (wikipediaData.languages || []).map(l => ({ name: l, sources: ['Wikipedia'] })),
+    imdbOnly: []
   };
 
   comparison.releaseDate = {
-    same: [],
-    different: [],
-    sourceA: { unique: wikipediaData.releaseDate || [] },
-    sourceB: { unique: imdbData.releaseinfo || [] }
+    common: [],
+    wikiOnly: (wikipediaData.releaseDate || []).map(d => ({ name: d, sources: ['Wikipedia'] })),
+    imdbOnly: (imdbData.releaseinfo || []).map(r => ({ name: typeof r === 'string' ? r : r.name, sources: ['IMDb'] }))
   };
 
   console.log('Comparison complete');
@@ -1076,6 +1354,19 @@ chrome.runtime.onInstalled.addListener(() => {
     if (message.action === 'startComparison') {
       console.log('Background: Starting comparison with consolidated data');
       (async () => {
+        // Helper to send progress updates to the initiating tab
+        const sendProgress = (step, detail) => {
+          try {
+            chrome.tabs.sendMessage(sender.tab.id, {
+              type: 'comparisonProgress',
+              step: step,
+              detail: detail
+            }).catch(() => {}); // Ignore errors if tab closed
+          } catch (e) {
+            // Ignore
+          }
+        };
+
         try {
           const { currentSource, currentPageInfo, selectedTab } = message;
           let comparisonData = {
@@ -1092,12 +1383,16 @@ chrome.runtime.onInstalled.addListener(() => {
             throw new Error('Could not extract IMDb ID');
           }
 
+          sendProgress('start', 'Starting comparison...');
+
           // 1. Consolidate IMDb data from all pages
           console.log('Background: Consolidating IMDb data from all pages');
-          const imdbConsolidatedData = await extractConsolidatedIMDbData(imdbId);
+          sendProgress('imdb-tabs', 'Opening IMDb pages...');
+          const imdbConsolidatedData = await extractConsolidatedIMDbData(imdbId, sendProgress);
 
           // 2. Extract Wikipedia data
           console.log('Background: Extracting from Wikipedia');
+          sendProgress('wikipedia', 'Extracting Wikipedia data...');
           let wikipediaData = null;
 
           if (currentSource === 'wikipedia') {
@@ -1110,6 +1405,7 @@ chrome.runtime.onInstalled.addListener(() => {
 
           // 3. Perform comparison
           console.log('Background: Performing comparison');
+          sendProgress('comparing', 'Comparing data from both sources...');
           const comparisonResults = compareData(wikipediaData, imdbConsolidatedData);
 
           // 4. Build final comparison data structure
@@ -1119,7 +1415,15 @@ chrome.runtime.onInstalled.addListener(() => {
 
           // Store comparison data and open comparison page
           console.log('Background: Storing comparison data and opening comparison page');
+          sendProgress('complete', 'Opening comparison view...');
+
           chrome.storage.local.set({ 'comparison-data': comparisonData }, () => {
+            // BUG FIX: Check for storage quota errors
+            if (chrome.runtime.lastError) {
+              console.error('Background: Failed to store comparison data:', chrome.runtime.lastError.message);
+              sendResponse({ success: false, error: 'Failed to store comparison data: ' + chrome.runtime.lastError.message });
+              return;
+            }
             const comparisonUrl = chrome.runtime.getURL('comparison-view-page.html');
             chrome.tabs.create({ url: comparisonUrl, active: true });
           });
@@ -1127,6 +1431,7 @@ chrome.runtime.onInstalled.addListener(() => {
           sendResponse({ success: true });
         } catch (error) {
           console.error('Comparison error:', error);
+          sendProgress('error', error.message);
           sendResponse({ success: false, error: error.message });
         }
       })();

@@ -411,8 +411,9 @@
 
     /**
      * Copy section data with format options
+     * Supports date formatting for date columns (Release Date, etc.)
      */
-    copySectionData(items, roleType, format) {
+    async copySectionData(items, roleType, format) {
       // Comprehensive input validation
       if (!Array.isArray(items)) {
         console.error('copySectionData: items must be an array');
@@ -436,36 +437,68 @@
         format = 'names-roles'; // Default format
       }
 
+      // Check if this is a date-related section that needs formatting
+      const isDateSection = this.isDateColumn('role', roleType);
+      let userFormat = null;
+
+      // Get user date format if needed and DateFormattingUtils is available
+      if (isDateSection && typeof window.DateFormattingUtils !== 'undefined') {
+        try {
+          userFormat = await window.DateFormattingUtils.getUserDateFormat();
+        } catch (error) {
+          console.warn('Failed to get user date format:', error);
+        }
+      }
+
+      // Helper to format a date value if applicable
+      const formatDateValue = (value) => {
+        if (!isDateSection || !userFormat || !value || value === '-') {
+          return value;
+        }
+        try {
+          const formatted = window.DateFormattingUtils.parseAndFormat(value, userFormat);
+          return formatted || value;
+        } catch (error) {
+          return value;
+        }
+      };
+
       let text = '';
       let formatLabel = '';
 
       switch(format) {
         case 'names':
+          // Names don't need date formatting
           text = items.map(item => item.name).join(',');
           formatLabel = 'names';
           break;
         case 'roles':
-          text = items.map(item => item.role).join(',');
+          // Roles may contain dates (e.g., Release Dates section)
+          text = items.map(item => formatDateValue(item.role)).join(',');
           formatLabel = 'roles';
           break;
         case 'names-roles':
-          text = items.map(item => `${item.name} - ${item.role}`).join('\n');
+          text = items.map(item => `${item.name} - ${formatDateValue(item.role)}`).join('\n');
           formatLabel = 'entries';
           break;
         case 'names-colon-roles':
-          text = items.map(item => `${item.name}:${item.role}`).join(',');
+          text = items.map(item => `${item.name}:${formatDateValue(item.role)}`).join(',');
           formatLabel = 'entries';
           break;
         default:
-          text = items.map(item => `${item.name} - ${item.role}`).join('\n');
+          text = items.map(item => `${item.name} - ${formatDateValue(item.role)}`).join('\n');
           formatLabel = 'entries';
       }
 
       navigator.clipboard.writeText(text).then(() => {
         this.showCopyNotification(`Copied ${items.length} ${roleType} ${formatLabel}`);
       }).catch(err => {
+        // BUG FIX: Provide more informative error feedback to user
         console.error('Failed to copy:', err);
-        alert('Failed to copy to clipboard');
+        const errorMsg = err.name === 'NotAllowedError'
+          ? 'Clipboard access denied. Please allow clipboard permissions.'
+          : 'Failed to copy to clipboard. Please try again.';
+        alert(errorMsg);
       });
     }
 
@@ -481,8 +514,12 @@
           navigator.clipboard.writeText(dateString).then(() => {
             this.showCopyNotification(`Copied ${columnName}`);
           }).catch(err => {
+            // BUG FIX: Provide more informative error feedback to user
             console.error('Failed to copy:', err);
-            alert('Failed to copy to clipboard');
+            const errorMsg = err.name === 'NotAllowedError'
+              ? 'Clipboard access denied. Please allow clipboard permissions.'
+              : 'Failed to copy to clipboard. Please try again.';
+            alert(errorMsg);
           });
           return;
         }
@@ -497,36 +534,65 @@
         navigator.clipboard.writeText(textToCopy).then(() => {
           this.showCopyNotification(`Copied ${columnName}: ${textToCopy}`);
         }).catch(err => {
+          // BUG FIX: Provide more informative error feedback to user
           console.error('Failed to copy:', err);
-          alert('Failed to copy to clipboard');
+          const errorMsg = err.name === 'NotAllowedError'
+            ? 'Clipboard access denied. Please allow clipboard permissions.'
+            : 'Failed to copy to clipboard. Please try again.';
+          alert(errorMsg);
         });
       } catch (error) {
         console.error('Error in copyDateValue:', error);
         // Fallback: just copy the raw string
         navigator.clipboard.writeText(dateString).catch(err => {
+          // BUG FIX: Provide more informative error feedback to user
           console.error('Fallback copy failed:', err);
-          alert('Failed to copy to clipboard');
+          const errorMsg = err.name === 'NotAllowedError'
+            ? 'Clipboard access denied. Please allow clipboard permissions.'
+            : 'Failed to copy to clipboard. Please try again.';
+          alert(errorMsg);
         });
       }
     }
 
     /**
      * Detect if a column contains dates
+     * Checks column name, role type, and optionally the actual value
      */
-    isDateColumn(columnName, roleType) {
+    isDateColumn(columnName, roleType, value = null) {
       const dateKeywords = ['date', 'release', 'year'];
       const columnLower = columnName.toLowerCase();
       const roleTypeLower = (roleType || '').toLowerCase();
 
-      return dateKeywords.some(keyword =>
+      // Check by column name or role type
+      const matchesByName = dateKeywords.some(keyword =>
         columnLower.includes(keyword) || roleTypeLower.includes(keyword)
       );
+
+      if (matchesByName) {
+        return true;
+      }
+
+      // Also check if the value looks like a date (using DateFormattingUtils if available)
+      if (value && typeof window.DateFormattingUtils !== 'undefined' && window.DateFormattingUtils.looksLikeDate) {
+        return window.DateFormattingUtils.looksLikeDate(value);
+      }
+
+      return false;
     }
 
     /**
      * Show a copy notification
      */
     showCopyNotification(text) {
+      // BUG FIX: Validate text parameter to prevent null/undefined errors
+      if (text === null || text === undefined) {
+        console.warn('showCopyNotification called with null/undefined text');
+        text = '';
+      }
+      // Convert to string in case a non-string value was passed
+      text = String(text);
+
       // Create notification element
       const notification = document.createElement('div');
       notification.className = 'copy-notification';
@@ -868,6 +934,12 @@
         const totalItems = groupItems.length;
         const isLimited = totalItems > viewLimit;
 
+        // BUG FIX: Skip rendering if displayItems is empty (e.g., viewLimit = 0)
+        if (displayItems.length === 0) {
+          console.warn(`No items to display for ${roleType} (viewLimit=${viewLimit})`);
+          return;
+        }
+
         // Create section header for role type
         const sectionHeader = document.createElement('div');
         sectionHeader.style.cssText = `
@@ -1014,7 +1086,9 @@
 
         copyBtn.addEventListener('click', (e) => {
           e.stopPropagation(); // Prevent immediate trigger of outsideClickHandler
-          const isVisible = dropdownMenu.style.display !== 'none';
+          // BUG FIX: Use computed style to handle all initial states (empty, CSS class, inline)
+          const computedDisplay = window.getComputedStyle(dropdownMenu).display;
+          const isVisible = computedDisplay !== 'none' && dropdownMenu.style.display !== 'none';
           dropdownMenu.style.display = isVisible ? 'none' : 'block';
 
           if (!isVisible) {
@@ -1154,8 +1228,8 @@
             try {
               self.copyInProgress = true;
 
-              // Check if this is a date column
-              const isDate = self.isDateColumn(col, roleType);
+              // Check if this is a date column (also check the value content)
+              const isDate = self.isDateColumn(col, roleType, cellValue);
               const textToCopy = cellValue;
 
               // If it's a date column and DateFormattingUtils is available, try to format it
@@ -1207,16 +1281,24 @@
           row.appendChild(td);
         });
 
-        // Copy button
+        // Copy button with dropdown for column selection
         const actionTd = document.createElement('td');
         actionTd.style.cssText = `
           padding: 10px 12px;
           text-align: center;
         `;
 
+        // Create dropdown container
+        const rowCopyDropdown = document.createElement('div');
+        rowCopyDropdown.setAttribute('data-copy-dropdown', 'true');
+        rowCopyDropdown.style.cssText = `
+          position: relative;
+          display: inline-block;
+        `;
+
         const copyBtn = document.createElement('button');
         copyBtn.innerHTML = '📋';
-        copyBtn.title = `Copy: ${item.name}:${item.role}`;
+        copyBtn.title = 'Copy row data';
         copyBtn.style.cssText = `
           background: var(--accent);
           border: none;
@@ -1238,8 +1320,142 @@
           copyBtn.style.transform = 'scale(1)';
         });
 
-        copyBtn.addEventListener('click', () => {
-          const text = `${item.name}:${item.role}`;
+        // Create dropdown menu for column options
+        const rowDropdownMenu = document.createElement('div');
+        rowDropdownMenu.style.cssText = `
+          position: absolute;
+          bottom: 100%;
+          right: 0;
+          background: var(--secondary-bg);
+          border: 2px solid var(--accent);
+          border-radius: 4px;
+          min-width: 180px;
+          display: none;
+          z-index: 1000;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          margin-bottom: 5px;
+        `;
+
+        // Add option for each column
+        self.columns.forEach(col => {
+          const colValue = (item[col] !== undefined && item[col] !== null) ? item[col] : '-';
+          const displayName = self.getColumnDisplayName(col);
+          const isDate = self.isDateColumn(col, roleType, colValue);
+
+          const optionBtn = document.createElement('button');
+          optionBtn.style.cssText = `
+            display: block;
+            width: 100%;
+            padding: 8px 12px;
+            background: transparent;
+            border: none;
+            text-align: left;
+            color: var(--text-primary);
+            font-size: 12px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+          `;
+
+          // Show column name and preview of value
+          const previewValue = String(colValue).length > 20 ? String(colValue).substring(0, 20) + '...' : colValue;
+          optionBtn.innerHTML = `<strong>${displayName}</strong><br><span style="opacity: 0.7; font-size: 11px;">${previewValue}</span>`;
+
+          optionBtn.addEventListener('mouseenter', () => {
+            optionBtn.style.backgroundColor = 'var(--hover-color)';
+          });
+
+          optionBtn.addEventListener('mouseleave', () => {
+            optionBtn.style.backgroundColor = 'transparent';
+          });
+
+          optionBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            rowDropdownMenu.style.display = 'none';
+
+            // Get value and apply date formatting if needed
+            let finalValue = colValue;
+            if (isDate && typeof window.DateFormattingUtils !== 'undefined' && colValue && colValue !== '-') {
+              try {
+                const userFormat = await window.DateFormattingUtils.getUserDateFormat();
+                const formatted = window.DateFormattingUtils.parseAndFormat(colValue, userFormat);
+                if (formatted) {
+                  finalValue = formatted;
+                }
+              } catch (error) {
+                console.warn('Failed to format date in row copy:', error);
+              }
+            }
+
+            navigator.clipboard.writeText(String(finalValue)).then(() => {
+              copyBtn.innerHTML = '✓';
+              self.showCopyNotification(`${displayName}: ${finalValue}`);
+              setTimeout(() => {
+                copyBtn.innerHTML = '📋';
+              }, 1000);
+            }).catch(err => {
+              console.error('Failed to copy:', err);
+              copyBtn.innerHTML = '✗';
+              setTimeout(() => {
+                copyBtn.innerHTML = '📋';
+              }, 1000);
+            });
+          });
+
+          rowDropdownMenu.appendChild(optionBtn);
+        });
+
+        // Add "All Columns" option at the end
+        const allColumnsBtn = document.createElement('button');
+        allColumnsBtn.style.cssText = `
+          display: block;
+          width: 100%;
+          padding: 8px 12px;
+          background: transparent;
+          border: none;
+          border-top: 1px solid var(--hover-color);
+          text-align: left;
+          color: var(--accent);
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background-color 0.2s;
+        `;
+        allColumnsBtn.textContent = 'All Columns';
+
+        allColumnsBtn.addEventListener('mouseenter', () => {
+          allColumnsBtn.style.backgroundColor = 'var(--hover-color)';
+        });
+
+        allColumnsBtn.addEventListener('mouseleave', () => {
+          allColumnsBtn.style.backgroundColor = 'transparent';
+        });
+
+        allColumnsBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          rowDropdownMenu.style.display = 'none';
+
+          // Build text with all columns
+          const parts = [];
+          for (const col of self.columns) {
+            let colValue = (item[col] !== undefined && item[col] !== null) ? item[col] : '-';
+            const isDate = self.isDateColumn(col, roleType, colValue);
+
+            // Apply date formatting if needed
+            if (isDate && typeof window.DateFormattingUtils !== 'undefined' && colValue && colValue !== '-') {
+              try {
+                const userFormat = await window.DateFormattingUtils.getUserDateFormat();
+                const formatted = window.DateFormattingUtils.parseAndFormat(colValue, userFormat);
+                if (formatted) {
+                  colValue = formatted;
+                }
+              } catch (error) {
+                console.warn('Failed to format date:', error);
+              }
+            }
+            parts.push(colValue);
+          }
+
+          const text = parts.join(':');
           navigator.clipboard.writeText(text).then(() => {
             copyBtn.innerHTML = '✓';
             self.showCopyNotification(text);
@@ -1255,7 +1471,58 @@
           });
         });
 
-        actionTd.appendChild(copyBtn);
+        rowDropdownMenu.appendChild(allColumnsBtn);
+
+        // Track handler for proper cleanup
+        const rowHandlerTracking = { active: false, handler: null };
+
+        const createRowOutsideClickHandler = () => {
+          return (e) => {
+            if (!rowCopyDropdown.contains(e.target)) {
+              rowDropdownMenu.style.display = 'none';
+              if (rowHandlerTracking.handler) {
+                document.removeEventListener('click', rowHandlerTracking.handler);
+                rowHandlerTracking.active = false;
+              }
+            }
+          };
+        };
+
+        copyBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const computedDisplay = window.getComputedStyle(rowDropdownMenu).display;
+          const isVisible = computedDisplay !== 'none' && rowDropdownMenu.style.display !== 'none';
+          rowDropdownMenu.style.display = isVisible ? 'none' : 'block';
+
+          if (!isVisible) {
+            if (!rowHandlerTracking.handler) {
+              rowHandlerTracking.handler = createRowOutsideClickHandler();
+            }
+            rowHandlerTracking.active = true;
+            setTimeout(() => {
+              if (rowHandlerTracking.active) {
+                document.addEventListener('click', rowHandlerTracking.handler);
+              }
+            }, 0);
+          } else {
+            if (rowHandlerTracking.handler && rowHandlerTracking.active) {
+              document.removeEventListener('click', rowHandlerTracking.handler);
+              rowHandlerTracking.active = false;
+            }
+          }
+        });
+
+        // Store cleanup function
+        rowCopyDropdown._cleanup = () => {
+          if (rowHandlerTracking.handler && rowHandlerTracking.active) {
+            document.removeEventListener('click', rowHandlerTracking.handler);
+            rowHandlerTracking.active = false;
+          }
+        };
+
+        rowCopyDropdown.appendChild(copyBtn);
+        rowCopyDropdown.appendChild(rowDropdownMenu);
+        actionTd.appendChild(rowCopyDropdown);
         row.appendChild(actionTd);
         tbody.appendChild(row);
         });

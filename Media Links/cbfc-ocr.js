@@ -67,38 +67,53 @@
 
       console.log('CBFC OCR: Sending to background script for OCR...');
 
-      // Send message to background script to perform OCR
+      // BUG FIX: Wrap sendMessage in a Promise with proper error handling
       return new Promise((resolve, reject) => {
-        chrome.runtime.sendMessage(
-          {
-            action: 'performOCR',
-            imageData: imageDataUrl
-          },
-          (response) => {
-            if (chrome.runtime.lastError) {
-              console.error('CBFC OCR: chrome.runtime.lastError occurred');
-              console.error('CBFC OCR: Error message:', chrome.runtime.lastError.message);
-              console.error('CBFC OCR: Full error:', JSON.stringify(chrome.runtime.lastError));
-              reject(chrome.runtime.lastError);
-              return;
-            }
+        try {
+          chrome.runtime.sendMessage(
+            {
+              action: 'performOCR',
+              imageData: imageDataUrl
+            },
+            (response) => {
+              // BUG FIX: Always check lastError first in callback
+              if (chrome.runtime.lastError) {
+                console.error('CBFC OCR: chrome.runtime.lastError occurred');
+                console.error('CBFC OCR: Error message:', chrome.runtime.lastError.message);
+                console.error('CBFC OCR: Full error:', JSON.stringify(chrome.runtime.lastError));
+                reject(new Error(chrome.runtime.lastError.message || 'Chrome runtime error'));
+                return;
+              }
 
-            console.log('CBFC OCR: Received response:', response);
+              // BUG FIX: Handle case where response is undefined
+              if (!response) {
+                console.error('CBFC OCR: No response received from background script');
+                reject(new Error('No response received from background script'));
+                return;
+              }
 
-            if (response && response.success) {
-              const cleanText = response.text.replace(/[^A-Za-z0-9]/g, '');
-              console.log('CBFC OCR: Text recognized:', cleanText);
-              console.log('CBFC OCR: Confidence:', response.confidence);
-              resolve(cleanText);
-            } else {
-              console.error('CBFC OCR: OCR failed:', response?.error);
-              reject(new Error(response?.error || 'OCR failed'));
+              console.log('CBFC OCR: Received response:', response);
+
+              if (response.success) {
+                const cleanText = response.text.replace(/[^A-Za-z0-9]/g, '');
+                console.log('CBFC OCR: Text recognized:', cleanText);
+                console.log('CBFC OCR: Confidence:', response.confidence);
+                resolve(cleanText);
+              } else {
+                console.error('CBFC OCR: OCR failed:', response.error);
+                reject(new Error(response.error || 'OCR failed'));
+              }
             }
-          }
-        );
+          );
+        } catch (sendError) {
+          // BUG FIX: Catch synchronous errors from sendMessage
+          console.error('CBFC OCR: Error sending message:', sendError);
+          reject(sendError);
+        }
       });
     } catch (error) {
       console.error('CBFC OCR: Error reading image:', error);
+      // BUG FIX: Return null instead of throwing to allow graceful degradation
       return null;
     }
   }
@@ -132,8 +147,8 @@
           reject(error);
         };
 
-        // Timeout after 5 seconds
-        setTimeout(() => reject(new Error('Image load timeout')), 5000);
+        // BUG FIX: Increased timeout from 5s to 15s for slow connections
+        setTimeout(() => reject(new Error('Image load timeout after 15 seconds')), 15000);
       });
 
       try {
