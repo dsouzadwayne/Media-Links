@@ -299,8 +299,15 @@
   }
 
   function processEpisodes(colors) {
-    // Find episodes section
-    const episodesSection = document.querySelector('[aria-label="Episodes"]');
+    // Find episodes section - try multiple selectors for different page layouts
+    let episodesSection = document.querySelector('[aria-label="Episodes"]');
+
+    // Also check for shelf-grid episode lists (like the one provided)
+    const shelfGridList = document.querySelector('.shelf-grid__list');
+    if (!episodesSection && shelfGridList) {
+      episodesSection = shelfGridList;
+    }
+
     if (!episodesSection) return;
 
     // Find season selector header
@@ -309,7 +316,138 @@
       addBulkCopyButton(seasonHeader, episodesSection, colors, 'Episodes', '.metadata .title');
     }
 
-    // Process individual episode titles
+    // Add bulk copy button for shelf-grid layout (near the episode list)
+    // Find the parent section that contains the shelf
+    const shelfSection = shelfGridList ? shelfGridList.closest('section') || shelfGridList.parentElement : null;
+    if (shelfSection && !shelfSection.querySelector('.media-links-appletv-episodes-bulk-copy-btn')) {
+      addEpisodesBulkCopyButton(shelfSection, shelfGridList, colors);
+    }
+
+    // Process individual episode cards (shelf-grid layout with lockup cards)
+    const episodeLockups = episodesSection.querySelectorAll('.lockup[data-testid="lockup"]');
+    episodeLockups.forEach(lockup => {
+      const metadataContent = lockup.querySelector('.metadata .content');
+      if (!metadataContent || metadataContent.dataset.appleTVEpisodeCopyEnabled) return;
+
+      metadataContent.dataset.appleTVEpisodeCopyEnabled = 'true';
+
+      const tagEl = metadataContent.querySelector('.tag');
+      const titleEl = metadataContent.querySelector('.title');
+      const descEl = metadataContent.querySelector('.description');
+
+      if (!tagEl || !descEl) return;
+
+      // Extract episode number from tag (e.g., "EPISODE 1" -> "1")
+      const episodeTag = tagEl.textContent.trim();
+      const episodeMatch = episodeTag.match(/EPISODE\s*(\d+)/i);
+      const episodeNum = episodeMatch ? episodeMatch[1] : episodeTag;
+      const episodeTitle = titleEl ? titleEl.textContent.trim() : '';
+      const description = descEl.textContent.trim();
+
+      // Create copy button for episode number + description
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'media-links-appletv-episode-copy-btn';
+      copyBtn.innerHTML = '📋';
+      copyBtn.title = `Copy: E${episodeNum} - ${description.substring(0, 50)}...`;
+      copyBtn.style.cssText = `
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        padding: 4px 6px;
+        background: ${colors.button};
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 11px;
+        color: ${colors.buttonText};
+        opacity: 0;
+        transition: all 0.2s;
+        z-index: 10;
+        pointer-events: auto;
+      `;
+
+      // Make the content area relative for absolute positioning
+      metadataContent.style.position = 'relative';
+
+      copyBtn.addEventListener('mouseenter', () => {
+        copyBtn.style.background = colors.buttonHover;
+        copyBtn.style.transform = 'scale(1.1)';
+      });
+
+      copyBtn.addEventListener('mouseleave', () => {
+        copyBtn.style.background = colors.button;
+        copyBtn.style.transform = 'scale(1)';
+      });
+
+      copyBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+
+        // Format: "E1: Description"
+        const copyText = `E${episodeNum}: ${description}`;
+
+        navigator.clipboard.writeText(copyText).then(() => {
+          showCopyNotification(copyBtn, `Copied E${episodeNum}`);
+        }).catch(err => {
+          console.error('Failed to copy:', err);
+          showCopyNotification(copyBtn, 'Copy failed', true);
+        });
+      }, true);
+
+      // Show button on hover over the metadata content
+      metadataContent.addEventListener('mouseenter', () => {
+        copyBtn.style.opacity = '1';
+      });
+
+      metadataContent.addEventListener('mouseleave', () => {
+        copyBtn.style.opacity = '0';
+      });
+
+      metadataContent.appendChild(copyBtn);
+
+      // Also make the title clickable to copy just the title
+      if (titleEl && !titleEl.dataset.appleTVCopyEnabled) {
+        titleEl.dataset.appleTVCopyEnabled = 'true';
+        titleEl.style.cursor = 'pointer';
+        titleEl.title = `Click to copy: ${episodeTitle}`;
+
+        titleEl.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+
+          navigator.clipboard.writeText(episodeTitle).then(() => {
+            showCopyNotification(titleEl, episodeTitle);
+          }).catch(err => {
+            console.error('Failed to copy:', err);
+            showCopyNotification(titleEl, episodeTitle, true);
+          });
+        }, true);
+      }
+
+      // Make the description clickable to copy just the description
+      if (descEl && !descEl.dataset.appleTVCopyEnabled) {
+        descEl.dataset.appleTVCopyEnabled = 'true';
+        descEl.style.cursor = 'pointer';
+        descEl.title = `Click to copy description`;
+
+        descEl.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation();
+
+          navigator.clipboard.writeText(description).then(() => {
+            showCopyNotification(descEl, 'Description copied');
+          }).catch(err => {
+            console.error('Failed to copy:', err);
+            showCopyNotification(descEl, 'Copy failed', true);
+          });
+        }, true);
+      }
+    });
+
+    // Process individual episode titles (original format for other layouts)
     const episodeTitles = episodesSection.querySelectorAll('.metadata .title');
     episodeTitles.forEach(title => {
       if (!title.dataset.appleTVCopyEnabled) {
@@ -332,6 +470,301 @@
           });
         }, true); // Use capture phase
       }
+    });
+  }
+
+  function addEpisodesBulkCopyButton(shelfSection, shelfGridList, colors) {
+    // Find a good place to insert the button - look for a header or create a container
+    let headerArea = shelfSection.querySelector('.shelf-header, .header-title-wrapper, h2');
+
+    // Create the bulk copy button
+    const button = document.createElement('button');
+    button.className = 'media-links-appletv-episodes-bulk-copy-btn';
+    button.innerHTML = '📋 Copy All Episodes';
+    button.title = 'Copy all episodes with descriptions';
+    button.style.cssText = `
+      margin: 10px 0;
+      padding: 8px 16px;
+      background: ${colors.button};
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      color: ${colors.buttonText};
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    `;
+
+    button.addEventListener('mouseenter', () => {
+      button.style.background = colors.buttonHover;
+      button.style.transform = 'scale(1.02)';
+      button.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+    });
+
+    button.addEventListener('mouseleave', () => {
+      button.style.background = colors.button;
+      button.style.transform = 'scale(1)';
+      button.style.boxShadow = '0 2px 8px rgba(0,0,0,0.2)';
+    });
+
+    button.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      showEpisodesCopyDialog(shelfGridList, colors);
+    });
+
+    // Insert button - either after header or at the beginning of the section
+    if (headerArea) {
+      headerArea.style.display = 'inline-flex';
+      headerArea.style.alignItems = 'center';
+      headerArea.style.gap = '12px';
+      headerArea.appendChild(button);
+    } else {
+      // Create a container for the button at the top of the shelf
+      const buttonContainer = document.createElement('div');
+      buttonContainer.style.cssText = 'padding: 10px 0; display: flex; justify-content: flex-start;';
+      buttonContainer.appendChild(button);
+      shelfSection.insertBefore(buttonContainer, shelfSection.firstChild);
+    }
+  }
+
+  async function showEpisodesCopyDialog(shelfGridList, colors) {
+    const dialogColors = getDialogColors(colors);
+
+    // Collect all episodes from the shelf
+    const episodes = [];
+    const episodeLockups = shelfGridList.querySelectorAll('.lockup[data-testid="lockup"]');
+
+    episodeLockups.forEach(lockup => {
+      const metadataContent = lockup.querySelector('.metadata .content');
+      if (!metadataContent) return;
+
+      const tagEl = metadataContent.querySelector('.tag');
+      const titleEl = metadataContent.querySelector('.title');
+      const descEl = metadataContent.querySelector('.description');
+
+      if (!tagEl) return;
+
+      const episodeTag = tagEl.textContent.trim();
+      const episodeMatch = episodeTag.match(/EPISODE\s*(\d+)/i);
+      const episodeNum = episodeMatch ? episodeMatch[1] : episodeTag;
+      const episodeTitle = titleEl ? titleEl.textContent.trim() : '';
+      const description = descEl ? descEl.textContent.trim() : '';
+
+      episodes.push({
+        number: episodeNum,
+        title: episodeTitle,
+        description: description
+      });
+    });
+
+    if (episodes.length === 0) {
+      showNotification('No episodes found!', true);
+      return;
+    }
+
+    // Create backdrop
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      z-index: ${Z_INDEX.DIALOG_BACKDROP};
+      backdrop-filter: blur(4px);
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    // Create dialog
+    const dialog = document.createElement('div');
+    dialog.style.cssText = `
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: ${dialogColors.background};
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+      z-index: ${Z_INDEX.DIALOG};
+      min-width: 450px;
+      max-width: 550px;
+      border: 1px solid ${dialogColors.border};
+      animation: slideIn 0.3s ease-out;
+    `;
+
+    // Build dialog content
+    const header = document.createElement('h3');
+    header.textContent = `📋 Copy ${episodes.length} Episodes`;
+    header.style.cssText = `margin: 0 0 20px 0; color: ${dialogColors.text}; font-size: 20px; font-weight: 700; border-bottom: 2px solid ${colors.button}; padding-bottom: 10px;`;
+
+    // Content format options
+    const contentLabel = document.createElement('label');
+    contentLabel.textContent = 'Content to copy:';
+    contentLabel.style.cssText = `display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;`;
+
+    const contentSelect = document.createElement('select');
+    contentSelect.id = 'appletv-episode-content';
+    contentSelect.style.cssText = `width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px;
+      font-size: 14px; background: ${dialogColors.inputBg}; color: ${dialogColors.text}; cursor: pointer; margin-bottom: 18px;`;
+
+    const contentOptions = [
+      { value: 'num-desc', label: 'Episode Number + Description (E1: Description...)' },
+      { value: 'num-title-desc', label: 'Episode Number + Title + Description' },
+      { value: 'num-title', label: 'Episode Number + Title only' },
+      { value: 'desc-only', label: 'Description only' },
+      { value: 'title-only', label: 'Title only' }
+    ];
+
+    contentOptions.forEach(opt => {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.label;
+      contentSelect.appendChild(option);
+    });
+
+    const contentDiv = document.createElement('div');
+    contentDiv.appendChild(contentLabel);
+    contentDiv.appendChild(contentSelect);
+
+    // Output format options
+    const formatLabel = document.createElement('label');
+    formatLabel.textContent = 'Output format:';
+    formatLabel.style.cssText = `display: block; margin-bottom: 8px; color: ${dialogColors.text}; font-weight: 600; font-size: 13px;`;
+
+    const formatSelect = document.createElement('select');
+    formatSelect.id = 'appletv-episode-format';
+    formatSelect.style.cssText = `width: 100%; padding: 10px 12px; border: 2px solid ${dialogColors.inputBorder}; border-radius: 6px;
+      font-size: 14px; background: ${dialogColors.inputBg}; color: ${dialogColors.text}; cursor: pointer; margin-bottom: 25px;`;
+
+    const formatOptions = [
+      { value: 'newline', label: 'One per line' },
+      { value: 'numbered', label: 'Numbered list (1. 2. 3.)' },
+      { value: 'double-newline', label: 'Double-spaced (blank line between)' },
+      { value: 'json', label: 'JSON Array' }
+    ];
+
+    formatOptions.forEach(opt => {
+      const option = document.createElement('option');
+      option.value = opt.value;
+      option.textContent = opt.label;
+      formatSelect.appendChild(option);
+    });
+
+    const formatDiv = document.createElement('div');
+    formatDiv.appendChild(formatLabel);
+    formatDiv.appendChild(formatSelect);
+
+    // Buttons
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = 'display: flex; gap: 12px;';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = 'Copy';
+    copyBtn.style.cssText = `flex: 1; padding: 14px; background: ${colors.button}; border: none; border-radius: 8px; cursor: pointer;
+      font-weight: 700; font-size: 15px; color: ${colors.buttonText}; transition: all 0.2s; box-shadow: 0 2px 8px ${colors.button}44;`;
+
+    copyBtn.addEventListener('mouseover', () => {
+      copyBtn.style.background = colors.buttonHover;
+      copyBtn.style.transform = 'translateY(-2px)';
+    });
+    copyBtn.addEventListener('mouseout', () => {
+      copyBtn.style.background = colors.button;
+      copyBtn.style.transform = 'translateY(0)';
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.style.cssText = `flex: 1; padding: 14px; background: ${dialogColors.cancelBg}; border: none; border-radius: 8px; cursor: pointer;
+      font-weight: 600; font-size: 15px; color: ${dialogColors.cancelText}; transition: all 0.2s;`;
+
+    cancelBtn.addEventListener('mouseover', () => {
+      cancelBtn.style.background = dialogColors.cancelHover;
+    });
+    cancelBtn.addEventListener('mouseout', () => {
+      cancelBtn.style.background = dialogColors.cancelBg;
+    });
+
+    buttonContainer.appendChild(copyBtn);
+    buttonContainer.appendChild(cancelBtn);
+
+    dialog.appendChild(header);
+    dialog.appendChild(contentDiv);
+    dialog.appendChild(formatDiv);
+    dialog.appendChild(buttonContainer);
+
+    document.body.appendChild(backdrop);
+    document.body.appendChild(dialog);
+
+    const closeDialog = () => {
+      if (dialog.parentNode) dialog.parentNode.removeChild(dialog);
+      if (backdrop.parentNode) backdrop.parentNode.removeChild(backdrop);
+    };
+
+    backdrop.addEventListener('click', closeDialog);
+    cancelBtn.addEventListener('click', closeDialog);
+
+    copyBtn.addEventListener('click', () => {
+      const contentType = contentSelect.value;
+      const formatType = formatSelect.value;
+
+      // Format each episode based on content selection
+      const formattedEpisodes = episodes.map((ep, index) => {
+        let text = '';
+        switch (contentType) {
+          case 'num-desc':
+            text = `E${ep.number}: ${ep.description}`;
+            break;
+          case 'num-title-desc':
+            text = `E${ep.number}: ${ep.title} - ${ep.description}`;
+            break;
+          case 'num-title':
+            text = `E${ep.number}: ${ep.title}`;
+            break;
+          case 'desc-only':
+            text = ep.description;
+            break;
+          case 'title-only':
+            text = ep.title;
+            break;
+        }
+
+        // Apply numbering if needed
+        if (formatType === 'numbered') {
+          text = `${index + 1}. ${text}`;
+        }
+
+        return text;
+      });
+
+      // Join based on format
+      let finalText = '';
+      switch (formatType) {
+        case 'newline':
+        case 'numbered':
+          finalText = formattedEpisodes.join('\n');
+          break;
+        case 'double-newline':
+          finalText = formattedEpisodes.join('\n\n');
+          break;
+        case 'json':
+          finalText = JSON.stringify(episodes, null, 2);
+          break;
+      }
+
+      navigator.clipboard.writeText(finalText).then(() => {
+        showNotification(`Copied ${episodes.length} episodes!`);
+        closeDialog();
+      }).catch(err => {
+        console.error('Failed to copy:', err);
+        showNotification('Failed to copy to clipboard', true);
+      });
     });
   }
 

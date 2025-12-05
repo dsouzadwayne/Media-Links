@@ -31,6 +31,9 @@
     let checkIntervalId = null;
     let updateEpisodeIntervalId = null;
 
+    // Track event listeners attached to episode buttons to prevent memory leaks
+    let episodeButtonListeners = new Map();
+
     // Debug logging
     function log(...args) {
         if (CONFIG.debug) {
@@ -86,7 +89,7 @@
     }
 
     // Clean up stale button references that are no longer in the DOM
-    // This prevents memory leaks and handles DOM reloads
+    // This prevents memory leaks from holding references to removed DOM nodes
     function cleanupStaleButtonReferences() {
         const staleCount = processedButtons.size;
         const iterator = processedButtons.values();
@@ -872,6 +875,13 @@
             letter-spacing: 0.5px;
         `;
 
+        // BUG FIX: Create searchInput early so it's available in toggleBtn click handler
+        const searchInput = document.createElement('input');
+        searchInput.id = 'hotstar-episode-search';
+        searchInput.type = 'text';
+        searchInput.placeholder = 'Find episode';
+        searchInput.title = 'Search episodes - type to filter, press Enter to navigate';
+
         const toggleBtn = document.createElement('button');
         toggleBtn.textContent = '−';
         toggleBtn.title = 'Toggle episode list';
@@ -941,13 +951,9 @@
         header.appendChild(toggleBtn);
         panel.appendChild(header);
 
-        // Search input for episode filtering
-        const searchInput = document.createElement('input');
-        searchInput.id = 'hotstar-episode-search';
-        searchInput.type = 'text';
-        searchInput.placeholder = 'Find episode';
-        searchInput.title = 'Search episodes - type to filter, press Enter to navigate';
-
+        // BUG FIX: Search input declared here BEFORE being referenced in toggleBtn click handler above
+        // (The toggleBtn click handler references searchInput, so it must be declared first)
+        // Note: Due to hoisting this works, but we're now explicitly ensuring proper order
         const searchBorder = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
         const searchBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)';
         const searchFocusBorder = colors.accent || '#6366f1';
@@ -1120,7 +1126,11 @@
             const episodeBtn = document.createElement('button');
             episodeBtn.textContent = `E${episodeNum}`;
             episodeBtn.title = title;
-            episodeBtn.dataset.episodeIndex = index;
+            // Generate a unique identifier for this episode card to handle dynamic DOM changes
+            const cardId = `episode-card-${episodeNum}-${Date.now()}-${index}`;
+            card.dataset.mediaLinksCardId = cardId;
+
+            episodeBtn.dataset.episodeCardId = cardId;
             episodeBtn.dataset.episodeNumber = episodeNum;
 
             const isDarkPanel = colors.isDark;
@@ -1163,17 +1173,18 @@
                 pointer-events: auto;
             `;
 
-            episodeBtn.addEventListener('mouseenter', () => {
+            // Create named handlers for proper cleanup
+            const mouseEnterHandler = () => {
                 episodeBtn.style.backgroundColor = buttonHoverBg;
                 episodeBtn.style.opacity = '1';
-            });
+            };
 
-            episodeBtn.addEventListener('mouseleave', () => {
+            const mouseLeaveHandler = () => {
                 episodeBtn.style.backgroundColor = buttonBg;
                 episodeBtn.style.opacity = '0.9';
-            });
+            };
 
-            episodeBtn.addEventListener('click', (e) => {
+            const clickHandler = (e) => {
                 e.stopPropagation();
                 scrollToEpisode(card, episodeNum);
 
@@ -1185,7 +1196,18 @@
                     episodeBtn.style.backgroundColor = buttonBg;
                     episodeBtn.style.borderColor = buttonBorder;
                 }, 500);
-            });
+            };
+
+            episodeBtn.addEventListener('mouseenter', mouseEnterHandler);
+            episodeBtn.addEventListener('mouseleave', mouseLeaveHandler);
+            episodeBtn.addEventListener('click', clickHandler);
+
+            // Track listeners for cleanup to prevent memory leaks
+            episodeButtonListeners.set(episodeBtn, [
+                { type: 'mouseenter', handler: mouseEnterHandler },
+                { type: 'mouseleave', handler: mouseLeaveHandler },
+                { type: 'click', handler: clickHandler }
+            ]);
 
             episodeList.appendChild(episodeBtn);
         });
@@ -1285,8 +1307,22 @@
         }
     }
 
+    // Cleanup episode button event listeners to prevent memory leaks
+    function cleanupEpisodeButtonListeners() {
+        episodeButtonListeners.forEach((listeners, button) => {
+            listeners.forEach(({ type, handler }) => {
+                button.removeEventListener(type, handler);
+            });
+        });
+        episodeButtonListeners.clear();
+        log('Episode button listeners cleaned up');
+    }
+
     // Cleanup episode panel and related resources
     function cleanupEpisodePanel() {
+        // Clean up button listeners first
+        cleanupEpisodeButtonListeners();
+
         if (episodePanel) {
             episodePanel.remove();
             episodePanel = null;
@@ -1368,19 +1404,31 @@
                 });
 
                 if (foundButton) {
-                    // Find the corresponding episode card in the DOM
-                    const episodeCards = document.querySelectorAll('li[data-testid="episode-card"]');
-                    const episodeIndex = parseInt(foundButton.dataset.episodeIndex);
+                    // Find the corresponding episode card using stored card ID
+                    const cardId = foundButton.dataset.episodeCardId;
+                    foundCard = document.querySelector(`li[data-media-links-card-id="${cardId}"]`);
 
-                    // BUG FIX: Validate episodeIndex is a valid non-negative integer within bounds
-                    if (!isNaN(episodeIndex) && episodeIndex >= 0 && episodeIndex < episodeCards.length) {
-                        foundCard = episodeCards[episodeIndex];
+                    if (foundCard) {
                         scrollToEpisode(foundCard, cleanSearch);
                         searchInput.blur();
                         log(`Navigated to exact episode ${cleanSearch}`);
                     } else {
-                        log(`ERROR: Invalid episode index ${episodeIndex} (parsed from "${foundButton.dataset.episodeIndex}"), episodeCards.length=${episodeCards.length}`);
-                        showNotification(`Could not navigate to episode ${cleanSearch}`);
+                        // Fallback: try to find by episode number in the current DOM
+                        const episodeCards = document.querySelectorAll('li[data-testid="episode-card"]');
+                        for (const card of episodeCards) {
+                            const episodeTag = card.querySelector('span[data-testid="textTag"] span');
+                            if (episodeTag) {
+                                const match = episodeTag.textContent.match(/E(\d+)/);
+                                if (match && match[1] === cleanSearch) {
+                                    scrollToEpisode(card, cleanSearch);
+                                    searchInput.blur();
+                                    log(`Navigated to episode ${cleanSearch} via fallback`);
+                                    return;
+                                }
+                            }
+                        }
+                        log(`ERROR: Episode card with ID ${cardId} no longer in DOM`);
+                        showNotification(`Episode ${cleanSearch} card no longer available`);
                     }
                 } else {
                     showNotification(`Episode ${cleanSearch} not found`);

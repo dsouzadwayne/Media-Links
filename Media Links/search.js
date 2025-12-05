@@ -335,15 +335,30 @@ const loadSettings = () => {
 };
 
 const saveCurrentProfileSettings = () => {
+  let invalidCount = 0;
+
   document.querySelectorAll(`#profile${currentProfile} .query-setting`).forEach(checkbox => {
     const profileNum = parseInt(checkbox.dataset.profileNum, 10);
     const wordCount = parseInt(checkbox.dataset.wordCount, 10);
     const pattern = checkbox.dataset.pattern;
 
-    // BUG FIX: Validate parsed values to prevent NaN keys
-    if (isNaN(profileNum) || isNaN(wordCount) || !pattern) {
-      console.warn('Invalid checkbox data:', { profileNum, wordCount, pattern });
-      return; // Skip invalid checkboxes
+    // BUG FIX: Enhanced validation - check for NaN and valid ranges
+    if (isNaN(profileNum) || profileNum < 1 || profileNum > 4) {
+      console.warn('Invalid profileNum:', checkbox.dataset.profileNum, '- must be 1-4');
+      invalidCount++;
+      return;
+    }
+
+    if (isNaN(wordCount) || wordCount < 1 || wordCount > 4) {
+      console.warn('Invalid wordCount:', checkbox.dataset.wordCount, '- must be 1-4');
+      invalidCount++;
+      return;
+    }
+
+    if (!pattern || typeof pattern !== 'string' || pattern.trim() === '') {
+      console.warn('Invalid pattern:', pattern, '- must be non-empty string');
+      invalidCount++;
+      return;
     }
 
     const profileKey = `profile${profileNum}`;
@@ -356,17 +371,26 @@ const saveCurrentProfileSettings = () => {
 
     profileSettings[profileKey][wordCount][pattern] = checkbox.checked;
   });
-  
+
   chrome.storage.sync.set({ profileSettings: profileSettings }, () => {
     const saveBtn = document.getElementById('save-btn');
     const originalText = saveBtn.textContent;
-    saveBtn.textContent = 'Saved!';
-    saveBtn.style.backgroundColor = '#4caf50';
+
+    // MEDIUM FIX: Show warning if some settings were skipped
+    if (invalidCount > 0) {
+      saveBtn.textContent = `Saved (${invalidCount} skipped)`;
+      saveBtn.style.backgroundColor = '#ff9800'; // Orange for partial success
+      console.warn(`${invalidCount} checkbox(es) had invalid data and were skipped`);
+    } else {
+      saveBtn.textContent = 'Saved!';
+      saveBtn.style.backgroundColor = '#4caf50';
+    }
+
     setTimeout(() => {
       saveBtn.textContent = originalText;
       saveBtn.style.backgroundColor = '';
     }, 2000);
-    
+
     updateSearchPreview();
   });
 };
@@ -491,6 +515,16 @@ const updateSearchPreview = () => {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
+  // BUG FIX: Check critical elements first before any initialization
+  const engineSelector = document.getElementById('search-engine');
+  const executeBtn = document.querySelector('.search-execute-btn');
+  const searchInputs = document.querySelectorAll('.search-element');
+
+  if (!engineSelector) {
+    console.error('search-engine element not found in DOM - aborting initialization');
+    return;
+  }
+
   try {
     // Initialize ThemeManager and load theme
     if (typeof ThemeManager !== 'undefined') {
@@ -526,16 +560,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
   });
-
-  const searchInputs = document.querySelectorAll('.search-element');
-  const executeBtn = document.querySelector('.search-execute-btn');
-  const engineSelector = document.getElementById('search-engine');
-
-  // MEDIUM FIX: Check if element exists before using it
-  if (!engineSelector) {
-    console.error('search-engine element not found in DOM');
-    return;
-  }
 
   searchInputs.forEach(input => {
     input.addEventListener('input', updateSearchPreview);

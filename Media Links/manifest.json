@@ -25,7 +25,7 @@
       },
       {
          "matches": ["*://tv.apple.com/*", "file:///*"],
-         "js": ["appletv-cast-copy.js"],
+         "js": ["appletv-cast-copy.js", "appletv-customized-views.js"],
          "run_at": "document_end"
       },
       {
@@ -75,10 +75,10 @@
       "pages": ["sandbox.html"]
    },
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "0.824",
+   "version": "0.825",
    "web_accessible_resources": [
       {
-         "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html", "offscreen.html", "consolidated-view-page.html", "consolidated-view-page.js", "comparison-view-page.html", "comparison-view-page.js", "customized-views.js", "theme-manager.js", "settings-utils.js", "hotstar-episode-copy.js", "hotstar-show-title-copy.js", "airtelxstream-episode-copy.js", "airtelxstream-cast-copy.js"],
+         "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html", "offscreen.html", "consolidated-view-page.html", "consolidated-view-page.js", "comparison-view-page.html", "comparison-view-page.js", "customized-views.js", "theme-manager.js", "settings-utils.js", "hotstar-episode-copy.js", "hotstar-show-title-copy.js", "airtelxstream-episode-copy.js", "airtelxstream-cast-copy.js", "appletv-view-page.html", "appletv-view-page.js", "appletv-customized-views.js", "filters/role-filters.js"],
          "matches": ["<all_urls>"],
          "use_dynamic_url": true
       }

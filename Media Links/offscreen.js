@@ -62,6 +62,22 @@ const setupMessageListeners = () => {
     }, 60000); // 60 second timeout for initialization
   });
 
+  // Track if the rejection was handled elsewhere to provide appropriate logging
+  let sandboxErrorHandled = false;
+
+  // Add catch handler to prevent unhandled promise rejection warnings
+  // The actual error handling is done where sandboxReadyPromise is awaited
+  sandboxReadyPromise.catch((error) => {
+    if (!sandboxErrorHandled) {
+      console.error('Offscreen: Sandbox ready promise rejected (unhandled):', error.message);
+    } else {
+      console.warn('Offscreen: Sandbox ready promise rejected (handled elsewhere):', error.message);
+    }
+  });
+
+  // Export the flag setter for use in handleOCRRequest
+  window._markSandboxErrorHandled = () => { sandboxErrorHandled = true; };
+
   // Listen for messages from sandboxed iframe
   window.addEventListener('message', (event) => {
     // HIGH SEVERITY FIX: Check type before calling includes()
@@ -217,6 +233,10 @@ const handleOCRRequest = async (message, sendResponse) => {
     if (!sandboxReady) {
       console.log('Offscreen: Waiting for sandbox Tesseract initialization...');
       try {
+        // Mark as handled before awaiting to ensure proper logging
+        if (typeof window._markSandboxErrorHandled === 'function') {
+          window._markSandboxErrorHandled();
+        }
         await sandboxReadyPromise;
         console.log('Offscreen: Sandbox ready, proceeding with OCR');
       } catch (error) {
@@ -253,6 +273,17 @@ const handleOCRRequest = async (message, sendResponse) => {
     });
 
     console.log('Offscreen: Forwarding OCR request to sandbox iframe with ID', id);
+
+    // BUG FIX: Verify sandboxFrame is still valid after async operations
+    if (!sandboxFrame || !sandboxFrame.contentWindow) {
+      pendingRequests.delete(id);
+      console.error('Offscreen: Sandbox iframe became unavailable after async wait');
+      sendResponse({
+        success: false,
+        error: 'Sandbox iframe became unavailable'
+      });
+      return;
+    }
 
     // Forward message to sandboxed iframe with request ID for tracking
     sandboxFrame.contentWindow.postMessage({

@@ -30,60 +30,75 @@
   }
 
   /**
-   * Detect view mode and load appropriate data
+   * Promisified wrapper for chrome.storage.local.get with error handling
+   * HIGH SEVERITY FIX: Prevents race conditions by using async/await pattern
    */
-  async function detectViewMode() {
-    return new Promise((resolve) => {
-      // First check for single view data
-      chrome.storage.local.get(['customized-view-temp'], (result) => {
-        if (result['customized-view-temp']) {
-          viewMode = 'single';
-          resolve({ mode: 'single', data: result['customized-view-temp'] });
-          return;
-        }
-
-        // Otherwise check for consolidated view data
-        chrome.storage.local.get([
-          'consolidatedViewData_title',
-          'consolidatedViewData_fullcredits',
-          'consolidatedViewData_companycredits',
-          'consolidatedViewData_awards',
-          'consolidatedViewData_releaseinfo',
-          'consolidatedViewData_technical'
-        ], (consolidatedResult) => {
-          // BUG FIX: Check for storage errors first
+  function storageGet(keys) {
+    return new Promise((resolve, reject) => {
+      try {
+        chrome.storage.local.get(keys, (result) => {
           if (chrome.runtime.lastError) {
-            console.error('Error loading consolidated data:', chrome.runtime.lastError);
-            viewMode = null;
-            resolve({ mode: null, data: null });
-            return;
-          }
-
-          // BUG FIX: Validate consolidatedResult is an object
-          if (!consolidatedResult || typeof consolidatedResult !== 'object') {
-            console.warn('Invalid consolidated result:', consolidatedResult);
-            viewMode = null;
-            resolve({ mode: null, data: null });
-            return;
-          }
-
-          const hasConsolidatedData = consolidatedResult['consolidatedViewData_title'] ||
-                                      consolidatedResult['consolidatedViewData_fullcredits'] ||
-                                      consolidatedResult['consolidatedViewData_companycredits'] ||
-                                      consolidatedResult['consolidatedViewData_awards'] ||
-                                      consolidatedResult['consolidatedViewData_releaseinfo'] ||
-                                      consolidatedResult['consolidatedViewData_technical'];
-
-          if (hasConsolidatedData) {
-            viewMode = 'consolidated';
-            resolve({ mode: 'consolidated', data: consolidatedResult });
+            reject(new Error(chrome.runtime.lastError.message));
           } else {
-            viewMode = null;
-            resolve({ mode: null, data: null });
+            resolve(result);
           }
         });
-      });
+      } catch (error) {
+        reject(error);
+      }
     });
+  }
+
+  /**
+   * Detect view mode and load appropriate data
+   * HIGH SEVERITY FIX: Converted to async/await to prevent race conditions
+   */
+  async function detectViewMode() {
+    try {
+      // First check for single view data
+      const singleResult = await storageGet(['customized-view-temp']);
+
+      if (singleResult['customized-view-temp']) {
+        viewMode = 'single';
+        return { mode: 'single', data: singleResult['customized-view-temp'] };
+      }
+
+      // Otherwise check for consolidated view data
+      const consolidatedResult = await storageGet([
+        'consolidatedViewData_title',
+        'consolidatedViewData_fullcredits',
+        'consolidatedViewData_companycredits',
+        'consolidatedViewData_awards',
+        'consolidatedViewData_releaseinfo',
+        'consolidatedViewData_technical'
+      ]);
+
+      // Validate consolidatedResult is an object
+      if (!consolidatedResult || typeof consolidatedResult !== 'object') {
+        console.warn('Invalid consolidated result:', consolidatedResult);
+        viewMode = null;
+        return { mode: null, data: null };
+      }
+
+      const hasConsolidatedData = consolidatedResult['consolidatedViewData_title'] ||
+                                  consolidatedResult['consolidatedViewData_fullcredits'] ||
+                                  consolidatedResult['consolidatedViewData_companycredits'] ||
+                                  consolidatedResult['consolidatedViewData_awards'] ||
+                                  consolidatedResult['consolidatedViewData_releaseinfo'] ||
+                                  consolidatedResult['consolidatedViewData_technical'];
+
+      if (hasConsolidatedData) {
+        viewMode = 'consolidated';
+        return { mode: 'consolidated', data: consolidatedResult };
+      } else {
+        viewMode = null;
+        return { mode: null, data: null };
+      }
+    } catch (error) {
+      console.error('Error in detectViewMode:', error);
+      viewMode = null;
+      return { mode: null, data: null };
+    }
   }
 
   /**
@@ -170,8 +185,8 @@
               contentDiv.appendChild(viewElement);
             });
           })
-          .catch((error) => {
-            // MEDIUM FIX: Handle preference loading errors
+          .catch(async (error) => {
+            // MEDIUM FIX: Handle preference loading errors with proper async/await
             console.error('Failed to load preferences:', error);
 
             // Set default empty preferences if load fails
@@ -179,17 +194,16 @@
             view.selectedRoles = new Set(allRoles);
             view.searchQuery = '';
 
-            // Continue with rendering despite error
+            // Continue with rendering despite error - await to prevent race condition
             contentDiv.innerHTML = '';
-            view.render().then(viewElement => {
-              contentDiv.appendChild(viewElement);
+            const viewElement = await view.render();
+            contentDiv.appendChild(viewElement);
 
-              // Optionally show user message
-              const warning = document.createElement('div');
-              warning.style.cssText = 'color: orange; padding: 10px; background: #fff3cd; margin: 10px 0; border-radius: 4px;';
-              warning.textContent = 'Warning: Could not load saved preferences. Using defaults.';
-              viewElement.insertBefore(warning, viewElement.firstChild);
-            });
+            // Show user warning message
+            const warning = document.createElement('div');
+            warning.style.cssText = 'color: orange; padding: 10px; background: #fff3cd; margin: 10px 0; border-radius: 4px;';
+            warning.textContent = 'Warning: Could not load saved preferences. Using defaults.';
+            viewElement.insertBefore(warning, viewElement.firstChild);
           });
       } else {
         throw new Error('CustomizedView not available');
@@ -439,6 +453,8 @@
     }
 
     // Cast & Crew section
+    // Note: Column visibility per roleType is handled by RoleFilters in customized-views.js
+    // Single credit roles (Directors, Producers, etc.) will hide the Role column automatically
     if (allData.castCrew && allData.castCrew.length > 0) {
       hasData = true;
       const section = await createSection('📋 Cast & Crew', 'cast-crew', allData.castCrew, ['name', 'role', 'roleType']);

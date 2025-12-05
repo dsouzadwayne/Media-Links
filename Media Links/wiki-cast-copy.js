@@ -128,15 +128,25 @@ async function addWikipediaCastButtons() {
     let currentElement = castSection.parentElement;
 
     // Determine the heading level of the cast section
-    const castHeadingLevel = parseInt(castSection.tagName.substring(1)); // Extract number from H2, H3, etc.
+    // BUG FIX: Validate that tagName is a heading (H1-H6) before parsing
+    const tagName = castSection.tagName || '';
+    const headingMatch = tagName.match(/^H([1-6])$/);
+
+    if (!headingMatch) {
+      console.warn('Wiki Cast Copy: Cast section element is not a heading:', tagName, '- defaulting to H2 level');
+    }
+
+    const castHeadingLevel = headingMatch ? parseInt(headingMatch[1], 10) : 2; // Default to H2 if not a valid heading
 
     // Traverse siblings to find ul elements and tables
     while (currentElement && currentElement.nextElementSibling) {
       currentElement = currentElement.nextElementSibling;
 
       // Stop only at headings of the same level or higher (e.g., if Cast is H2, stop at next H2 or H1)
-      if (currentElement.tagName.match(/^H[1-6]$/)) {
-        const currentHeadingLevel = parseInt(currentElement.tagName.substring(1));
+      // LOW FIX: Use safer regex matching for heading level extraction
+      const currentTagMatch = currentElement.tagName && currentElement.tagName.match(/^H([1-6])$/);
+      if (currentTagMatch) {
+        const currentHeadingLevel = parseInt(currentTagMatch[1], 10);
         if (currentHeadingLevel <= castHeadingLevel) {
           break;
         }
@@ -689,14 +699,19 @@ async function showWikiCopyDialog(castSection, sectionName) {
   let currentElement = castSection.parentElement;
 
   // Determine the heading level of the cast section
-  const castHeadingLevel = parseInt(castSection.tagName.substring(1));
+  // LOW FIX: Use safer regex matching for heading level extraction
+  const dialogTagName = castSection.tagName || '';
+  const dialogHeadingMatch = dialogTagName.match(/^H([1-6])$/);
+  const castHeadingLevel = dialogHeadingMatch ? parseInt(dialogHeadingMatch[1], 10) : 2;
 
   while (currentElement && currentElement.nextElementSibling) {
     currentElement = currentElement.nextElementSibling;
 
     // Stop at headings of the same level or higher
-    if (currentElement.tagName.match(/^H[1-6]$/)) {
-      const currentHeadingLevel = parseInt(currentElement.tagName.substring(1));
+    // LOW FIX: Use safer regex matching for heading level extraction
+    const currentTagMatch = currentElement.tagName && currentElement.tagName.match(/^H([1-6])$/);
+    if (currentTagMatch) {
+      const currentHeadingLevel = parseInt(currentTagMatch[1], 10);
       if (currentHeadingLevel <= castHeadingLevel) {
         break;
       }
@@ -706,7 +721,8 @@ async function showWikiCopyDialog(castSection, sectionName) {
     if (currentElement.classList && currentElement.classList.contains('mw-heading')) {
       const headingInside = currentElement.querySelector('h1, h2, h3, h4, h5, h6');
       if (headingInside) {
-        const headingInsideLevel = parseInt(headingInside.tagName.substring(1));
+        const insideTagMatch = headingInside.tagName && headingInside.tagName.match(/^H([1-6])$/);
+        const headingInsideLevel = insideTagMatch ? parseInt(insideTagMatch[1], 10) : 6;
         if (headingInsideLevel <= castHeadingLevel) {
           break; // Stop processing - we've reached another section at same or higher level
         }
@@ -860,7 +876,25 @@ async function showWikiCopyDialog(castSection, sectionName) {
 }
 
 function getDialogColors(buttonColors) {
-  const isDark = buttonColors.buttonText === '#fff';
+  // BUG FIX: More robust dark mode detection - handle various color formats
+  const normalizeColor = (color) => {
+    if (!color) return '';
+    const lower = color.toLowerCase().trim();
+    // Check for common white color formats
+    if (lower === '#fff' || lower === '#ffffff' || lower === 'white') {
+      return 'white';
+    }
+    // Check for rgb format
+    if (lower.startsWith('rgb')) {
+      const match = lower.match(/rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+      if (match && match[1] === '255' && match[2] === '255' && match[3] === '255') {
+        return 'white';
+      }
+    }
+    return lower;
+  };
+
+  const isDark = normalizeColor(buttonColors.buttonText) === 'white';
 
   if (isDark) {
     return {

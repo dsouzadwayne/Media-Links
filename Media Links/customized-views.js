@@ -51,6 +51,9 @@
       // Debouncing flag for async copy operations
       this.copyInProgress = false;
 
+      // Debounce timer for render calls
+      this.renderDebounceTimer = null;
+
       // Set up MutationObserver to clean up removed dropdowns
       this.setupDropdownCleanupObserver();
     }
@@ -127,9 +130,17 @@
      * Clean up observer and listeners when view is destroyed
      */
     destroy() {
-      // Clean up cell click listeners
-      this.cellListeners.forEach(({ element, handler }) => {
-        element.removeEventListener('click', handler);
+      // Clean up render debounce timer
+      if (this.renderDebounceTimer) {
+        clearTimeout(this.renderDebounceTimer);
+        this.renderDebounceTimer = null;
+      }
+
+      // Clean up cell listeners (click, mouseenter, mouseleave)
+      this.cellListeners.forEach(({ element, handler, type }) => {
+        // Support both old format (without type) and new format (with type)
+        const eventType = type || 'click';
+        element.removeEventListener(eventType, handler);
       });
       this.cellListeners = [];
       console.log('CustomizedView: Cell listeners cleaned up');
@@ -823,8 +834,13 @@
 
       searchInput.addEventListener('input', (e) => {
         this.searchQuery = e.target.value;
-        this.render();
-        this.savePreferences();
+
+        // BUG FIX: Debounce render calls to prevent race conditions during rapid typing
+        clearTimeout(this.renderDebounceTimer);
+        this.renderDebounceTimer = setTimeout(async () => {
+          await this.render();
+          this.savePreferences();
+        }, 150);
       });
 
       controls.appendChild(searchInput);
@@ -929,6 +945,17 @@
           return;
         }
 
+        // Filter out excluded roles using RoleFilters
+        // e.g., Directors with "ending sequence", "opening", "episode director" roles
+        if (typeof window.RoleFilters !== 'undefined' && window.RoleFilters.filterExcludedRoles) {
+          groupItems = window.RoleFilters.filterExcludedRoles(groupItems);
+        }
+
+        // Skip if no items after filtering
+        if (!groupItems || groupItems.length === 0) {
+          return;
+        }
+
         // Apply view limit
         const displayItems = groupItems.slice(0, viewLimit);
         const totalItems = groupItems.length;
@@ -938,6 +965,12 @@
         if (displayItems.length === 0) {
           console.warn(`No items to display for ${roleType} (viewLimit=${viewLimit})`);
           return;
+        }
+
+        // Determine columns for this role type using RoleFilters
+        let sectionColumns = this.columns;
+        if (typeof window.RoleFilters !== 'undefined') {
+          sectionColumns = window.RoleFilters.getColumnsForRoleType(roleType);
         }
 
         // Create section header for role type
@@ -1070,9 +1103,19 @@
         // Track active handlers for this dropdown for proper cleanup
         const handlerTracking = { active: false, handler: null };
 
-        // Create handler function with proper cleanup
+        // Create handler function with proper cleanup and stale reference check
         const createOutsideClickHandler = () => {
           return (e) => {
+            // BUG FIX: Check if elements are still in DOM to handle stale closures
+            if (!document.body.contains(copyDropdown)) {
+              // Element removed from DOM, clean up handler
+              if (handlerTracking.handler) {
+                document.removeEventListener('click', handlerTracking.handler);
+                handlerTracking.active = false;
+              }
+              return;
+            }
+
             if (!copyDropdown.contains(e.target)) {
               dropdownMenu.style.display = 'none';
               // Remove the listener when dropdown closes
@@ -1147,7 +1190,7 @@
           background-color: var(--secondary-bg);
         `;
 
-        this.columns.forEach(col => {
+        sectionColumns.forEach(col => {
           const th = document.createElement('th');
           th.textContent = this.getColumnDisplayName(col);
           th.style.cssText = `
@@ -1190,7 +1233,7 @@
           row.style.backgroundColor = 'transparent';
         });
 
-        this.columns.forEach(col => {
+        sectionColumns.forEach(col => {
           const td = document.createElement('td');
           // BUG FIX: Don't replace legitimate falsy values (0, false, '') with '-'
           const cellValue = (item[col] !== undefined && item[col] !== null) ? item[col] : '-';
@@ -1204,15 +1247,20 @@
           `;
 
           // Add hover effects
-          td.addEventListener('mouseenter', () => {
+          // CRITICAL FIX: Track hover listeners for cleanup to prevent memory leaks
+          const mouseenterHandler = () => {
             td.style.backgroundColor = 'var(--accent)';
             td.style.color = 'white';
-          });
-
-          td.addEventListener('mouseleave', () => {
+          };
+          const mouseleaveHandler = () => {
             td.style.backgroundColor = 'transparent';
             td.style.color = 'var(--text-primary)';
-          });
+          };
+          td.addEventListener('mouseenter', mouseenterHandler);
+          td.addEventListener('mouseleave', mouseleaveHandler);
+          // Track hover listeners for cleanup
+          self.cellListeners.push({ element: td, handler: mouseenterHandler, type: 'mouseenter' });
+          self.cellListeners.push({ element: td, handler: mouseleaveHandler, type: 'mouseleave' });
 
           // Add click to copy (with date formatting support)
           // CRITICAL FIX: Store listener handler for cleanup on re-render
@@ -1261,6 +1309,19 @@
                 }, 600);
               }).catch(err => {
                 console.error('Failed to copy:', err);
+                // BUG FIX: Provide visual feedback for copy errors
+                td.style.backgroundColor = '#ef4444';
+                td.style.color = 'white';
+
+                const errorMsg = err.name === 'NotAllowedError'
+                  ? 'Clipboard access denied'
+                  : 'Copy failed';
+                self.showCopyNotification(`Error: ${errorMsg}`);
+
+                setTimeout(() => {
+                  td.style.backgroundColor = 'transparent';
+                  td.style.color = 'var(--text-primary)';
+                }, 1000);
               });
             } catch (error) {
               console.error('Error in cell copy:', error);
@@ -1276,7 +1337,7 @@
 
           td.addEventListener('click', clickHandler);
           // Track listener for cleanup
-          self.cellListeners.push({ element: td, handler: clickHandler });
+          self.cellListeners.push({ element: td, handler: clickHandler, type: 'click' });
 
           row.appendChild(td);
         });
@@ -1336,8 +1397,8 @@
           margin-bottom: 5px;
         `;
 
-        // Add option for each column
-        self.columns.forEach(col => {
+        // Add option for each column (use sectionColumns for this role type)
+        sectionColumns.forEach(col => {
           const colValue = (item[col] !== undefined && item[col] !== null) ? item[col] : '-';
           const displayName = self.getColumnDisplayName(col);
           const isDate = self.isDateColumn(col, roleType, colValue);
@@ -1434,9 +1495,9 @@
           e.stopPropagation();
           rowDropdownMenu.style.display = 'none';
 
-          // Build text with all columns
+          // Build text with all columns (use sectionColumns for this role type)
           const parts = [];
-          for (const col of self.columns) {
+          for (const col of sectionColumns) {
             let colValue = (item[col] !== undefined && item[col] !== null) ? item[col] : '-';
             const isDate = self.isDateColumn(col, roleType, colValue);
 
@@ -1478,6 +1539,16 @@
 
         const createRowOutsideClickHandler = () => {
           return (e) => {
+            // BUG FIX: Check if elements are still in DOM to handle stale closures
+            if (!document.body.contains(rowCopyDropdown)) {
+              // Element removed from DOM, clean up handler
+              if (rowHandlerTracking.handler) {
+                document.removeEventListener('click', rowHandlerTracking.handler);
+                rowHandlerTracking.active = false;
+              }
+              return;
+            }
+
             if (!rowCopyDropdown.contains(e.target)) {
               rowDropdownMenu.style.display = 'none';
               if (rowHandlerTracking.handler) {
