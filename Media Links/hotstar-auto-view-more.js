@@ -951,9 +951,7 @@
         header.appendChild(toggleBtn);
         panel.appendChild(header);
 
-        // BUG FIX: Search input declared here BEFORE being referenced in toggleBtn click handler above
-        // (The toggleBtn click handler references searchInput, so it must be declared first)
-        // Note: Due to hoisting this works, but we're now explicitly ensuring proper order
+        // Style the search input (searchInput was declared at line 879 above)
         const searchBorder = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
         const searchBg = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.02)';
         const searchFocusBorder = colors.accent || '#6366f1';
@@ -1510,10 +1508,11 @@
             }
         }, CONFIG.checkInterval);
 
-        // Update episode list every 200ms to catch newly loaded episodes
+        // Update episode list every 1000ms to catch newly loaded episodes
+        // Note: MutationObserver also updates on DOM changes, so this is a fallback
         updateEpisodeIntervalId = setInterval(() => {
             updateEpisodeList();
-        }, 200);
+        }, 1000);
 
         // Set up observer for dynamic content
         if (document.body) {

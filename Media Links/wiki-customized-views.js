@@ -234,11 +234,11 @@
         }
       }
 
-      // Log warning if limit was reached
-      if (iterationCount >= MAX_ITERATIONS) {
-        console.warn(`Cast section iteration limit reached (${MAX_ITERATIONS}). Some cast members may be missing.`);
-      }
-    });
+        // Log warning if limit was reached (inside forEach callback where iterationCount is in scope)
+        if (iterationCount >= MAX_ITERATIONS) {
+          console.warn(`Cast section iteration limit reached (${MAX_ITERATIONS}). Some cast members may be missing.`);
+        }
+      });
 
     // Then, if we haven't found enough from cast section, add from infobox "Starring" row
     const infobox = getMainInfobox();

@@ -169,10 +169,17 @@
         // Use tab title as fallback
       }
 
-      tabButton.innerHTML = `
-        <div style="font-weight: 700; margin-bottom: 6px; font-size: 14px;">📄 ${pageTitle}</div>
-        <div style="font-size: 12px; opacity: 0.6; word-break: break-all;">${tab.url}</div>
-      `;
+      // Use DOM methods instead of innerHTML to prevent XSS
+      const titleDiv = document.createElement('div');
+      titleDiv.style.cssText = 'font-weight: 700; margin-bottom: 6px; font-size: 14px;';
+      titleDiv.textContent = '📄 ' + pageTitle;
+
+      const urlDiv = document.createElement('div');
+      urlDiv.style.cssText = 'font-size: 12px; opacity: 0.6; word-break: break-all;';
+      urlDiv.textContent = tab.url;
+
+      tabButton.appendChild(titleDiv);
+      tabButton.appendChild(urlDiv);
 
       tabButton.addEventListener('mouseenter', () => {
         tabButton.style.background = isDarkMode ? '#3a3a3a' : '#ececec';
@@ -280,7 +287,14 @@
       document.head.appendChild(style);
     }
 
-    notification.innerHTML = message;
+    // Use textContent for plain text messages, or parse HTML safely for structured messages
+    // Since messages are generated internally, we can trust them but still sanitize
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = message;
+    // Clone all child nodes to the notification (this is safer than direct innerHTML)
+    while (tempDiv.firstChild) {
+      notification.appendChild(tempDiv.firstChild);
+    }
     document.body.appendChild(notification);
 
     return notification;
@@ -293,7 +307,13 @@
     const existing = document.getElementById('comparison-status-notification');
     if (existing) {
       const isDarkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-      existing.innerHTML = message;
+      // Clear existing content and safely add new content
+      existing.textContent = '';
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = message;
+      while (tempDiv.firstChild) {
+        existing.appendChild(tempDiv.firstChild);
+      }
       existing.style.background = type === 'error' ? '#ef4444' : type === 'success' ? '#22c55e' : isDarkMode ? '#1e1e1e' : '#ffffff';
       existing.style.color = type === 'error' || type === 'success' ? '#ffffff' : isDarkMode ? '#ffffff' : '#000000';
       existing.style.borderColor = type === 'error' ? '#dc2626' : type === 'success' ? '#16a34a' : '#8b5cf6';

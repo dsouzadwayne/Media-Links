@@ -251,7 +251,8 @@ function createCopyModal() {
     const checkboxes = modalContent.querySelectorAll('.tab-checkbox:checked');
 
     // Validate tab IDs before processing
-    if (!Array.isArray(checkboxes) || checkboxes.length === 0) {
+    // Note: querySelectorAll returns a NodeList, not an Array
+    if (!checkboxes || checkboxes.length === 0) {
       console.warn('No checkboxes selected');
       alert('Please select at least one tab');
       return;

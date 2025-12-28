@@ -82,7 +82,15 @@ window.SettingsUtils = (() => {
       includeTitle: true,
       includeURL: true,
       separator: '\n\n---\n\n'
-    }
+    },
+
+    // Stopwatch Settings
+    stopwatchEnabled: false,
+    stopwatchPosition: 'bottom-right',
+    stopwatchNotificationEnabled: false,
+    stopwatchNotificationMinutes: 30,
+    stopwatchMinimizedByDefault: false,
+    stopwatchIncludedDomains: ''
   };
 
   // Validation rules
@@ -295,6 +303,33 @@ window.SettingsUtils = (() => {
         includeURL: true,
         separator: '\n\n---\n\n'
       }
+    },
+    stopwatchEnabled: {
+      type: 'boolean',
+      default: false
+    },
+    stopwatchPosition: {
+      type: 'string',
+      enum: ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
+      default: 'bottom-right'
+    },
+    stopwatchNotificationEnabled: {
+      type: 'boolean',
+      default: false
+    },
+    stopwatchNotificationMinutes: {
+      type: 'number',
+      min: 1,
+      max: 1440,
+      default: 30
+    },
+    stopwatchMinimizedByDefault: {
+      type: 'boolean',
+      default: false
+    },
+    stopwatchIncludedDomains: {
+      type: 'string',
+      default: ''
     }
   };
 

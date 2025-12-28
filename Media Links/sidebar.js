@@ -3,6 +3,8 @@ const createLink = (url, text) => {
   link.href = '#';
   link.textContent = text;
   link.classList.add('sidebar-link');
+  // Store the URL path in a data attribute for active link detection
+  link.dataset.urlPath = url;
   link.addEventListener('click', () => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       // Validate URL starts with / to prevent XSS
@@ -68,7 +70,9 @@ const setActiveLink = () => {
         const sidebarLinks = document.querySelectorAll('.sidebar-link');
         sidebarLinks.forEach(link => {
           link.classList.remove('active');
-          if (currentUrl.pathname.includes(link.getAttribute('href'))) {
+          // Use data-url-path attribute instead of href for matching
+          const urlPath = link.dataset.urlPath;
+          if (urlPath && currentUrl.pathname.includes(urlPath)) {
             link.classList.add('active');
           }
         });
@@ -97,16 +101,16 @@ const updateLinks = () => {
         let hasLinks = false;
 
         if (currentUrl.hostname === 'www.imdb.com') {
-          // CRITICAL FIX: Check array bounds before accessing
+          // Check array bounds before accessing
           const pathParts = currentUrl.pathname.split('/');
-          if (pathParts.length <= 2) {
-            console.warn('Invalid IMDb URL format:', currentUrl.pathname);
+          if (pathParts.length <= 2 || !pathParts[2]) {
+            // Homepage or non-title page - no links to show (this is normal)
             hasLinks = false;
           } else {
             const imdbId = pathParts[2];
             // Additional validation: IMDb IDs should start with 'tt'
-            if (!imdbId || !imdbId.match(/^tt\d+$/)) {
-              console.warn('Invalid IMDb ID:', imdbId);
+            if (!imdbId.match(/^tt\d+$/)) {
+              // Not a title page (could be /name/, /list/, etc.)
               hasLinks = false;
             } else {
               links = getLinksForIMDb(imdbId);
@@ -114,16 +118,15 @@ const updateLinks = () => {
             }
           }
         } else if (currentUrl.hostname === 'letterboxd.com') {
-          // CRITICAL FIX: Check array bounds before accessing
+          // Check array bounds before accessing
           const pathParts = currentUrl.pathname.split('/');
-          if (pathParts.length <= 2) {
-            console.warn('Invalid Letterboxd URL format:', currentUrl.pathname);
+          if (pathParts.length <= 2 || !pathParts[2]) {
+            // Homepage or non-film page - no links to show (this is normal)
             hasLinks = false;
           } else {
             const filmName = pathParts[2];
             // Additional validation: Film name should not be empty
-            if (!filmName || filmName.trim() === '') {
-              console.warn('Invalid film name');
+            if (filmName.trim() === '') {
               hasLinks = false;
             } else {
               links = getLinksForLetterboxd(filmName);

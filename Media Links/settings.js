@@ -220,6 +220,18 @@ function applySettingsToUI() {
   // Toggle comparison settings subsection based on enable state
   toggleComparisonSettings(currentSettings.enableComparisonFeature === true);
 
+  // Stopwatch settings
+  safeSetChecked('stopwatch-enabled', currentSettings.stopwatchEnabled === true);
+  safeSetValue('stopwatch-position', currentSettings.stopwatchPosition || 'bottom-right');
+  safeSetChecked('stopwatch-minimized-default', currentSettings.stopwatchMinimizedByDefault === true);
+  safeSetChecked('stopwatch-notification-enabled', currentSettings.stopwatchNotificationEnabled === true);
+  safeSetValue('stopwatch-notification-minutes', currentSettings.stopwatchNotificationMinutes || 30);
+  safeSetValue('stopwatch-included-domains', currentSettings.stopwatchIncludedDomains || '');
+
+  // Toggle stopwatch options subsection based on enable state
+  toggleStopwatchSettings(currentSettings.stopwatchEnabled === true);
+  toggleNotificationMinutes(currentSettings.stopwatchNotificationEnabled === true);
+
   // Set default view columns
   const defaultColumns = currentSettings.defaultViewColumns || ['name', 'role', 'roleType'];
   const columnCheckboxes = document.querySelectorAll('.view-column-checkbox');
@@ -285,6 +297,18 @@ function attachEventListeners() {
   // Comparison feature toggle
   safeAddListener('enable-comparison-feature', 'change', (e) => {
     toggleComparisonSettings(e.target.checked);
+    markUnsaved();
+  });
+
+  // Stopwatch feature toggle
+  safeAddListener('stopwatch-enabled', 'change', (e) => {
+    toggleStopwatchSettings(e.target.checked);
+    markUnsaved();
+  });
+
+  // Stopwatch notification toggle
+  safeAddListener('stopwatch-notification-enabled', 'change', (e) => {
+    toggleNotificationMinutes(e.target.checked);
     markUnsaved();
   });
 
@@ -388,6 +412,54 @@ function toggleComparisonSettings(enabled) {
   }
 }
 
+// Toggle stopwatch settings subsection visibility
+function toggleStopwatchSettings(enabled) {
+  const subsection = document.getElementById('stopwatch-options');
+  if (subsection) {
+    if (enabled) {
+      subsection.style.opacity = '1';
+      subsection.style.pointerEvents = 'auto';
+      subsection.setAttribute('aria-disabled', 'false');
+      const inputs = subsection.querySelectorAll('input, select');
+      inputs.forEach(input => {
+        // Don't enable notification minutes if notifications are disabled
+        if (input.id === 'stopwatch-notification-minutes') {
+          const notifEnabled = document.getElementById('stopwatch-notification-enabled');
+          input.disabled = !(notifEnabled && notifEnabled.checked);
+        } else {
+          input.disabled = false;
+        }
+      });
+    } else {
+      subsection.style.opacity = '0.5';
+      subsection.style.pointerEvents = 'none';
+      subsection.setAttribute('aria-disabled', 'true');
+      const inputs = subsection.querySelectorAll('input, select');
+      inputs.forEach(input => {
+        input.disabled = true;
+      });
+    }
+  }
+}
+
+// Toggle notification minutes input visibility
+function toggleNotificationMinutes(enabled) {
+  const container = document.getElementById('notification-minutes-container');
+  if (container) {
+    if (enabled) {
+      container.style.opacity = '1';
+      container.style.pointerEvents = 'auto';
+      const input = container.querySelector('input');
+      if (input) input.disabled = false;
+    } else {
+      container.style.opacity = '0.5';
+      container.style.pointerEvents = 'none';
+      const input = container.querySelector('input');
+      if (input) input.disabled = true;
+    }
+  }
+}
+
 // Save settings
 function saveSettings() {
   // Helper function to safely get element values with fallbacks
@@ -457,7 +529,14 @@ function saveSettings() {
     enableComparisonFeature: getSafeValue('enable-comparison-feature', 'checked'),
     showComparisonBtnWiki: getSafeValue('show-comparison-btn-wiki', 'checked'),
     showComparisonBtnImdb: getSafeValue('show-comparison-btn-imdb', 'checked'),
-    autoOpenComparison: getSafeValue('auto-open-comparison', 'checked')
+    autoOpenComparison: getSafeValue('auto-open-comparison', 'checked'),
+    // Stopwatch settings
+    stopwatchEnabled: getSafeValue('stopwatch-enabled', 'checked'),
+    stopwatchPosition: getSafeValue('stopwatch-position'),
+    stopwatchMinimizedByDefault: getSafeValue('stopwatch-minimized-default', 'checked'),
+    stopwatchNotificationEnabled: getSafeValue('stopwatch-notification-enabled', 'checked'),
+    stopwatchNotificationMinutes: validateNumericInput(getSafeValue('stopwatch-notification-minutes'), 1, 1440, 30),
+    stopwatchIncludedDomains: getSafeValue('stopwatch-included-domains')
   };
 
   // Save to storage using SettingsUtils with validation

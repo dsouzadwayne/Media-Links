@@ -55,26 +55,22 @@ window.DateFormattingUtils = (() => {
       }
     }
 
-    // Format 3: "MM/DD/YYYY"
+    // Format 3 & 4: "MM/DD/YYYY" or "DD/MM/YYYY" (ambiguous)
+    // Logic: If first number > 12, it must be day (DD/MM/YYYY)
+    // Otherwise, assume MM/DD/YYYY (American format)
     match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (match) {
-      const [_, month, day, year] = match;
-      const monthNum = parseInt(month, 10);
-      const dayNum = parseInt(day, 10);
-      if (monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
-        return new Date(parseInt(year, 10), monthNum - 1, dayNum);
-      }
-    }
+      const [_, first, second, year] = match;
+      const firstNum = parseInt(first, 10);
+      const secondNum = parseInt(second, 10);
 
-    // Format 4: "DD/MM/YYYY"
-    match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (match) {
-      const [_, day, month, year] = match;
-      // Ambiguous - assume DD/MM if day > 12 and month <= 12
-      const dayNum = parseInt(day, 10);
-      const monthNum = parseInt(month, 10);
-      if (dayNum > 12 && monthNum >= 1 && monthNum <= 12 && dayNum >= 1 && dayNum <= 31) {
-        return new Date(parseInt(year, 10), monthNum - 1, dayNum);
+      // If first number > 12, it must be day (DD/MM/YYYY format)
+      if (firstNum > 12 && secondNum >= 1 && secondNum <= 12 && firstNum >= 1 && firstNum <= 31) {
+        return new Date(parseInt(year, 10), secondNum - 1, firstNum);
+      }
+      // Otherwise assume MM/DD/YYYY (American format)
+      if (firstNum >= 1 && firstNum <= 12 && secondNum >= 1 && secondNum <= 31) {
+        return new Date(parseInt(year, 10), firstNum - 1, secondNum);
       }
     }
 

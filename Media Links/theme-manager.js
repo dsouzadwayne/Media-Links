@@ -10,6 +10,7 @@ window.ThemeManager = (() => {
   let currentTheme = 'light';
   const subscribers = new Set();
   let isInitialized = false;
+  let initializationPromise = null;
 
   // Theme color definitions
   const themeColors = {
@@ -142,31 +143,49 @@ window.ThemeManager = (() => {
    * Initialize theme manager
    */
   const initialize = async () => {
-    if (isInitialized) return;
+    // Return existing promise if already initializing or initialized
+    if (initializationPromise) return initializationPromise;
 
-    try {
-      const theme = await loadTheme();
-      applyThemeToDOM(theme);
+    initializationPromise = (async () => {
+      if (isInitialized) return;
 
-      // MEDIUM FIX: Register message listener BEFORE setting isInitialized
-      // Listen for theme changes from background script
-      if (isExtensionContextValid()) {
-        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-          if (message.type === 'themeChanged' && message.theme) {
-            setTheme(message.theme);
-          }
-        });
+      try {
+        const theme = await loadTheme();
+        applyThemeToDOM(theme);
+
+        // Register message listener BEFORE setting isInitialized
+        // Listen for theme changes from background script
+        if (isExtensionContextValid()) {
+          chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            if (message.type === 'themeChanged' && message.theme) {
+              setTheme(message.theme);
+            }
+          });
+        }
+
+        // Now it's safe to mark as initialized
+        // All message listeners are ready to handle incoming messages
+        isInitialized = true;
+        console.log('Theme manager initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize theme manager:', error);
+        isInitialized = false;
+        initializationPromise = null; // Allow retry
+        throw error;
       }
+    })();
 
-      // Now it's safe to mark as initialized
-      // All message listeners are ready to handle incoming messages
-      isInitialized = true;
-      console.log('Theme manager initialized successfully');
-    } catch (error) {
-      console.error('Failed to initialize theme manager:', error);
-      isInitialized = false;
-      throw error;
-    }
+    return initializationPromise;
+  };
+
+  /**
+   * Wait for initialization to complete
+   * Returns a promise that resolves when ThemeManager is ready
+   */
+  const whenReady = () => {
+    if (isInitialized) return Promise.resolve();
+    if (initializationPromise) return initializationPromise;
+    return initialize();
   };
 
   /**
@@ -236,6 +255,7 @@ window.ThemeManager = (() => {
    */
   return {
     initialize,
+    whenReady,
     loadTheme,
     applyThemeToDOM,
     setTheme,
