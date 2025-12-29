@@ -51,6 +51,7 @@
     }
 
     const currentHost = window.location.hostname.toLowerCase();
+    const currentUrl = window.location.href.toLowerCase();
     const includedList = settings.includedDomains
       .split(',')
       .map(d => d.trim().toLowerCase())
@@ -62,6 +63,24 @@
     }
 
     return includedList.some(included => {
+      // Check if pattern contains path (/ or ://) - if so, match against full URL
+      const isUrlPattern = included.includes('/') || included.includes('://');
+      const matchTarget = isUrlPattern ? currentUrl : currentHost;
+
+      // Handle wildcard patterns
+      if (included.startsWith('*') && included.endsWith('*') && included.length > 2) {
+        // *google.com* matches anything containing that pattern
+        const pattern = included.slice(1, -1); // Remove both *
+        return matchTarget.includes(pattern);
+      } else if (included.startsWith('*')) {
+        // *.example.com matches anything ending with that pattern
+        const pattern = included.slice(1); // Remove the *
+        return matchTarget.endsWith(pattern);
+      } else if (included.endsWith('*')) {
+        // example.* matches anything starting with that pattern
+        const pattern = included.slice(0, -1); // Remove the *
+        return matchTarget.startsWith(pattern);
+      }
       // Handle both exact match and subdomain match
       return currentHost === included || currentHost.endsWith('.' + included);
     });
