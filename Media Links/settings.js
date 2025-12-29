@@ -228,6 +228,9 @@ function applySettingsToUI() {
   safeSetValue('stopwatch-notification-minutes', currentSettings.stopwatchNotificationMinutes || 30);
   safeSetValue('stopwatch-included-domains', currentSettings.stopwatchIncludedDomains || '');
 
+  // Render domain tags from the hidden input value
+  renderDomainTags();
+
   // Toggle stopwatch options subsection based on enable state
   toggleStopwatchSettings(currentSettings.stopwatchEnabled === true);
   toggleNotificationMinutes(currentSettings.stopwatchNotificationEnabled === true);
@@ -378,6 +381,9 @@ function attachEventListeners() {
       e.returnValue = '';
     }
   });
+
+  // Initialize domain tag interface for stopwatch
+  initializeDomainTagListeners();
 }
 
 // Mark settings as unsaved
@@ -670,6 +676,153 @@ function getSeparatorOption(separatorString) {
   return mapping[separatorString] || 'horizontal-line';
 }
 
+// Domain Tag Management Functions
+function renderDomainTags() {
+  const tagsContainer = document.getElementById('stopwatch-domain-tags');
+  const hiddenInput = document.getElementById('stopwatch-included-domains');
+
+  if (!tagsContainer || !hiddenInput) return;
+
+  // Clear existing tags
+  tagsContainer.innerHTML = '';
+
+  // Get domains from hidden input
+  const domainsStr = hiddenInput.value || '';
+  const domains = domainsStr.split(',').map(d => d.trim()).filter(d => d.length > 0);
+
+  // Create tags for each domain
+  domains.forEach(domain => {
+    const tag = createDomainTag(domain);
+    tagsContainer.appendChild(tag);
+  });
+}
+
+function createDomainTag(domain) {
+  const tag = document.createElement('span');
+  tag.className = 'domain-tag';
+
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'domain-name';
+  nameSpan.textContent = domain;
+  nameSpan.title = domain; // Show full domain on hover if truncated
+
+  const removeBtn = document.createElement('button');
+  removeBtn.type = 'button';
+  removeBtn.className = 'remove-domain';
+  removeBtn.innerHTML = '×';
+  removeBtn.title = 'Remove ' + domain;
+  removeBtn.addEventListener('click', () => removeDomain(domain));
+
+  tag.appendChild(nameSpan);
+  tag.appendChild(removeBtn);
+
+  return tag;
+}
+
+/**
+ * Validate domain format
+ * Allows: domain.com, *.domain.com, domain.*, *domain*, subdomain.domain.com
+ */
+function isValidDomainPattern(domain) {
+  if (!domain || typeof domain !== 'string') return false;
+
+  // Remove wildcard characters for base validation
+  const basePattern = domain.replace(/^\*+|\*+$/g, '');
+
+  // If only wildcards, invalid
+  if (!basePattern) return false;
+
+  // Check for invalid characters (allow letters, numbers, dots, hyphens, and internal wildcards)
+  // Domain pattern: alphanumeric, dots, hyphens, and wildcards
+  const validPattern = /^[\w\-.*]+$/;
+  if (!validPattern.test(domain)) return false;
+
+  // Reject patterns with consecutive dots
+  if (domain.includes('..')) return false;
+
+  // Reject patterns that are just dots
+  if (/^[.*]+$/.test(domain)) return false;
+
+  return true;
+}
+
+function addDomain(domain) {
+  const hiddenInput = document.getElementById('stopwatch-included-domains');
+  if (!hiddenInput) return;
+
+  // Clean and validate domain
+  domain = domain.trim().toLowerCase();
+  if (!domain) return;
+
+  // Validate domain format
+  if (!isValidDomainPattern(domain)) {
+    showStatus('Invalid domain format', 'error');
+    return;
+  }
+
+  // Get current domains
+  const domainsStr = hiddenInput.value || '';
+  const domains = domainsStr.split(',').map(d => d.trim()).filter(d => d.length > 0);
+
+  // Check for duplicates
+  if (domains.includes(domain)) {
+    showStatus('Domain already exists', 'warning');
+    return;
+  }
+
+  // Add new domain
+  domains.push(domain);
+  hiddenInput.value = domains.join(', ');
+
+  // Re-render tags
+  renderDomainTags();
+  markUnsaved();
+}
+
+function removeDomain(domain) {
+  const hiddenInput = document.getElementById('stopwatch-included-domains');
+  if (!hiddenInput) return;
+
+  // Get current domains
+  const domainsStr = hiddenInput.value || '';
+  const domains = domainsStr.split(',').map(d => d.trim()).filter(d => d.length > 0);
+
+  // Remove the domain
+  const index = domains.indexOf(domain);
+  if (index > -1) {
+    domains.splice(index, 1);
+  }
+
+  hiddenInput.value = domains.join(', ');
+
+  // Re-render tags
+  renderDomainTags();
+  markUnsaved();
+}
+
+function initializeDomainTagListeners() {
+  const addBtn = document.getElementById('stopwatch-add-domain-btn');
+  const domainInput = document.getElementById('stopwatch-domain-input');
+
+  if (addBtn && domainInput) {
+    // Add on button click
+    addBtn.addEventListener('click', () => {
+      addDomain(domainInput.value);
+      domainInput.value = '';
+      domainInput.focus();
+    });
+
+    // Add on Enter key
+    domainInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addDomain(domainInput.value);
+        domainInput.value = '';
+      }
+    });
+  }
+}
+
 // Profile Settings Functions
 function loadProfileSettings() {
   // Show loading indicator
@@ -703,7 +856,13 @@ function loadProfileSettings() {
     const profileSelect = document.getElementById('profile-select');
     if (profileSelect) {
       profileSelect.addEventListener('change', (e) => {
-        currentProfile = parseInt(e.target.value, 10);
+        const parsedProfile = parseInt(e.target.value, 10);
+        // Validate profile ID is a valid number between 1-4
+        if (isNaN(parsedProfile) || parsedProfile < 1 || parsedProfile > 4) {
+          console.warn('Invalid profile ID:', e.target.value);
+          return;
+        }
+        currentProfile = parsedProfile;
         document.querySelectorAll('.profile-content').forEach(p => p.classList.remove('active'));
         const activeProfile = document.getElementById(`profile${currentProfile}`);
         if (activeProfile) {
@@ -876,9 +1035,14 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   if (namespace === 'sync') {
     // Reload settings if changed elsewhere and no unsaved changes
     if (!hasUnsavedChanges) {
-      loadSettings().then(() => {
-        showStatus('✓ Settings updated from another window', 'info');
-      });
+      loadSettings()
+        .then(() => {
+          showStatus('✓ Settings updated from another window', 'info');
+        })
+        .catch((error) => {
+          console.error('Error reloading settings:', error);
+          showStatus('Error reloading settings', 'error');
+        });
     } else {
       showStatus('⚠ Settings changed elsewhere (not applied - you have unsaved changes)', 'warning');
     }

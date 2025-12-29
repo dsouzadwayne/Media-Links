@@ -1534,15 +1534,24 @@ chrome.runtime.onInstalled.addListener(() => {
     // Handle focusCurrentTab request (used by stopwatch notifications)
     if (message.type === 'focusCurrentTab') {
       if (sender.tab && sender.tab.id) {
-        chrome.tabs.update(sender.tab.id, { active: true }, () => {
+        const tabId = sender.tab.id;
+        const windowId = sender.tab.windowId;
+
+        // First focus the window, then activate the tab
+        chrome.windows.update(windowId, { focused: true }, () => {
           if (chrome.runtime.lastError) {
-            sendResponse({ success: false, error: chrome.runtime.lastError.message });
-          } else {
-            // Also focus the window containing this tab
-            chrome.windows.update(sender.tab.windowId, { focused: true }, () => {
-              sendResponse({ success: true });
-            });
+            console.warn('Failed to focus window:', chrome.runtime.lastError.message);
+            // Still try to activate the tab
           }
+
+          chrome.tabs.update(tabId, { active: true }, () => {
+            if (chrome.runtime.lastError) {
+              console.warn('Failed to activate tab:', chrome.runtime.lastError.message);
+              sendResponse({ success: false, error: chrome.runtime.lastError.message });
+            } else {
+              sendResponse({ success: true });
+            }
+          });
         });
         return true; // Keep channel open for async response
       } else {

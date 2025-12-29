@@ -741,11 +741,20 @@
           </div>
 
           <div class="setting-item">
-            <label for="stopwatch-included-domains" class="setting-label">
+            <label class="setting-label">
               <span class="label-text">Included Domains</span>
-              <span class="label-description">Comma-separated list of domains where stopwatch should appear. Leave empty to show on all sites (e.g., youtube.com, twitter.com)</span>
+              <span class="label-description">Domains where stopwatch should appear. Leave empty to show on all sites.</span>
             </label>
-            <input type="text" id="stopwatch-included-domains" class="setting-input" placeholder="youtube.com, twitter.com">
+            <div class="domain-list-container">
+              <div class="domain-tags" id="stopwatch-domain-tags">
+                <!-- Tags will be added here dynamically -->
+              </div>
+              <div class="domain-input-row">
+                <input type="text" id="stopwatch-domain-input" class="setting-input domain-input" placeholder="e.g., youtube.com">
+                <button type="button" id="stopwatch-add-domain-btn" class="add-domain-btn" title="Add domain">+</button>
+              </div>
+              <input type="hidden" id="stopwatch-included-domains">
+            </div>
           </div>
         </div>
       </section>

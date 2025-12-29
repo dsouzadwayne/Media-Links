@@ -877,3 +877,121 @@ html, body {
 .settings-section {
   animation: fadeInUp 0.5s ease-out;
 }
+
+/* Domain List Tag Interface */
+.domain-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.domain-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.domain-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  animation: tagFadeIn 0.2s ease-out;
+}
+
+@keyframes tagFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.domain-tag .domain-name {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.domain-tag .remove-domain {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.domain-tag .remove-domain:hover {
+  background: rgba(255, 255, 255, 0.4);
+  transform: scale(1.1);
+}
+
+.domain-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.domain-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.add-domain-btn {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.add-domain-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
+.add-domain-btn:active {
+  transform: translateY(0);
+}
+
+/* Responsive adjustments for domain list */
+@media (max-width: 768px) {
+  .domain-list-container {
+    max-width: 100%;
+  }
+
+  .setting-item .domain-list-container {
+    width: 100%;
+  }
+}

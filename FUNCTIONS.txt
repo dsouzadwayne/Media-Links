@@ -1,0 +1,558 @@
+================================================================================
+MEDIA LINKS EXTENSION - FUNCTION REFERENCE
+================================================================================
+
+This file documents all JavaScript functions in the Media Links extension.
+Last updated: December 29, 2024
+
+================================================================================
+CORE EXTENSION FILES
+================================================================================
+
+--------------------------------------------------------------------------------
+content.js - Main content script for page interactions
+--------------------------------------------------------------------------------
+
+sendSelectionUpdate(text, fromContextMenu)
+  - Safely sends selected text updates to background script
+
+createCopyModal()
+  - Creates modal for selecting tabs to copy content from
+
+showCopyFeedback(success)
+  - Shows success/error feedback on copy button
+
+createCopyWebpageButton()
+  - Creates the floating copy button on pages
+
+removeCopyWebpageButton()
+  - Removes the copy button from the page
+
+updateCopyWebpageButton(shouldShow)
+  - Shows or hides copy button based on settings
+
+initCopyWebpageButton()
+  - Initializes button based on user settings
+
+--------------------------------------------------------------------------------
+background.js - Background service worker
+--------------------------------------------------------------------------------
+
+generateUUID()
+  - Generates unique identifiers for storage operations
+
+createOffscreenDocument()
+  - Creates offscreen document for OCR processing
+
+extractIMDbId(url)
+  - Extracts IMDb ID from URLs
+
+extractConsolidatedIMDbData(imdbId, sendProgress)
+  - Opens and extracts data from all IMDb pages (cast, crew, awards, etc.)
+
+extractWikipediaData(tabId)
+  - Extracts data from Wikipedia pages
+
+compareData(wikipediaData, imdbData)
+  - Compares data between two sources with conflict detection
+
+broadcastThemeChange(theme)
+  - Broadcasts theme changes to all open pages
+
+updateContextMenu(selectionText, immediate)
+  - Updates context menu with search options based on selection
+
+Message Handlers:
+  - createTab: Creates new tabs for data extraction
+  - closeConsolidatedViewTab: Closes tabs created for consolidation
+  - closeTab: Closes specific tabs
+  - getTabStatus: Gets tab loading status
+  - focusTab: Makes a tab active
+  - getTabs: Returns list of open tabs
+  - queryTabs: Filters tabs for comparison feature
+  - updateTab: Updates tab URL
+  - startComparison: Initiates comparison workflow
+  - copyMultipleTabs: Gathers content from multiple tabs
+  - performOCR: Forwards OCR requests to offscreen document
+  - themeChanged: Broadcasts theme changes
+
+--------------------------------------------------------------------------------
+sidebar.js - Sidebar panel management
+--------------------------------------------------------------------------------
+
+createLink(url, text)
+  - Creates navigation links for sidebar
+
+addLinks(links)
+  - Adds multiple links to sidebar
+
+getLinksForIMDb(imdbId)
+  - Gets IMDb navigation links (Main, Cast, Production, Awards, etc.)
+
+getLinksForLetterboxd(filmName)
+  - Gets Letterboxd navigation links
+
+setActiveLink()
+  - Highlights current page link
+
+updateLinks()
+  - Updates links based on current page
+
+init()
+  - Initializes sidebar with event listeners
+
+--------------------------------------------------------------------------------
+stopwatch.js - Time tracking on websites
+--------------------------------------------------------------------------------
+
+isExtensionContextValid()
+  - Checks if extension context is still valid
+
+isDomainIncluded()
+  - Checks if current domain is in allowed list (supports wildcards)
+  - Includes type validation for robustness
+
+formatTime(ms)
+  - Formats milliseconds to HH:MM:SS
+
+getPositionStyles()
+  - Returns CSS styles based on stopwatch position setting
+
+getThemeColors()
+  - Gets theme colors with computed values
+
+loadCurrentTheme()
+  - Loads user's selected theme from storage
+
+isColorDark(hexColor)
+  - Determines if a color is dark or light
+  - Validates hex format, returns true (dark) for invalid colors
+
+lightenColor(hexColor, percent)
+  - Lightens a hex color by percentage
+  - Validates hex format, returns #ffffff for invalid colors
+
+darkenColor(hexColor, percent)
+  - Darkens a hex color by percentage
+  - Validates hex format, returns #000000 for invalid colors
+
+createStopwatch()
+  - Creates stopwatch UI element
+
+updateStopwatchUI()
+  - Updates display (expanded or minimized)
+
+updateTime()
+  - Updates time display and checks for notifications
+
+showToastNotification(elapsed)
+  - Shows alert notification and focuses tab
+
+start()
+  - Starts the stopwatch
+
+stop()
+  - Stops and removes stopwatch
+
+loadSettings()
+  - Loads stopwatch configuration
+
+init()
+  - Initializes stopwatch based on settings
+
+--------------------------------------------------------------------------------
+settings.js - Extension settings management
+--------------------------------------------------------------------------------
+
+getDefaultSettings()
+  - Returns default settings object
+
+loadSettings()
+  - Loads settings from storage asynchronously
+
+applySettingsToUI()
+  - Updates UI with loaded settings
+
+applyTheme(theme)
+  - Applies theme to document
+
+attachEventListeners()
+  - Binds all form event handlers
+
+markUnsaved()
+  - Flags unsaved changes
+
+toggleComparisonSettings(enabled)
+  - Shows/hides comparison settings subsection
+
+toggleStopwatchSettings(enabled)
+  - Shows/hides stopwatch settings subsection
+
+toggleNotificationMinutes(enabled)
+  - Shows/hides notification time input
+
+saveSettings()
+  - Validates and saves all settings
+
+resetSettings()
+  - Resets all settings to defaults
+
+showStatus(message, type)
+  - Displays status messages
+
+validateNumericInput(value, min, max, defaultVal)
+  - Validates numeric inputs with bounds checking
+
+getSeparatorValue(optionValue)
+  - Converts separator option to actual string
+
+getSeparatorOption(separatorString)
+  - Converts separator string to option value
+
+renderDomainTags()
+  - Renders domain filter tags from hidden input value
+
+createDomainTag(domain)
+  - Creates individual domain tag element with remove button
+
+isValidDomainPattern(domain)
+  - Validates domain format for stopwatch filter
+  - Allows: domain.com, *.domain.com, domain.*, *domain*
+  - Rejects: empty, invalid characters, consecutive dots
+
+addDomain(domain)
+  - Adds domain to stopwatch filter list
+  - Validates domain format before adding
+
+removeDomain(domain)
+  - Removes domain from stopwatch filter list
+
+initializeDomainTagListeners()
+  - Sets up domain input event handlers
+
+loadProfileSettings()
+  - Loads search profiles from storage
+
+initializeProfileUI(profileNum)
+  - Renders search pattern profile UI
+
+saveProfileSettings()
+  - Saves current profile patterns
+
+resetProfileSettings()
+  - Resets profile to defaults
+
+selectAllProfile()
+  - Selects all patterns in current profile
+
+deselectAllProfile()
+  - Deselects all patterns in current profile
+
+initializeSidebarNavigation()
+  - Sets up sidebar scroll tracking for active state
+
+--------------------------------------------------------------------------------
+theme-manager.js - Centralized theme management
+--------------------------------------------------------------------------------
+
+isExtensionContextValid()
+  - Checks if extension context is valid
+
+loadTheme()
+  - Loads theme from storage
+
+applyThemeToDOM(theme)
+  - Applies theme to document elements
+
+initialize()
+  - Initializes theme manager with message listeners
+
+whenReady()
+  - Returns promise that resolves when initialized
+
+setTheme(theme)
+  - Sets theme and notifies subscribers
+
+getTheme()
+  - Returns current theme name
+
+getThemeColors(theme)
+  - Returns color palette for theme
+
+getDialogColorsForTheme(theme)
+  - Returns dialog-specific colors
+
+getDialogColors(buttonText)
+  - Computes dialog colors based on button text
+
+subscribe(callback)
+  - Registers callback for theme changes
+
+notifySubscribers(theme)
+  - Notifies all subscribers of theme change
+
+getAvailableThemes()
+  - Returns list of all available themes
+
+Available Themes: light, dark, catppuccin-mocha, cats, cat-night
+
+--------------------------------------------------------------------------------
+search.js - Multi-element search pattern generation
+--------------------------------------------------------------------------------
+
+loadDefaultSearchEngine()
+  - Loads default search engine from settings
+
+saveDefaultSearchEngine(engine)
+  - Saves selected search engine
+
+loadSearchFromUrl()
+  - Loads search elements from URL parameters
+
+getCombinations(elements, size)
+  - Generates word combinations of specified size
+
+getCurrentElements()
+  - Gets all search input values
+
+generateExampleQuery(pattern, exampleElements, wordCount)
+  - Creates example query from pattern
+
+getProfileSettings(profileNum)
+  - Gets search patterns for profile
+
+initializeProfileSettings(profileNum)
+  - Renders profile pattern UI
+
+selectAllInSection(profileNum, wordCount)
+  - Selects all patterns in section
+
+deselectAllInSection(profileNum, wordCount)
+  - Deselects all patterns in section
+
+updateSectionStatus(profileNum, wordCount)
+  - Updates section status display
+
+loadSettings()
+  - Loads profile settings from storage
+
+saveCurrentProfileSettings()
+  - Saves current profile patterns
+
+resetCurrentProfileSettings()
+  - Resets profile to defaults
+
+selectAllInCurrentProfile()
+  - Selects all patterns in profile
+
+deselectAllInCurrentProfile()
+  - Deselects all patterns in profile
+
+generateQueries(elements)
+  - Generates all search queries from elements
+
+getSearchUrl(query, engine)
+  - Creates search URL for engine
+
+updateSearchPreview()
+  - Updates preview of generated queries
+
+Search Engines: Google, YouTube, Google AI, Bing, DuckDuckGo
+
+--------------------------------------------------------------------------------
+settings-utils.js - Settings validation and migration
+--------------------------------------------------------------------------------
+
+isExtensionContextValid()
+  - Checks if extension context is valid
+
+validateCopyFormats(copyFormats)
+  - Validates copy format settings object
+
+validateSetting(key, value)
+  - Validates individual setting by key
+
+validateSettings(settings)
+  - Validates all settings object
+
+migrateSettings(settings)
+  - Fills missing keys with defaults
+
+loadSettings()
+  - Loads all settings from storage
+
+saveSetting(key, value)
+  - Saves single setting with validation
+
+saveSettings(settings)
+  - Saves multiple settings with validation
+
+getSetting(key)
+  - Gets single setting value
+
+getSettings(keys)
+  - Gets multiple settings
+
+resetSettings()
+  - Clears all settings to defaults
+
+getValidationRule(key)
+  - Returns validation rules for setting
+
+getDefaultSettings()
+  - Returns copy of default settings
+
+--------------------------------------------------------------------------------
+comparison.js - Wikipedia/IMDb data comparison
+--------------------------------------------------------------------------------
+
+isExtensionContextValid()
+  - Checks if extension context is valid
+
+getCurrentPageInfo()
+  - Extracts current page information (source, title, URL)
+
+selectComparisonTab(currentSource)
+  - Opens tab selector modal for comparison
+
+createTabSelectorModal(tabs, currentSource, callback)
+  - Creates modal UI for tab selection
+
+Features: Wikipedia-IMDb comparison, tab selection, conflict detection
+
+================================================================================
+UTILITY FILES
+================================================================================
+
+--------------------------------------------------------------------------------
+date-formatting-utils.js - Shared date utilities
+--------------------------------------------------------------------------------
+
+parseDate(dateString)
+  - Parses dates in multiple formats to Date object
+
+findMonthIndex(monthStr)
+  - Finds month index from month name
+
+formatDate(date, format)
+  - Formats Date object to string
+
+parseAndFormat(dateString, outputFormat)
+  - Parses and reformats date in one step
+
+looksLikeDate(str)
+  - Detects if string contains a date
+
+getUserDateFormat()
+  - Gets user's preferred date format from settings
+
+extractYear(str)
+  - Extracts year from string
+
+Supported Formats: DD MMM YYYY, YYYY-MM-DD, MM/DD/YYYY, DD/MM/YYYY, MMM DD YYYY
+
+--------------------------------------------------------------------------------
+customized-views.js - Reusable view components
+--------------------------------------------------------------------------------
+
+CustomizedView Class:
+  constructor(options)
+    - Initializes view with data and options
+
+  setupDropdownCleanupObserver()
+    - Sets up DOM observers for cleanup
+
+  destroy()
+    - Cleans up listeners and observers
+
+  getAvailableRoles()
+    - Gets unique roles in data
+
+  render()
+    - Renders sortable table view
+
+  setupCopyDropdown(cell, columnName)
+    - Creates copy dropdown menu
+
+  setupRoleFilter()
+    - Creates role filter UI
+
+  setupSearch()
+    - Creates search input
+
+  handleCopy(text)
+    - Copies text to clipboard
+
+Features: Sortable tables, searchable data, role filtering, copy-to-clipboard
+
+================================================================================
+PLATFORM-SPECIFIC CAST COPY SCRIPTS
+================================================================================
+
+imdb-cast-copy.js
+wiki-cast-copy.js
+letterboxd-cast-copy.js
+appletv-cast-copy.js
+airtelxstream-cast-copy.js
+bookmyshow-copy.js
+
+Common Functions:
+  extractCastData()
+    - Scrapes cast information from page
+
+  formatCastOutput(format)
+    - Formats data based on user preference
+
+  copyCastToClipboard()
+    - Copies formatted cast list
+
+================================================================================
+ADDITIONAL FILES
+================================================================================
+
+offscreen.js
+  - Offscreen document for OCR processing (Tesseract.js)
+
+hotstar-auto-view-more.js
+  - Auto-expanding content on Hotstar
+
+hotstar-episode-copy.js / hotstar-show-title-copy.js
+  - Hotstar-specific data extraction
+
+imdb-customized-views.js / wiki-customized-views.js / appletv-customized-views.js
+  - Platform-specific customized view implementations
+
+consolidated-view-page.js
+  - Dedicated view page for consolidated IMDb data
+
+comparison-view-page.js
+  - Dedicated view page for Wikipedia/IMDb comparisons
+
+cbfc-ocr.js / cbfc-fix.js
+  - CBFC certificate OCR and processing
+
+================================================================================
+ARCHITECTURE NOTES
+================================================================================
+
+Message Flow:
+1. Content scripts detect user actions (selection, clicks)
+2. Messages sent to background.js for processing
+3. Background coordinates tab operations and data extraction
+4. Results returned to content scripts or stored
+5. Theme changes broadcast to all scripts
+6. Settings changes automatically sync across extension
+
+Storage:
+- chrome.storage.sync for user settings
+- SettingsUtils handles validation and migration
+- ThemeManager maintains centralized theme state
+
+Key Patterns:
+- Profile-based search patterns (1-4 word combinations)
+- Multiple date formats supported
+- Theme system with 5 themes
+- Domain filtering with wildcard support
+- Format options for cast/crew copying
+
+================================================================================

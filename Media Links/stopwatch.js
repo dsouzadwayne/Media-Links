@@ -46,7 +46,7 @@
    */
   function isDomainIncluded() {
     // If no domains specified, allow all (empty = show everywhere)
-    if (!settings.includedDomains || settings.includedDomains.trim() === '') {
+    if (!settings.includedDomains || typeof settings.includedDomains !== 'string' || settings.includedDomains.trim() === '') {
       return true;
     }
 
@@ -220,10 +220,12 @@
    * Check if a color is dark
    */
   function isColorDark(hexColor) {
+    if (!hexColor || typeof hexColor !== 'string') return true;
     const hex = hexColor.replace('#', '');
-    const r = parseInt(hex.substr(0, 2), 16);
-    const g = parseInt(hex.substr(2, 2), 16);
-    const b = parseInt(hex.substr(4, 2), 16);
+    if (!/^[0-9A-Fa-f]{6}$/.test(hex)) return true; // Default to dark if invalid
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
     // Calculate luminance
     const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     return luminance < 0.5;
@@ -233,10 +235,12 @@
    * Lighten a hex color by a percentage
    */
   function lightenColor(hexColor, percent) {
+    if (!hexColor || typeof hexColor !== 'string') return '#ffffff';
     const hex = hexColor.replace('#', '');
-    const r = Math.min(255, parseInt(hex.substr(0, 2), 16) + Math.round(255 * percent / 100));
-    const g = Math.min(255, parseInt(hex.substr(2, 2), 16) + Math.round(255 * percent / 100));
-    const b = Math.min(255, parseInt(hex.substr(4, 2), 16) + Math.round(255 * percent / 100));
+    if (!/^[0-9A-Fa-f]{6}$/.test(hex)) return '#ffffff';
+    const r = Math.min(255, parseInt(hex.substring(0, 2), 16) + Math.round(255 * percent / 100));
+    const g = Math.min(255, parseInt(hex.substring(2, 4), 16) + Math.round(255 * percent / 100));
+    const b = Math.min(255, parseInt(hex.substring(4, 6), 16) + Math.round(255 * percent / 100));
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   }
 
@@ -244,10 +248,12 @@
    * Darken a hex color by a percentage
    */
   function darkenColor(hexColor, percent) {
+    if (!hexColor || typeof hexColor !== 'string') return '#000000';
     const hex = hexColor.replace('#', '');
-    const r = Math.max(0, parseInt(hex.substr(0, 2), 16) - Math.round(255 * percent / 100));
-    const g = Math.max(0, parseInt(hex.substr(2, 2), 16) - Math.round(255 * percent / 100));
-    const b = Math.max(0, parseInt(hex.substr(4, 2), 16) - Math.round(255 * percent / 100));
+    if (!/^[0-9A-Fa-f]{6}$/.test(hex)) return '#000000';
+    const r = Math.max(0, parseInt(hex.substring(0, 2), 16) - Math.round(255 * percent / 100));
+    const g = Math.max(0, parseInt(hex.substring(2, 4), 16) - Math.round(255 * percent / 100));
+    const b = Math.max(0, parseInt(hex.substring(4, 6), 16) - Math.round(255 * percent / 100));
     return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
   }
 
@@ -482,22 +488,33 @@
     const hostname = window.location.hostname;
     const timeStr = formatTime(elapsed);
 
+    const showAlert = () => {
+      alert(`Time Alert!\n\nYou've been on ${hostname} for ${timeStr}`);
+    };
+
     // First, request to focus this tab (brings user to this tab)
     if (isExtensionContextValid()) {
       try {
-        chrome.runtime.sendMessage({ type: 'focusCurrentTab' }, () => {
-          // Show alert after tab is focused
+        chrome.runtime.sendMessage({ type: 'focusCurrentTab' }, (response) => {
+          // Check for errors
           if (chrome.runtime.lastError) {
-            // If message fails, just show alert anyway
+            console.warn('Focus tab error:', chrome.runtime.lastError.message);
+            showAlert();
+            return;
           }
-          alert(`Time Alert!\n\nYou've been on ${hostname} for ${timeStr}`);
+
+          // Wait a brief moment for the window/tab focus to visually complete
+          setTimeout(() => {
+            showAlert();
+          }, 150);
         });
       } catch (e) {
         // Fallback: just show alert
-        alert(`Time Alert!\n\nYou've been on ${hostname} for ${timeStr}`);
+        console.warn('Focus tab exception:', e);
+        showAlert();
       }
     } else {
-      alert(`Time Alert!\n\nYou've been on ${hostname} for ${timeStr}`);
+      showAlert();
     }
   }
 
