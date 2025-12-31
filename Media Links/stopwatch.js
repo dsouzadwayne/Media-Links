@@ -350,7 +350,7 @@
       stopwatchElement.innerHTML = '';
 
       const icon = document.createElement('span');
-      icon.textContent = '';
+      icon.textContent = '⏱️';
       icon.style.cssText = `
         font-size: 18px;
         color: ${colors.buttonText};
@@ -384,7 +384,7 @@
       leftSection.style.cssText = 'display: flex; align-items: center; gap: 8px;';
 
       const clockIcon = document.createElement('span');
-      clockIcon.textContent = '';
+      clockIcon.textContent = '⏱️';
       clockIcon.style.fontSize = '14px';
 
       const timeDisplay = document.createElement('span');

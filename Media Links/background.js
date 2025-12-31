@@ -1425,10 +1425,11 @@ chrome.runtime.onInstalled.addListener(() => {
               return;
             }
             const comparisonUrl = chrome.runtime.getURL('comparison-view-page.html');
-            chrome.tabs.create({ url: comparisonUrl, active: true });
+            chrome.tabs.create({ url: comparisonUrl, active: true }, () => {
+              // Send success response after tab is created
+              sendResponse({ success: true });
+            });
           });
-
-          sendResponse({ success: true });
         } catch (error) {
           console.error('Comparison error:', error);
           sendProgress('error', error.message);
