@@ -123,9 +123,12 @@
 
       const colors = await getThemeColors();
 
-      const targetArea = await waitForElement('#actions-inner #menu #top-level-buttons-computed', 5000) ||
-                         await waitForElement('#above-the-fold #top-level-buttons-computed', 5000) ||
-                         await waitForElement('ytd-menu-renderer #top-level-buttons-computed', 5000);
+      // Check all selectors in parallel - resolves as soon as any one is found
+      const targetArea = await Promise.any([
+        waitForElement('#actions-inner #menu #top-level-buttons-computed', 10000),
+        waitForElement('#above-the-fold #top-level-buttons-computed', 10000),
+        waitForElement('ytd-menu-renderer #top-level-buttons-computed', 10000)
+      ]).catch(() => null);
 
       if (!targetArea) {
         isProcessing = false;
@@ -180,8 +183,8 @@
     }
   }
 
-  function waitForElement(selector, timeout = 5000) {
-    return new Promise((resolve) => {
+  function waitForElement(selector, timeout = 10000) {
+    return new Promise((resolve, reject) => {
       const element = document.querySelector(selector);
       if (element) {
         resolve(element);
@@ -203,7 +206,7 @@
 
       setTimeout(() => {
         observer.disconnect();
-        resolve(null);
+        reject(new Error(`Element not found: ${selector}`));
       }, timeout);
     });
   }

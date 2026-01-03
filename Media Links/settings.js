@@ -737,9 +737,9 @@ function isValidDomainPattern(domain) {
   // If only wildcards, invalid
   if (!basePattern) return false;
 
-  // Check for invalid characters (allow letters, numbers, dots, hyphens, and internal wildcards)
-  // Domain pattern: alphanumeric, dots, hyphens, and wildcards
-  const validPattern = /^[\w\-.*]+$/;
+  // Check for invalid characters (allow letters, numbers, dots, hyphens, wildcards, and URL characters)
+  // Domain/URL pattern: alphanumeric, dots, hyphens, wildcards, colons, and slashes
+  const validPattern = /^[\w\-.*/:]+$/;
   if (!validPattern.test(domain)) return false;
 
   // Reject patterns with consecutive dots
