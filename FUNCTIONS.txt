@@ -3,7 +3,7 @@ MEDIA LINKS EXTENSION - FUNCTION REFERENCE
 ================================================================================
 
 This file documents all JavaScript functions in the Media Links extension.
-Last updated: December 29, 2024
+Last updated: January 3, 2026
 
 ================================================================================
 CORE EXTENSION FILES
@@ -420,6 +420,150 @@ createTabSelectorModal(tabs, currentSource, callback)
 
 Features: Wikipedia-IMDb comparison, tab selection, conflict detection
 
+--------------------------------------------------------------------------------
+youtube-transcript-copy.js - YouTube transcript extraction
+--------------------------------------------------------------------------------
+
+isExtensionContextValid()
+  - Checks if extension context is still valid
+
+isYouTubeVideoPage()
+  - Checks if current page is a YouTube video page
+
+getVideoId()
+  - Extracts video ID from URL parameters
+
+getVideoTitle()
+  - Extracts video title from page elements or meta tags
+
+getThemeColors()
+  - Gets theme colors for button styling
+
+getCopyButtonSettings()
+  - Loads transcript button visibility setting from storage
+
+addTranscriptButton()
+  - Creates and adds the transcript button to YouTube's action bar
+
+waitForElement(selector, timeout)
+  - Waits for DOM element to appear with timeout
+
+decodeHTMLEntities(text)
+  - Decodes HTML entities in text
+
+stripTags(html)
+  - Removes HTML tags from text
+
+formatTimestamp(seconds)
+  - Formats seconds to MM:SS or HH:MM:SS timestamp
+
+getYtInitialPlayerResponse()
+  - Extracts ytInitialPlayerResponse from page scripts
+
+fetchTranscriptInnerTube(videoId)
+  - Fetches transcript using YouTube's InnerTube API
+
+fetchFromCaptionTracks(captionTracks)
+  - Parses transcript from caption track XML
+
+fetchTranscriptFromNextEndpoint(videoId)
+  - Fetches transcript from /next endpoint (engagement panel)
+
+findContinuationToken(content)
+  - Finds continuation token in panel content
+
+fetchTranscriptWithToken(token)
+  - Fetches transcript using continuation token
+
+fetchTranscriptFromPage(videoId)
+  - Fallback method: fetches transcript from page HTML
+
+extractTranscript()
+  - Main extraction function, tries multiple methods
+
+resetButton()
+  - Resets button state after extraction
+
+showNotification(message, isError)
+  - Shows toast notification on page
+
+initialize()
+  - Initializes transcript button with SPA navigation handling
+
+API Used: YouTube InnerTube API (player, next, get_transcript endpoints)
+Caption Priority: English manual > English auto > Any auto > First available
+
+--------------------------------------------------------------------------------
+youtube-transcript-view.js - Transcript display page
+--------------------------------------------------------------------------------
+
+showToast(message, type)
+  - Shows toast notification (success/error)
+
+formatTime(seconds)
+  - Formats seconds to MM:SS or HH:MM:SS
+
+countWords(text)
+  - Counts words in text string
+
+escapeHtml(text)
+  - Escapes HTML characters for safe display
+
+highlightText(text, term)
+  - Highlights search terms in text
+
+loadTranscriptData()
+  - Loads transcript data from chrome.storage.local
+
+generateTranscriptText(withTimestamps)
+  - Generates formatted transcript text for copying
+
+generatePlainText()
+  - Generates plain text with all segments joined
+
+renderTranscript()
+  - Main render function for transcript view
+
+renderSegments()
+  - Renders transcript segments with optional timestamps
+
+copyTranscript()
+  - Copies transcript to clipboard (with/without timestamps)
+
+downloadTranscript()
+  - Downloads transcript as .txt file
+
+toggleTimestamps()
+  - Toggles timestamp visibility
+
+handleSearch(e)
+  - Handles search input with filtering
+
+initializeEventListeners()
+  - Sets up all event listeners
+
+Keyboard Shortcuts:
+  - Ctrl/Cmd + C: Copy transcript (when not in input)
+  - Ctrl/Cmd + S: Download transcript
+  - Ctrl/Cmd + F: Focus search box
+
+Features: Timestamp toggle, search/filter, copy, download, click-to-copy timestamps
+
+--------------------------------------------------------------------------------
+youtube-transcript-view.html - Transcript viewer page
+--------------------------------------------------------------------------------
+
+UI Components:
+  - Header with video title and metadata
+  - Transcript controls (timestamp toggle, copy, download buttons)
+  - Statistics section (segments, words, duration)
+  - Search box with live filtering
+  - Transcript segments with clickable timestamps
+  - Plain text view (hidden by default)
+
+Theme Support: Uses CSS variables from theme-manager.js
+Styles: Responsive layout, hover effects, toast notifications
+
 ================================================================================
 UTILITY FILES
 ================================================================================
@@ -531,6 +675,9 @@ comparison-view-page.js
 cbfc-ocr.js / cbfc-fix.js
   - CBFC certificate OCR and processing
 
+youtube-transcript-copy.js / youtube-transcript-view.js / youtube-transcript-view.html
+  - YouTube transcript extraction and viewing system
+
 ================================================================================
 ARCHITECTURE NOTES
 ================================================================================
@@ -545,6 +692,7 @@ Message Flow:
 
 Storage:
 - chrome.storage.sync for user settings
+- chrome.storage.local for temporary data (YouTube transcripts)
 - SettingsUtils handles validation and migration
 - ThemeManager maintains centralized theme state
 
@@ -554,5 +702,6 @@ Key Patterns:
 - Theme system with 5 themes
 - Domain filtering with wildcard support
 - Format options for cast/crew copying
+- YouTube transcript extraction via InnerTube API
 
 ================================================================================

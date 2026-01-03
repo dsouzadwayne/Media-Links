@@ -60,6 +60,9 @@ window.SettingsUtils = (() => {
     bookMyShowOutputFormat: 'colon',
     bookMyShowIncludeRoles: true,
 
+    // YouTube Settings
+    showYouTubeTranscript: true,
+
     // Customized View Settings
     customizedViewLimit: 8,
     showCustomizedViewBtn: true,
@@ -239,6 +242,10 @@ window.SettingsUtils = (() => {
       default: 'colon'
     },
     bookMyShowIncludeRoles: {
+      type: 'boolean',
+      default: true
+    },
+    showYouTubeTranscript: {
       type: 'boolean',
       default: true
     },

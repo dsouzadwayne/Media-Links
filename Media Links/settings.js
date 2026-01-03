@@ -201,6 +201,9 @@ function applySettingsToUI() {
   safeSetValue('bookmyshow-output-format', currentSettings.bookMyShowOutputFormat);
   safeSetChecked('bookmyshow-include-roles', currentSettings.bookMyShowIncludeRoles);
 
+  // YouTube settings
+  safeSetChecked('show-youtube-transcript', currentSettings.showYouTubeTranscript !== false);
+
   // Customized view settings
   safeSetChecked('show-customized-view-btn', currentSettings.showCustomizedViewBtn !== false);
   safeSetChecked('auto-open-individual-view', currentSettings.autoOpenIndividualView !== false);
@@ -522,6 +525,8 @@ function saveSettings() {
     bookMyShowCastCount: validateNumericInput(getSafeValue('bookmyshow-cast-count'), 1, 1000, 10),
     bookMyShowOutputFormat: getSafeValue('bookmyshow-output-format'),
     bookMyShowIncludeRoles: getSafeValue('bookmyshow-include-roles', 'checked'),
+    // YouTube settings
+    showYouTubeTranscript: getSafeValue('show-youtube-transcript', 'checked'),
     // Customized view settings
     showCustomizedViewBtn: getSafeValue('show-customized-view-btn', 'checked'),
     autoOpenIndividualView: getSafeValue('auto-open-individual-view', 'checked'),

@@ -1532,6 +1532,20 @@ chrome.runtime.onInstalled.addListener(() => {
       return;
     }
 
+    // Handle openTranscriptView request from YouTube transcript copy script
+    if (message.action === 'openTranscriptView') {
+      console.log('Background: Opening transcript view page');
+      chrome.tabs.create({ url: message.url, active: true }, (tab) => {
+        if (chrome.runtime.lastError) {
+          console.error('Failed to open transcript view:', chrome.runtime.lastError);
+          sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        } else {
+          sendResponse({ success: true, tabId: tab.id });
+        }
+      });
+      return true; // Keep channel open for async response
+    }
+
     // Handle focusCurrentTab request (used by stopwatch notifications)
     if (message.type === 'focusCurrentTab') {
       if (sender.tab && sender.tab.id) {
