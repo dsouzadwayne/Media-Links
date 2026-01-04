@@ -1,10 +1,10 @@
 ================================================================================
 MEDIA LINKS EXTENSION - FUNCTION REFERENCE
-Version: 0.832
+Version: 0.834
 ================================================================================
 
 This file documents all JavaScript functions in the Media Links extension.
-Last updated: January 3, 2026
+Last updated: January 4, 2026
 
 ================================================================================
 CORE EXTENSION FILES
@@ -239,11 +239,11 @@ getSeparatorValue(optionValue)
 getSeparatorOption(separatorString)
   - Converts separator string to option value
 
-renderDomainTags()
-  - Renders domain filter tags from hidden input value
+renderDomainList()
+  - Renders domain filter list from hidden input value
 
-createDomainTag(domain)
-  - Creates individual domain tag element with remove button
+createDomainListItem(domain)
+  - Creates individual domain list item element with remove button
 
 isValidDomainPattern(domain)
   - Validates domain format for stopwatch filter

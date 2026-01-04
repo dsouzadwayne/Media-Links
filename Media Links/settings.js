@@ -681,35 +681,34 @@ function getSeparatorOption(separatorString) {
   return mapping[separatorString] || 'horizontal-line';
 }
 
-// Domain Tag Management Functions
-function renderDomainTags() {
-  const tagsContainer = document.getElementById('stopwatch-domain-tags');
+// Domain List Management Functions
+function renderDomainList() {
+  const listContainer = document.getElementById('stopwatch-domain-list');
   const hiddenInput = document.getElementById('stopwatch-included-domains');
 
-  if (!tagsContainer || !hiddenInput) return;
+  if (!listContainer || !hiddenInput) return;
 
-  // Clear existing tags
-  tagsContainer.innerHTML = '';
+  // Clear existing list items
+  listContainer.innerHTML = '';
 
   // Get domains from hidden input
   const domainsStr = hiddenInput.value || '';
   const domains = domainsStr.split(',').map(d => d.trim()).filter(d => d.length > 0);
 
-  // Create tags for each domain
+  // Create list items for each domain
   domains.forEach(domain => {
-    const tag = createDomainTag(domain);
-    tagsContainer.appendChild(tag);
+    const item = createDomainListItem(domain);
+    listContainer.appendChild(item);
   });
 }
 
-function createDomainTag(domain) {
-  const tag = document.createElement('span');
-  tag.className = 'domain-tag';
+function createDomainListItem(domain) {
+  const item = document.createElement('div');
+  item.className = 'domain-list-item';
 
   const nameSpan = document.createElement('span');
   nameSpan.className = 'domain-name';
   nameSpan.textContent = domain;
-  nameSpan.title = domain; // Show full domain on hover if truncated
 
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';
@@ -718,11 +717,14 @@ function createDomainTag(domain) {
   removeBtn.title = 'Remove ' + domain;
   removeBtn.addEventListener('click', () => removeDomain(domain));
 
-  tag.appendChild(nameSpan);
-  tag.appendChild(removeBtn);
+  item.appendChild(nameSpan);
+  item.appendChild(removeBtn);
 
-  return tag;
+  return item;
 }
+
+// Keep old function name as alias for backwards compatibility
+const renderDomainTags = renderDomainList;
 
 /**
  * Validate domain format

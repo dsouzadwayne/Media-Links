@@ -898,73 +898,86 @@ html, body {
   animation: fadeInUp 0.5s ease-out;
 }
 
-/* Domain List Tag Interface */
+/* Domain List Interface */
 .domain-list-container {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
   max-width: 400px;
 }
 
-.domain-tags {
+.domain-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-height: 20px;
+  flex-direction: column;
+  gap: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-secondary);
 }
 
-.domain-tag {
-  display: inline-flex;
+.domain-list:empty {
+  display: none;
+}
+
+.domain-list-item {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  background: var(--accent);
-  color: white;
-  padding: 6px 10px;
-  border-radius: 20px;
-  font-size: 0.85rem;
-  font-weight: 500;
-  animation: tagFadeIn 0.2s ease-out;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
+  animation: listItemFadeIn 0.2s ease-out;
 }
 
-@keyframes tagFadeIn {
+.domain-list-item:last-child {
+  border-bottom: none;
+}
+
+.domain-list-item:hover {
+  background: var(--bg-tertiary);
+}
+
+@keyframes listItemFadeIn {
   from {
     opacity: 0;
-    transform: scale(0.8);
+    transform: translateX(-10px);
   }
   to {
     opacity: 1;
-    transform: scale(1);
+    transform: translateX(0);
   }
 }
 
-.domain-tag .domain-name {
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.domain-list-item .domain-name {
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  font-weight: 500;
+  word-break: break-all;
 }
 
-.domain-tag .remove-domain {
-  background: rgba(255, 255, 255, 0.2);
+.domain-list-item .remove-domain {
+  background: transparent;
   border: none;
-  color: white;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
+  color: var(--text-secondary);
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 4px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1;
   padding: 0;
   transition: all 0.2s ease;
 }
 
-.domain-tag .remove-domain:hover {
-  background: rgba(255, 255, 255, 0.4);
-  transform: scale(1.1);
+.domain-list-item .remove-domain:hover {
+  background: var(--danger-bg, rgba(239, 68, 68, 0.1));
+  color: var(--danger, #ef4444);
 }
 
 .domain-input-row {
