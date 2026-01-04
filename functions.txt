@@ -1,5 +1,6 @@
 ================================================================================
 MEDIA LINKS EXTENSION - FUNCTION REFERENCE
+Version: 0.832
 ================================================================================
 
 This file documents all JavaScript functions in the Media Links extension.
@@ -33,6 +34,15 @@ updateCopyWebpageButton(shouldShow)
 
 initCopyWebpageButton()
   - Initializes button based on user settings
+
+Message Handler:
+  - copyPageContent: Selects all page content and returns it for multi-tab copying
+
+Event Listeners:
+  - mouseup: Sends selection to background script
+  - keyup (Shift): Sends keyboard-based selection
+  - contextmenu: Sends selection immediately for context menu
+  - selectionchange: Debounced selection update (150ms)
 
 --------------------------------------------------------------------------------
 background.js - Background service worker
@@ -68,13 +78,33 @@ Message Handlers:
   - closeTab: Closes specific tabs
   - getTabStatus: Gets tab loading status
   - focusTab: Makes a tab active
+  - sendExtractionMessage: Relays extraction message to target tab
   - getTabs: Returns list of open tabs
   - queryTabs: Filters tabs for comparison feature
   - updateTab: Updates tab URL
   - startComparison: Initiates comparison workflow
   - copyMultipleTabs: Gathers content from multiple tabs
+  - getCurrentTabId: Returns sender tab ID
+  - openTranscriptView: Opens YouTube transcript view page
+  - focusCurrentTab: Focuses current tab and window (for stopwatch notifications)
   - performOCR: Forwards OCR requests to offscreen document
   - themeChanged: Broadcasts theme changes
+  - selectionChanged: Updates context menu based on text selection
+
+Inner Functions in compareData():
+  - normalizeName(name): Normalizes names for comparison (removes periods, apostrophes)
+  - compareLists(listA, listB, nameField): Compares two lists of items
+  - flattenIMDbData(imdbData): Flattens IMDb consolidated data into lists
+  - consolidateBothSources(wikipediaData, imdbData): Unifies data format from both sources
+  - compareListEnhanced(wikiList, imdbList, nameField): Enhanced comparison with conflict detection
+
+Helper Functions:
+  - getSearchUrl(query, engine): Generates search URL for query
+  - getCombinations(elements, size): Generates all combinations of elements
+  - generateQueries(words, profileSettings): Generates search queries from words
+  - sanitizeForContextMenu(text): Sanitizes text for context menu display
+  - addPendingUpdate(textToUpdate): Adds update to pending queue
+  - processPendingUpdate(): Processes pending context menu updates
 
 --------------------------------------------------------------------------------
 sidebar.js - Sidebar panel management
@@ -410,15 +440,51 @@ isExtensionContextValid()
   - Checks if extension context is valid
 
 getCurrentPageInfo()
-  - Extracts current page information (source, title, URL)
+  - Extracts current page information (source, title, URL, imdbId)
+  - Returns: object | null
 
 selectComparisonTab(currentSource)
   - Opens tab selector modal for comparison
+  - Parameters: currentSource (string) - 'wikipedia' or 'imdb'
+  - Returns: Promise<tab object | null>
 
 createTabSelectorModal(tabs, currentSource, callback)
   - Creates modal UI for tab selection
+  - Parameters: tabs (array), currentSource (string), callback (function)
 
-Features: Wikipedia-IMDb comparison, tab selection, conflict detection
+extractIMDbId(url)
+  - Extracts IMDb title ID from URL
+  - Parameters: url (string)
+  - Returns: string | null
+
+showComparisonStatus(message, type)
+  - Creates and shows status notification
+  - Parameters: message (string), type ('info'|'success'|'error')
+  - Returns: HTMLElement
+
+updateComparisonStatus(message, type)
+  - Updates existing status notification
+  - Parameters: message (string), type (string)
+
+removeComparisonStatus()
+  - Removes status notification with animation
+
+setupComparisonProgressListener()
+  - Sets up listener for comparison progress messages from background
+
+initiateComparison(currentPageInfo)
+  - Main function to start comparison workflow
+  - Parameters: currentPageInfo (object)
+  - Sends message to background script and handles progress
+
+initComparisonButton()
+  - Initializes "Compare with IMDb/Wikipedia" button on page
+  - Respects user settings for button visibility
+
+removeComparisonButton()
+  - Removes comparison button from page
+
+Features: Wikipedia-IMDb comparison, tab selection, conflict detection, progress notifications
 
 --------------------------------------------------------------------------------
 youtube-transcript-copy.js - YouTube transcript extraction
@@ -679,6 +745,44 @@ youtube-transcript-copy.js / youtube-transcript-view.js / youtube-transcript-vie
   - YouTube transcript extraction and viewing system
 
 ================================================================================
+CONSTANTS & CONFIGURATIONS
+================================================================================
+
+groupingPatterns (background.js)
+  - Patterns for 1-4 word grouping combinations
+  - Example: 2 words can be "word1 | word2" or "word1-word2"
+
+patternDescriptions (background.js, settings.js, search.js)
+  - Search pattern templates for each word count (1-4)
+  - Templates: plain, quoted, intitle, allintitle, intext, phrase, and/or
+
+defaultPatterns (background.js, settings.js, search.js)
+  - Default enabled patterns per word count
+
+themeColors/themeColorPalettes (theme-manager.js, stopwatch.js)
+  - Color definitions for themes:
+    - light: Default web colors
+    - dark: Dark mode
+    - catppuccin-mocha: Community theme
+    - cats: Custom cat-themed
+    - cat-night: Dark cat theme
+
+DEFAULT_SETTINGS (settings-utils.js)
+  - All default extension settings (50+ settings)
+
+VALIDATION_RULES (settings-utils.js)
+  - Type and constraint validation for all settings
+  - Supports: string, number, boolean, array, object types
+  - Validates: enums, min/max values
+
+INNERTUBE_API_KEY, INNERTUBE_CLIENT_VERSION (youtube-transcript-copy.js)
+  - YouTube InnerTube API configuration for transcript extraction
+
+Queue Constants (background.js)
+  - MAX_PENDING_UPDATES: 50 (prevents unbounded growth)
+  - UPDATE_TIMEOUT: 5 minutes (auto-clean old updates)
+
+================================================================================
 ARCHITECTURE NOTES
 ================================================================================
 
@@ -691,17 +795,34 @@ Message Flow:
 6. Settings changes automatically sync across extension
 
 Storage:
-- chrome.storage.sync for user settings
-- chrome.storage.local for temporary data (YouTube transcripts)
-- SettingsUtils handles validation and migration
-- ThemeManager maintains centralized theme state
+- chrome.storage.sync: User settings (limited to 100KB)
+- chrome.storage.local: Temporary data (YouTube transcripts, comparison data)
+- SettingsUtils: Handles validation, migration, and defaults
+- ThemeManager: Centralized theme state with subscriber pattern
 
 Key Patterns:
 - Profile-based search patterns (1-4 word combinations)
 - Multiple date formats supported
-- Theme system with 5 themes
-- Domain filtering with wildcard support
-- Format options for cast/crew copying
+- Theme system with 5 themes and subscriber notifications
+- Domain filtering with wildcard support (*.example.com, *keyword*)
+- Format options for cast/crew copying (newline, comma, CSV, JSON, table)
 - YouTube transcript extraction via InnerTube API
+- UUID-based storage keys prevent concurrent operation conflicts
+
+Extension Context Safety:
+- All scripts check isExtensionContextValid() before chrome API calls
+- Graceful degradation when context is invalidated
+- Try-finally blocks ensure cleanup of storage keys
+
+Tab Management:
+- Staggered tab opening (300ms intervals) prevents rate limiting
+- Polling mechanism for data extraction (500ms checks, max 60 seconds)
+- Automatic tab cleanup after extraction
+
+Security Measures:
+- textContent preferred over innerHTML for user data
+- Safe string replacement (split-join instead of regex with user input)
+- Tab ID validation before processing
+- Context menu text sanitization (50 char limit, special chars removed)
 
 ================================================================================

@@ -14,6 +14,9 @@ const sendSelectionUpdate = (text, fromContextMenu = false) => {
   }
 };
 
+// Debounce timer for selection change events
+let selectionDebounceTimer = null;
+
 // Listen for text selection and notify background script
 document.addEventListener('mouseup', () => {
   const selectedText = window.getSelection().toString().trim();
@@ -44,16 +47,21 @@ document.addEventListener('contextmenu', () => {
 
 // Listen for selection changes (catches double-click selection)
 // This fires whenever the selection changes, regardless of how it was made
+// Debounced to prevent excessive messages during drag selection
 document.addEventListener('selectionchange', () => {
-  const selectedText = window.getSelection().toString().trim();
-  if (selectedText) {
-    sendSelectionUpdate(selectedText);
-  }
+  clearTimeout(selectionDebounceTimer);
+  selectionDebounceTimer = setTimeout(() => {
+    const selectedText = window.getSelection().toString().trim();
+    if (selectedText) {
+      sendSelectionUpdate(selectedText);
+    }
+  }, 150);
 });
 
 // Copy Webpage Button Functionality
 let copyWebpageButton = null;
 let copyModal = null;
+let isCreatingModal = false;
 
 // Message handler for copying current page content
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -110,6 +118,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 // Create the tab selection modal
 function createCopyModal() {
+  // Prevent race condition from rapid clicks
+  if (isCreatingModal) return;
+  isCreatingModal = true;
+
   // Remove existing modal if any
   if (copyModal) {
     copyModal.remove();
@@ -305,6 +317,7 @@ function createCopyModal() {
           if (modalRef.element && modalRef.element.parentNode) {
             modalRef.element.remove();
             copyModal = null;
+            isCreatingModal = false;
           }
           modalRef.alive = false;
         }
@@ -346,12 +359,14 @@ function createCopyModal() {
         if (modalRef.alive && modalRef.element && modalRef.element.parentNode) {
           modalRef.element.remove();
           copyModal = null;
+          isCreatingModal = false;
         }
         modalRef.alive = false;
       });
     } else {
       modal.remove();
       copyModal = null;
+      isCreatingModal = false;
     }
   });
 
@@ -359,6 +374,7 @@ function createCopyModal() {
   cancelBtn.addEventListener('click', () => {
     modal.remove();
     copyModal = null;
+    isCreatingModal = false;
   });
 
   // Close modal when clicking outside
@@ -366,6 +382,7 @@ function createCopyModal() {
     if (e.target === modal) {
       modal.remove();
       copyModal = null;
+      isCreatingModal = false;
     }
   });
 
@@ -457,6 +474,7 @@ function removeCopyWebpageButton() {
   if (copyModal) {
     copyModal.remove();
     copyModal = null;
+    isCreatingModal = false;
   }
 }
 
