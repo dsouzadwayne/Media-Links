@@ -17,6 +17,14 @@ RECENT BUG FIXES:
   current tab's page context (world: 'MAIN') instead of trying to open it as a
   URL (which Chrome blocks for security).
 
+- Created dedicated bookmarklets.js for handling all bookmarklet execution.
+  Exposes MediaLinksBookmarklets API for enterprise-safe execution:
+  - Uses isolated world new Function() - allowed by extension CSP
+  - Has full DOM access (click buttons, check checkboxes, extract data)
+  - Cannot access page JS functions (safe trade-off for enterprise)
+  - stopwatch.js now uses this API instead of inline execution
+  Regular bookmarks still use background script for chrome.tabs.create().
+
 ================================================================================
 CORE EXTENSION FILES
 ================================================================================
@@ -98,8 +106,10 @@ Message Handlers:
   - getCurrentTabId: Returns sender tab ID
   - openTranscriptView: Opens YouTube transcript view page
   - focusCurrentTab: Focuses current tab and window (for stopwatch notifications)
-  - openBookmarks: Opens selected bookmarks sequentially in new tabs (for stopwatch notifications)
-    - Supports bookmarklets (javascript: URLs) via chrome.scripting.executeScript in page context
+  - openBookmarks: Opens regular URL bookmarks in new tabs (for stopwatch notifications)
+    - Bookmarklets (javascript: URLs) are handled directly by stopwatch.js content script
+    - Only processes regular http/https URLs
+    - Opens first bookmark as active tab, rest in background
   - performOCR: Forwards OCR requests to offscreen document
   - themeChanged: Broadcasts theme changes
   - selectionChanged: Updates context menu based on text selection
@@ -145,6 +155,66 @@ init()
   - Initializes sidebar with event listeners
 
 --------------------------------------------------------------------------------
+bookmarklets.js - Bookmarklet execution handler
+--------------------------------------------------------------------------------
+
+Exposes: window.MediaLinksBookmarklets API
+
+For enterprise environments with strict CSP that blocks eval/new Function,
+this module automatically falls back to action-based execution.
+
+BOOKMARKLET EXECUTION:
+
+MediaLinksBookmarklets.execute(jsCode, title)
+  - Tries eval first, falls back to action parsing if CSP blocks it
+  - Parses common bookmarklet patterns into DOM actions
+  - Returns: boolean (true if succeeded)
+
+MediaLinksBookmarklets.executeFromUrl(bookmark)
+  - Executes a bookmarklet from bookmark object with url and title properties
+  - Parses javascript: URL and executes the code
+  - Returns: boolean (true if succeeded)
+
+MediaLinksBookmarklets.executeMultiple(bookmarks)
+  - Executes multiple bookmarklets sequentially
+  - Filters array to only process javascript: URLs
+  - Returns: { total, executed, failed, errors[] }
+
+MediaLinksBookmarklets.parse(bookmarkletUrl)
+  - Parses a javascript: URL and returns the decoded JavaScript code
+  - Handles double/triple encoded bookmarklets (decodes up to 3 times)
+  - Returns: string (decoded code) or null if invalid
+
+MediaLinksBookmarklets.isBookmarklet(url)
+  - Checks if a URL is a bookmarklet (starts with javascript:)
+  - Returns: boolean
+
+DOM ACTIONS (Enterprise-Safe - No eval needed):
+
+MediaLinksBookmarklets.action(actionConfig)
+  - Executes a DOM action without eval (works even when CSP blocks eval)
+  - Supported action types:
+    - check: Check checkbox(es) matching selector
+    - uncheck: Uncheck checkbox(es) matching selector
+    - click: Click element(s) matching selector
+    - setValue: Set value of input(s) matching selector
+    - focus: Focus element matching selector
+    - getText: Get text content of element
+    - hasText: Check if page contains text
+    - alert: Show an alert message
+  - Config: { type, selector, value, all }
+  - Returns: { success, error?, elementsModified?, text?, found? }
+
+MediaLinksBookmarklets.parseToActions(jsCode)
+  - Parses bookmarklet code into DOM actions
+  - Recognizes common patterns: querySelector, checked, value, click, alert
+  - Returns: array of action configs
+
+MediaLinksBookmarklets.isEvalAvailable()
+  - Checks if eval/new Function is available (not blocked by CSP)
+  - Returns: boolean
+
+--------------------------------------------------------------------------------
 stopwatch.js - Time tracking on websites
 --------------------------------------------------------------------------------
 
@@ -160,8 +230,11 @@ getBookmarksForCurrentDomain()
   - Checks exact match first, then partial matches (e.g., youtube.com matches www.youtube.com)
 
 openSelectedBookmarks()
-  - Opens bookmarks for current domain via background script
-  - Called after notification alert is dismissed (if enabled and domain has bookmarks)
+  - Opens bookmarks for current domain
+  - Called AFTER user clicks "OK" to dismiss the notification alert (not before)
+  - Only called if openBookmarksOnNotification is enabled and domain has configured bookmarks
+  - Bookmarklets: Handled by bookmarklets.js (MediaLinksBookmarklets API)
+  - Regular URLs: Sent to background script to open in new tabs
 
 formatTime(ms)
   - Formats milliseconds to HH:MM:SS
@@ -198,6 +271,8 @@ updateTime()
 
 showToastNotification(elapsed)
   - Shows alert notification and focuses tab
+  - Flow: 1) Focus tab via background script, 2) Wait 150ms, 3) Show blocking alert()
+  - After user clicks "OK" to dismiss alert, opens bookmarks if enabled
 
 start()
   - Starts the stopwatch

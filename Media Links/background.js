@@ -1552,43 +1552,86 @@ chrome.runtime.onInstalled.addListener(() => {
         const tabId = sender.tab.id;
         const windowId = sender.tab.windowId;
 
-        // First focus the window, then activate the tab
-        chrome.windows.update(windowId, { focused: true }, () => {
-          if (chrome.runtime.lastError) {
-            console.warn('Failed to focus window:', chrome.runtime.lastError.message);
-            // Still try to activate the tab
-          }
+        console.log(`Background: focusCurrentTab - tabId: ${tabId}, windowId: ${windowId}`);
 
-          chrome.tabs.update(tabId, { active: true }, () => {
-            if (chrome.runtime.lastError) {
-              console.warn('Failed to activate tab:', chrome.runtime.lastError.message);
-              sendResponse({ success: false, error: chrome.runtime.lastError.message });
+        // Use async/await for more reliable focus handling
+        (async () => {
+          try {
+            // First, try to focus the window if windowId is valid
+            if (windowId !== undefined && windowId !== chrome.windows.WINDOW_ID_NONE) {
+              try {
+                await chrome.windows.update(windowId, { focused: true });
+                console.log(`Background: Window ${windowId} focused`);
+              } catch (winError) {
+                console.warn('Background: Failed to focus window:', winError.message);
+                // Continue anyway - maybe the window is already focused
+              }
             } else {
-              sendResponse({ success: true });
+              console.warn('Background: No valid windowId, skipping window focus');
             }
-          });
-        });
+
+            // Then activate the tab
+            try {
+              await chrome.tabs.update(tabId, { active: true });
+              console.log(`Background: Tab ${tabId} activated`);
+            } catch (tabError) {
+              console.warn('Background: Failed to activate tab:', tabError.message);
+              sendResponse({ success: false, error: tabError.message });
+              return;
+            }
+
+            // Try to draw attention if focus didn't work (flash taskbar on Windows/Linux)
+            try {
+              await chrome.windows.update(windowId, { drawAttention: true });
+              // Clear draw attention after a short delay
+              setTimeout(async () => {
+                try {
+                  await chrome.windows.update(windowId, { drawAttention: false });
+                } catch (e) {
+                  // Ignore
+                }
+              }, 2000);
+            } catch (e) {
+              // drawAttention might not be supported, ignore
+            }
+
+            sendResponse({ success: true });
+          } catch (error) {
+            console.error('Background: focusCurrentTab error:', error);
+            sendResponse({ success: false, error: error.message });
+          }
+        })();
+
         return true; // Keep channel open for async response
       } else {
+        console.warn('Background: focusCurrentTab - no tab info available');
         sendResponse({ success: false, error: 'No tab information available' });
         return;
       }
     }
 
     // Handle openBookmarks request (used by stopwatch notifications)
+    // Note: Bookmarklets (javascript: URLs) are now handled directly in stopwatch.js
+    // This handler only opens regular URL bookmarks in new tabs
     if (message.type === 'openBookmarks') {
       const bookmarks = message.bookmarks;
-      const currentTabId = sender.tab?.id; // Tab where stopwatch notification was shown
+
+      console.log('Background: Received openBookmarks request', {
+        bookmarkCount: bookmarks?.length,
+        senderUrl: sender.url
+      });
 
       if (!bookmarks || !Array.isArray(bookmarks) || bookmarks.length === 0) {
+        console.warn('Background: No bookmarks provided or invalid format');
         sendResponse({ success: false, error: 'No bookmarks provided' });
         return;
       }
 
-      console.log(`Background: Opening ${bookmarks.length} bookmark(s) sequentially`);
+      console.log(`Background: Opening ${bookmarks.length} bookmark(s) in new tabs`);
 
       (async () => {
         let openedCount = 0;
+        let errors = [];
         const delayBetweenTabs = 300; // ms between opening each tab
 
         for (let i = 0; i < bookmarks.length; i++) {
@@ -1596,58 +1639,41 @@ chrome.runtime.onInstalled.addListener(() => {
 
           // Validate bookmark has a URL
           if (!bookmark.url) {
-            console.warn(`Skipping bookmark without URL:`, bookmark);
+            console.warn(`Background: Skipping bookmark without URL:`, bookmark);
+            errors.push(`Bookmark ${i + 1}: No URL`);
             continue;
           }
 
-          try {
-            // Check if this is a bookmarklet (javascript: URL)
-            if (bookmark.url.startsWith('javascript:')) {
-              // Execute bookmarklet in the current tab using chrome.scripting.executeScript
-              if (currentTabId) {
-                // Extract the JavaScript code from the bookmarklet URL
-                const jsCode = decodeURIComponent(bookmark.url.slice(11)); // Remove 'javascript:'
+          // Skip bookmarklets - they should be handled by stopwatch.js directly
+          if (bookmark.url.startsWith('javascript:')) {
+            console.warn(`Background: Skipping bookmarklet (should be handled by content script):`, bookmark.title);
+            continue;
+          }
 
-                await chrome.scripting.executeScript({
-                  target: { tabId: currentTabId },
-                  func: (code) => {
-                    // Execute the bookmarklet code in the page context
-                    try {
-                      // Use Function constructor to execute in global scope
-                      const fn = new Function(code);
-                      fn();
-                    } catch (e) {
-                      console.error('Bookmarklet execution error:', e);
-                    }
-                  },
-                  args: [jsCode],
-                  world: 'MAIN' // Execute in the page's context, not extension context
-                });
-                openedCount++;
-                console.log(`Executed bookmarklet ${i + 1}/${bookmarks.length}: ${bookmark.title || 'Untitled'}`);
-              } else {
-                console.warn('Cannot execute bookmarklet: no current tab ID available');
-              }
-            } else {
-              // Regular URL - open in a new tab (first one active, rest in background)
-              await chrome.tabs.create({
-                url: bookmark.url,
-                active: i === 0 // First bookmark is active
-              });
-              openedCount++;
-              console.log(`Opened bookmark ${i + 1}/${bookmarks.length}: ${bookmark.title || bookmark.url}`);
-            }
+          console.log(`Background: Opening bookmark ${i + 1}/${bookmarks.length}:`, bookmark.title || bookmark.url);
+
+          try {
+            // Open URL in a new tab (first one active, rest in background)
+            const newTab = await chrome.tabs.create({
+              url: bookmark.url,
+              active: i === 0 // First bookmark is active
+            });
+            openedCount++;
+            console.log(`Background: Opened tab ${newTab.id}: ${bookmark.title || bookmark.url}`);
 
             // Wait before opening the next one (if there are more)
             if (i < bookmarks.length - 1) {
               await new Promise(resolve => setTimeout(resolve, delayBetweenTabs));
             }
           } catch (error) {
-            console.error(`Failed to open bookmark ${bookmark.title || bookmark.url}:`, error);
+            const errMsg = `Failed to open ${bookmark.title || bookmark.url}: ${error.message}`;
+            console.error(`Background: ${errMsg}`, error);
+            errors.push(errMsg);
           }
         }
 
-        sendResponse({ success: true, openedCount });
+        console.log(`Background: Finished. Opened: ${openedCount}, Errors: ${errors.length}`);
+        sendResponse({ success: openedCount > 0, openedCount, errors: errors.length > 0 ? errors : undefined });
       })();
 
       return true; // Keep channel open for async response

@@ -491,28 +491,47 @@
     const hostname = window.location.hostname;
     const timeStr = formatTime(elapsed);
 
+    console.log('Stopwatch: showToastNotification called', {
+      hostname,
+      timeStr,
+      openBookmarksOnNotification: settings.openBookmarksOnNotification,
+      bookmarksByDomain: settings.bookmarksByDomain
+    });
+
     const showAlert = () => {
+      console.log('Stopwatch: Showing alert');
       alert(`Time Alert!\n\nYou've been on ${hostname} for ${timeStr}`);
+      console.log('Stopwatch: Alert dismissed by user');
 
       // After alert is dismissed, open bookmarks if enabled and configured for this domain
       if (settings.openBookmarksOnNotification) {
+        console.log('Stopwatch: openBookmarksOnNotification is enabled, checking for domain bookmarks');
         const domainBookmarks = getBookmarksForCurrentDomain();
+        console.log('Stopwatch: Domain bookmarks found:', domainBookmarks);
         if (domainBookmarks.length > 0) {
+          console.log('Stopwatch: Calling openSelectedBookmarks');
           openSelectedBookmarks();
+        } else {
+          console.log('Stopwatch: No bookmarks configured for this domain');
         }
+      } else {
+        console.log('Stopwatch: openBookmarksOnNotification is disabled');
       }
     };
 
     // First, request to focus this tab (brings user to this tab)
     if (isExtensionContextValid()) {
       try {
+        console.log('Stopwatch: Sending focusCurrentTab message');
         chrome.runtime.sendMessage({ type: 'focusCurrentTab' }, (response) => {
           // Check for errors
           if (chrome.runtime.lastError) {
-            console.warn('Focus tab error:', chrome.runtime.lastError.message);
+            console.warn('Stopwatch: Focus tab error:', chrome.runtime.lastError.message);
             showAlert();
             return;
           }
+
+          console.log('Stopwatch: focusCurrentTab response:', response);
 
           // Wait a brief moment for the window/tab focus to visually complete
           setTimeout(() => {
@@ -521,17 +540,18 @@
         });
       } catch (e) {
         // Fallback: just show alert
-        console.warn('Focus tab exception:', e);
+        console.error('Stopwatch: Focus tab exception:', e);
         showAlert();
       }
     } else {
+      console.warn('Stopwatch: Extension context invalid, showing alert directly');
       showAlert();
     }
   }
 
   /**
    * Get bookmarks for the current domain
-   * Checks for exact match first, then partial matches
+   * Checks for exact match first, then partial matches, then wildcards
    */
   function getBookmarksForCurrentDomain() {
     const currentHostname = window.location.hostname.toLowerCase();
@@ -540,52 +560,109 @@
       return [];
     }
 
+    let result = [];
+
     // Check for exact match first
     if (settings.bookmarksByDomain[currentHostname]) {
-      return settings.bookmarksByDomain[currentHostname];
+      result = [...settings.bookmarksByDomain[currentHostname]];
     }
 
     // Check for partial matches (e.g., "youtube.com" matches "www.youtube.com")
-    for (const domain of Object.keys(settings.bookmarksByDomain)) {
-      if (currentHostname === domain ||
-          currentHostname.endsWith('.' + domain) ||
-          domain.endsWith('.' + currentHostname)) {
-        return settings.bookmarksByDomain[domain];
+    if (result.length === 0) {
+      for (const domain of Object.keys(settings.bookmarksByDomain)) {
+        if (domain === '*') continue; // Handle wildcard separately
+        if (currentHostname === domain ||
+            currentHostname.endsWith('.' + domain) ||
+            domain.endsWith('.' + currentHostname)) {
+          result = [...settings.bookmarksByDomain[domain]];
+          break;
+        }
       }
     }
 
-    return [];
+    // Also add global wildcard bookmarks (*) - these run on ALL sites
+    if (settings.bookmarksByDomain['*']) {
+      result = [...result, ...settings.bookmarksByDomain['*']];
+    }
+
+    return result;
   }
 
   /**
-   * Open bookmarks for current domain via background script
+   * Open bookmarks for current domain
+   * - Bookmarklets: Handled by bookmarklets.js (MediaLinksBookmarklets)
+   * - Regular URLs: Send to background script to open in new tabs
    */
   function openSelectedBookmarks() {
-    if (!isExtensionContextValid()) {
-      console.warn('Extension context invalid, cannot open bookmarks');
-      return;
-    }
+    console.log('Stopwatch: openSelectedBookmarks called');
 
     const bookmarks = getBookmarksForCurrentDomain();
+    console.log('Stopwatch: Bookmarks for domain:', window.location.hostname, bookmarks);
 
     if (!bookmarks || bookmarks.length === 0) {
-      console.log('No bookmarks configured for this domain:', window.location.hostname);
+      console.log('Stopwatch: No bookmarks configured for this domain:', window.location.hostname);
       return;
     }
 
-    try {
-      chrome.runtime.sendMessage({
-        type: 'openBookmarks',
-        bookmarks: bookmarks
-      }, (response) => {
-        if (chrome.runtime.lastError) {
-          console.warn('Error opening bookmarks:', chrome.runtime.lastError.message);
-        } else if (response && response.success) {
-          console.log(`Opened ${response.openedCount} bookmark(s) for ${window.location.hostname}`);
-        }
-      });
-    } catch (e) {
-      console.warn('Exception opening bookmarks:', e);
+    // Separate bookmarklets from regular URLs
+    const bookmarklets = [];
+    const regularBookmarks = [];
+
+    for (const bookmark of bookmarks) {
+      if (!bookmark.url) continue;
+
+      // Check if it's a bookmarklet (javascript: URL)
+      const isBookmarklet = bookmark.url.startsWith('javascript:');
+
+      if (isBookmarklet) {
+        bookmarklets.push(bookmark);
+      } else {
+        regularBookmarks.push(bookmark);
+      }
+    }
+
+    console.log(`Stopwatch: Found ${bookmarklets.length} bookmarklet(s) and ${regularBookmarks.length} regular bookmark(s)`);
+
+    // Execute bookmarklets using the bookmarklets.js handler
+    if (bookmarklets.length > 0) {
+      if (window.MediaLinksBookmarklets) {
+        const results = window.MediaLinksBookmarklets.executeMultiple(bookmarklets);
+        console.log(`Stopwatch: Bookmarklet execution results:`, results);
+      } else {
+        console.error('Stopwatch: MediaLinksBookmarklets not available');
+      }
+    }
+
+    // Send regular bookmarks to background script to open in new tabs
+    if (regularBookmarks.length > 0) {
+      if (!isExtensionContextValid()) {
+        console.warn('Stopwatch: Extension context invalid, cannot open regular bookmarks');
+        return;
+      }
+
+      console.log(`Stopwatch: Sending ${regularBookmarks.length} regular bookmark(s) to background`);
+
+      try {
+        chrome.runtime.sendMessage({
+          type: 'openBookmarks',
+          bookmarks: regularBookmarks
+        }, (response) => {
+          if (chrome.runtime.lastError) {
+            console.error('Stopwatch: Error opening bookmarks:', chrome.runtime.lastError.message);
+          } else if (response) {
+            console.log('Stopwatch: openBookmarks response:', response);
+            if (response.success) {
+              console.log(`Stopwatch: Successfully opened ${response.openedCount} bookmark(s)`);
+            } else {
+              console.warn('Stopwatch: openBookmarks reported failure:', response.error || response.errors);
+            }
+          } else {
+            console.warn('Stopwatch: No response received from openBookmarks');
+          }
+        });
+      } catch (e) {
+        console.error('Stopwatch: Exception sending openBookmarks message:', e);
+      }
     }
   }
 

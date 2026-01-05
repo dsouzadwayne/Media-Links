@@ -1223,7 +1223,7 @@ function openSiteBookmarkModal(domain, existingBookmarks) {
   // Instructions
   const instructions = document.createElement('div');
   instructions.style.cssText = 'padding: 12px 20px; background: var(--surface-bg); font-size: 13px; color: var(--text-secondary);';
-  instructions.textContent = 'Select bookmarks to open when the stopwatch notification is dismissed on this site.';
+  instructions.innerHTML = 'Select bookmarks or <strong>add custom code</strong> to run when the stopwatch notification is dismissed.';
 
   // Selected bookmarks preview
   const selectedPreview = document.createElement('div');
@@ -1242,13 +1242,110 @@ function openSiteBookmarkModal(domain, existingBookmarks) {
 
       selectedBookmarks.forEach((bm, idx) => {
         const chip = document.createElement('span');
-        chip.textContent = `${idx + 1}. ${bm.title || 'Untitled'}`;
-        chip.style.cssText = 'display: inline-block; background: var(--accent-glow); color: var(--text-primary); padding: 4px 8px; border-radius: 4px; font-size: 11px; margin: 2px 4px 2px 0;';
+        const isCode = bm.isCustomCode || (bm.url && bm.url.startsWith('javascript:'));
+        chip.textContent = `${idx + 1}. ${isCode ? '< / > ' : ''}${bm.title || 'Untitled'}`;
+        chip.style.cssText = `display: inline-block; background: ${isCode ? 'var(--warning-bg, #fef3c7)' : 'var(--accent-glow)'}; color: var(--text-primary); padding: 4px 8px; border-radius: 4px; font-size: 11px; margin: 2px 4px 2px 0;`;
         selectedPreview.appendChild(chip);
       });
     }
   }
   updateSelectedPreview();
+
+  // Add Custom Code section
+  const customCodeSection = document.createElement('div');
+  customCodeSection.style.cssText = 'padding: 12px 20px; border-bottom: 1px solid var(--border);';
+
+  const addCodeBtn = document.createElement('button');
+  addCodeBtn.textContent = '+ Add Custom Code';
+  addCodeBtn.className = 'secondary-button';
+  addCodeBtn.style.cssText = 'font-size: 13px; padding: 8px 16px;';
+
+  const codeInputContainer = document.createElement('div');
+  codeInputContainer.style.cssText = 'display: none; margin-top: 12px;';
+
+  const codeNameInput = document.createElement('input');
+  codeNameInput.type = 'text';
+  codeNameInput.placeholder = 'Name (e.g., "Check all boxes")';
+  codeNameInput.style.cssText = 'width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; margin-bottom: 8px; background: var(--input-bg); color: var(--text-primary);';
+
+  const codeTextarea = document.createElement('textarea');
+  codeTextarea.placeholder = 'Paste JavaScript code here...\n\nExamples:\n• document.querySelectorAll(\'input[type="checkbox"]\').forEach(c => c.checked = true);\n• document.querySelector(\'#myButton\').click();';
+  codeTextarea.style.cssText = 'width: 100%; height: 120px; padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-family: monospace; font-size: 12px; resize: vertical; background: var(--input-bg); color: var(--text-primary);';
+
+  const codeHint = document.createElement('div');
+  codeHint.style.cssText = 'font-size: 11px; color: var(--text-secondary); margin-top: 6px; margin-bottom: 10px;';
+  codeHint.innerHTML = '<strong>Note:</strong> Code runs in isolated world (DOM access only). Cannot call page JavaScript functions.';
+
+  const codeButtonsRow = document.createElement('div');
+  codeButtonsRow.style.cssText = 'display: flex; gap: 8px;';
+
+  const addCodeConfirmBtn = document.createElement('button');
+  addCodeConfirmBtn.textContent = 'Add Code';
+  addCodeConfirmBtn.className = 'primary-button';
+  addCodeConfirmBtn.style.cssText = 'font-size: 12px; padding: 6px 14px;';
+
+  const cancelCodeBtn = document.createElement('button');
+  cancelCodeBtn.textContent = 'Cancel';
+  cancelCodeBtn.className = 'secondary-button';
+  cancelCodeBtn.style.cssText = 'font-size: 12px; padding: 6px 14px;';
+
+  addCodeBtn.addEventListener('click', () => {
+    codeInputContainer.style.display = 'block';
+    addCodeBtn.style.display = 'none';
+    codeNameInput.focus();
+  });
+
+  cancelCodeBtn.addEventListener('click', () => {
+    codeInputContainer.style.display = 'none';
+    addCodeBtn.style.display = 'inline-block';
+    codeNameInput.value = '';
+    codeTextarea.value = '';
+  });
+
+  addCodeConfirmBtn.addEventListener('click', () => {
+    const name = codeNameInput.value.trim() || 'Custom Code';
+    let code = codeTextarea.value.trim();
+
+    if (!code) {
+      alert('Please enter some code');
+      return;
+    }
+
+    // Wrap code in javascript: URL format for storage (like a bookmarklet)
+    // But keep it clean - don't double-encode if already encoded
+    if (!code.startsWith('javascript:')) {
+      code = 'javascript:' + encodeURIComponent(code);
+    }
+
+    // Create a custom bookmark entry with a unique ID (timestamp + random)
+    const customBookmark = {
+      id: 'custom_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9),
+      title: name,
+      url: code,
+      isCustomCode: true
+    };
+
+    selectedBookmarks.push(customBookmark);
+    selectedIds.add(customBookmark.id);
+    updateSelectedPreview();
+
+    // Reset form
+    codeInputContainer.style.display = 'none';
+    addCodeBtn.style.display = 'inline-block';
+    codeNameInput.value = '';
+    codeTextarea.value = '';
+  });
+
+  codeButtonsRow.appendChild(addCodeConfirmBtn);
+  codeButtonsRow.appendChild(cancelCodeBtn);
+
+  codeInputContainer.appendChild(codeNameInput);
+  codeInputContainer.appendChild(codeTextarea);
+  codeInputContainer.appendChild(codeHint);
+  codeInputContainer.appendChild(codeButtonsRow);
+
+  customCodeSection.appendChild(addCodeBtn);
+  customCodeSection.appendChild(codeInputContainer);
 
   // Bookmark tree container
   const treeContainer = document.createElement('div');
@@ -1289,6 +1386,7 @@ function openSiteBookmarkModal(domain, existingBookmarks) {
   modalContent.appendChild(header);
   modalContent.appendChild(instructions);
   modalContent.appendChild(selectedPreview);
+  modalContent.appendChild(customCodeSection);
   modalContent.appendChild(treeContainer);
   modalContent.appendChild(footer);
   modal.appendChild(modalContent);
