@@ -1,6 +1,6 @@
 ================================================================================
 MEDIA LINKS EXTENSION - FUNCTION REFERENCE
-Version: 0.844
+Version: 0.845
 ================================================================================
 
 This file documents all JavaScript functions in the Media Links extension.
@@ -163,11 +163,30 @@ Exposes: window.MediaLinksBookmarklets API
 For enterprise environments with strict CSP that blocks eval/new Function,
 this module automatically falls back to action-based execution.
 
+WHY ADDRESS BAR / PROGRAMMATIC NAVIGATION DOESN'T WORK:
+Chrome blocks ALL programmatic navigation to javascript: URLs for security:
+  - window.location.href = "javascript:..." → BLOCKED
+  - window.location.assign("javascript:...") → BLOCKED
+  - chrome.tabs.update({url: "javascript:..."}) → BLOCKED
+  - window.open("javascript:...") → BLOCKED
+  - Creating <a href="javascript:..."> and clicking → BLOCKED
+These restrictions prevent XSS attacks.
+
+SOLUTION: SCRIPT TAG INJECTION (Tampermonkey-style)
+Instead of navigating to javascript: URLs, we inject a <script> tag into the
+page DOM. This runs the code in the page's MAIN world context with full access
+to page JavaScript functions - exactly like clicking a bookmarklet would.
+
+EXECUTION PRIORITY (3 methods, in order):
+  1. Script injection (MAIN world) - Full page JS access, like Tampermonkey
+  2. eval/new Function (isolated world) - DOM access only, no page JS
+  3. Action parsing (enterprise fallback) - Parse into DOM actions
+
 BOOKMARKLET EXECUTION:
 
 MediaLinksBookmarklets.execute(jsCode, title)
-  - Tries eval first, falls back to action parsing if CSP blocks it
-  - Parses common bookmarklet patterns into DOM actions
+  - Tries script injection first, then eval, then action parsing
+  - Script injection runs in MAIN world (full page access like bookmarklets)
   - Returns: boolean (true if succeeded)
 
 MediaLinksBookmarklets.executeFromUrl(bookmark)
@@ -187,6 +206,17 @@ MediaLinksBookmarklets.parse(bookmarkletUrl)
 
 MediaLinksBookmarklets.isBookmarklet(url)
   - Checks if a URL is a bookmarklet (starts with javascript:)
+  - Returns: boolean
+
+SCRIPT INJECTION (Tampermonkey-style, MAIN world):
+
+MediaLinksBookmarklets.executeInPageContext(jsCode)
+  - Executes JavaScript via script tag injection (like Tampermonkey)
+  - Runs in page's MAIN world with full access to page JS functions
+  - Returns: boolean (true if succeeded)
+
+MediaLinksBookmarklets.isScriptInjectionAvailable()
+  - Checks if script tag injection is available (not blocked by CSP)
   - Returns: boolean
 
 DOM ACTIONS (Enterprise-Safe - No eval needed):

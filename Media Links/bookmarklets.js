@@ -17,6 +17,8 @@
 
   // Track if eval/Function is available (enterprise CSP may block it)
   let evalAvailable = null;
+  // Track if script injection is available
+  let scriptInjectionAvailable = null;
 
   /**
    * Check if eval/new Function is available (not blocked by CSP)
@@ -33,6 +35,59 @@
       console.log('Bookmarklets: eval/Function blocked by CSP - using action-based fallback');
     }
     return evalAvailable;
+  }
+
+  /**
+   * Check if script tag injection is available (not blocked by CSP)
+   */
+  function isScriptInjectionAvailable() {
+    if (scriptInjectionAvailable !== null) return scriptInjectionAvailable;
+
+    try {
+      const testScript = document.createElement('script');
+      testScript.textContent = 'window.__bookmarkletTestFlag = true;';
+      document.documentElement.appendChild(testScript);
+      testScript.remove();
+
+      if (window.__bookmarkletTestFlag) {
+        delete window.__bookmarkletTestFlag;
+        scriptInjectionAvailable = true;
+        console.log('Bookmarklets: Script injection available (MAIN world access)');
+      } else {
+        scriptInjectionAvailable = false;
+      }
+    } catch (e) {
+      scriptInjectionAvailable = false;
+      console.log('Bookmarklets: Script injection blocked by CSP');
+    }
+    return scriptInjectionAvailable;
+  }
+
+  /**
+   * Execute code via script tag injection (Tampermonkey-style)
+   * This runs in the page's MAIN world context with full access to page JS
+   *
+   * @param {string} jsCode - The JavaScript code to execute
+   * @returns {boolean} - True if execution succeeded
+   */
+  function executeViaScriptInjection(jsCode) {
+    try {
+      const script = document.createElement('script');
+      // Wrap in try-catch to handle errors gracefully
+      script.textContent = `
+        try {
+          ${jsCode}
+        } catch (e) {
+          console.error('Bookmarklet execution error:', e);
+        }
+      `;
+      document.documentElement.appendChild(script);
+      script.remove();
+      return true;
+    } catch (e) {
+      console.log('Bookmarklets: Script injection failed:', e.message);
+      return false;
+    }
   }
 
   /**
@@ -350,7 +405,8 @@
   }
 
   /**
-   * Execute a bookmarklet - tries eval first, falls back to action parsing
+   * Execute a bookmarklet - tries script injection first (like Tampermonkey),
+   * then eval, then falls back to action parsing
    *
    * @param {string} jsCode - The JavaScript code to execute
    * @param {string} title - The bookmarklet title (for logging)
@@ -360,10 +416,22 @@
     console.log(`Bookmarklets: Executing "${title}"`);
     console.log(`Bookmarklets: Code:`, jsCode.substring(0, 200) + (jsCode.length > 200 ? '...' : ''));
 
-    // Try eval/Function if available (not blocked by CSP)
+    // Method 1: Try script tag injection (Tampermonkey-style)
+    // This runs in MAIN world with full access to page JS functions
+    if (isScriptInjectionAvailable()) {
+      console.log('Bookmarklets: Using script injection (MAIN world - full page access)');
+      if (executeViaScriptInjection(jsCode)) {
+        console.log(`Bookmarklets: "${title}" executed successfully via script injection`);
+        return true;
+      }
+      // Script injection failed, try next method
+      console.log('Bookmarklets: Script injection failed, trying eval');
+    }
+
+    // Method 2: Try eval/Function if available (isolated world, no page JS access)
     if (isEvalAvailable()) {
       try {
-        console.log('Bookmarklets: Using eval (CSP allows it)');
+        console.log('Bookmarklets: Using eval (isolated world - DOM access only)');
         if (jsCode.trim().startsWith('(') || jsCode.trim().startsWith('!') || jsCode.trim().startsWith('void')) {
           eval(jsCode);
         } else {
@@ -384,7 +452,7 @@
       }
     }
 
-    // Fallback: Try to parse bookmarklet into DOM actions
+    // Method 3: Fallback - Try to parse bookmarklet into DOM actions
     console.log('Bookmarklets: CSP blocks eval - attempting to parse bookmarklet into actions');
     const actions = parseBookmarkletToActions(jsCode);
 
@@ -540,12 +608,16 @@
 
   // Expose functions globally for use by other scripts (like stopwatch.js)
   window.MediaLinksBookmarklets = {
-    // Bookmarklet execution (tries eval, falls back to action parsing)
+    // Bookmarklet execution (tries script injection, then eval, then action parsing)
     execute: executeBookmarklet,
     executeFromUrl: executeBookmarkletFromUrl,
     executeMultiple: executeMultipleBookmarklets,
     parse: parseBookmarkletUrl,
     isBookmarklet: isBookmarklet,
+
+    // Script injection (Tampermonkey-style, MAIN world)
+    executeInPageContext: executeViaScriptInjection,
+    isScriptInjectionAvailable: isScriptInjectionAvailable,
 
     // DOM Actions (enterprise-safe, no eval needed)
     action: executeDOMAction,
@@ -555,8 +627,9 @@
     isEvalAvailable: isEvalAvailable
   };
 
-  // Check eval availability on init
-  const evalStatus = isEvalAvailable() ? 'available' : 'BLOCKED by CSP (using action fallback)';
-  console.log(`Bookmarklets: Handler initialized - eval is ${evalStatus}`);
+  // Check availability on init
+  const scriptStatus = isScriptInjectionAvailable() ? 'available (MAIN world)' : 'blocked';
+  const evalStatus = isEvalAvailable() ? 'available' : 'blocked';
+  console.log(`Bookmarklets: Handler initialized - script injection: ${scriptStatus}, eval: ${evalStatus}`);
 
 })();
