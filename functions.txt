@@ -1,12 +1,30 @@
 ================================================================================
 MEDIA LINKS EXTENSION - FUNCTION REFERENCE
-Version: 0.845
+Version: 0.847
 ================================================================================
 
 This file documents all JavaScript functions in the Media Links extension.
 Last updated: January 5, 2026
 
-RECENT BUG FIXES:
+RECENT CHANGES:
+- Created monkey.js - Dedicated script injection engine inspired by Tampermonkey
+  and Violentmonkey. Provides 7 execution methods to bypass CSP and Trusted Types:
+  1. Script tag injection (MAIN world)
+  2. Blob URL injection (bypasses inline CSP)
+  3. Trusted Types policy (for sites like YouTube)
+  4. eval/Function constructor
+  5. Shadow DOM injection
+  6. Sandboxed iframe
+  7. Background execution via chrome.scripting.executeScript
+
+- bookmarklets.js now uses MonkeyEngine for all script execution, providing
+  better compatibility with sites that have strict Content Security Policies.
+
+- Added userScripts API support for CSP-exempt bookmarklet execution. Sites like
+  YouTube have strict CSP that blocks script injection and eval. The userScripts
+  API provides a USER_SCRIPT execution world that is explicitly exempt from page
+  CSP. Note: Brave browser disables this API for security reasons.
+
 - Fixed stopwatch settings persistence bug where included domains and bookmarks
   would disappear after saving. The issue was a race condition in applySettingsToUI()
   where renderDomainTags() was called BEFORE the bookmarks hidden input was populated.
@@ -21,7 +39,7 @@ RECENT BUG FIXES:
   Exposes MediaLinksBookmarklets API for enterprise-safe execution:
   - Uses isolated world new Function() - allowed by extension CSP
   - Has full DOM access (click buttons, check checkboxes, extract data)
-  - Cannot access page JS functions (safe trade-off for enterprise)
+  - Falls back to userScripts API for CSP-exempt execution
   - stopwatch.js now uses this API instead of inline execution
   Regular bookmarks still use background script for chrome.tabs.create().
 
@@ -70,6 +88,18 @@ background.js - Background service worker
 generateUUID()
   - Generates unique identifiers for storage operations
 
+configureUserScriptsWorld()
+  - Configures the userScripts world for bookmarklet execution
+  - Sets permissive CSP and enables messaging
+  - The USER_SCRIPT world is exempt from page CSP
+
+executeBookmarkletInTab(tabId, code, title)
+  - Executes a bookmarklet in the specified tab using userScripts API
+  - Tries chrome.userScripts.execute() first (Chrome 135+, CSP-exempt)
+  - Falls back to chrome.scripting.executeScript with MAIN world
+  - Parameters: tabId (number), code (string), title (string)
+  - Returns: Promise<{success: boolean, error?: string}>
+
 createOffscreenDocument()
   - Creates offscreen document for OCR processing
 
@@ -110,6 +140,14 @@ Message Handlers:
     - Bookmarklets (javascript: URLs) are handled directly by stopwatch.js content script
     - Only processes regular http/https URLs
     - Opens first bookmark as active tab, rest in background
+  - executeBookmarklet: Executes a single bookmarklet via userScripts API
+    - Uses chrome.userScripts.execute() which is exempt from page CSP
+    - Falls back to chrome.scripting.executeScript with MAIN world
+    - Parameters: { code, title }
+    - Returns: { success, error? }
+  - executeMultipleBookmarklets: Batch executes multiple bookmarklets
+    - Parameters: { bookmarklets: [{code, title}] }
+    - Returns: { success, results: {total, executed, failed, errors[]} }
   - performOCR: Forwards OCR requests to offscreen document
   - themeChanged: Broadcasts theme changes
   - selectionChanged: Updates context menu based on text selection
@@ -161,7 +199,8 @@ bookmarklets.js - Bookmarklet execution handler
 Exposes: window.MediaLinksBookmarklets API
 
 For enterprise environments with strict CSP that blocks eval/new Function,
-this module automatically falls back to action-based execution.
+this module uses multiple fallback methods including background script execution
+via the userScripts API (which is exempt from page CSP).
 
 WHY ADDRESS BAR / PROGRAMMATIC NAVIGATION DOESN'T WORK:
 Chrome blocks ALL programmatic navigation to javascript: URLs for security:
@@ -172,32 +211,35 @@ Chrome blocks ALL programmatic navigation to javascript: URLs for security:
   - Creating <a href="javascript:..."> and clicking → BLOCKED
 These restrictions prevent XSS attacks.
 
-SOLUTION: SCRIPT TAG INJECTION (Tampermonkey-style)
-Instead of navigating to javascript: URLs, we inject a <script> tag into the
-page DOM. This runs the code in the page's MAIN world context with full access
-to page JavaScript functions - exactly like clicking a bookmarklet would.
+SOLUTION: MULTIPLE EXECUTION METHODS
+The module tries multiple methods in order to execute bookmarklets:
 
-EXECUTION PRIORITY (3 methods, in order):
+EXECUTION PRIORITY (4 methods, in order):
   1. Script injection (MAIN world) - Full page JS access, like Tampermonkey
   2. eval/new Function (isolated world) - DOM access only, no page JS
-  3. Action parsing (enterprise fallback) - Parse into DOM actions
+  3. Background execution (userScripts API) - CSP-exempt, full JS execution
+  4. Action parsing (enterprise fallback) - Parse into DOM actions
+
+The userScripts API (Chrome 135+) provides a USER_SCRIPT execution world that
+is explicitly exempt from page CSP, allowing bookmarklets to run even on sites
+with strict security policies like YouTube.
 
 BOOKMARKLET EXECUTION:
 
 MediaLinksBookmarklets.execute(jsCode, title)
-  - Tries script injection first, then eval, then action parsing
-  - Script injection runs in MAIN world (full page access like bookmarklets)
-  - Returns: boolean (true if succeeded)
+  - Tries script injection, then eval, then background, then action parsing
+  - Returns: Promise<boolean> (true if succeeded)
 
 MediaLinksBookmarklets.executeFromUrl(bookmark)
   - Executes a bookmarklet from bookmark object with url and title properties
   - Parses javascript: URL and executes the code
-  - Returns: boolean (true if succeeded)
+  - Returns: Promise<boolean> (true if succeeded)
 
 MediaLinksBookmarklets.executeMultiple(bookmarks)
   - Executes multiple bookmarklets sequentially
   - Filters array to only process javascript: URLs
-  - Returns: { total, executed, failed, errors[] }
+  - Uses batch background execution when local methods unavailable
+  - Returns: Promise<{ total, executed, failed, errors[] }>
 
 MediaLinksBookmarklets.parse(bookmarkletUrl)
   - Parses a javascript: URL and returns the decoded JavaScript code
@@ -218,6 +260,18 @@ MediaLinksBookmarklets.executeInPageContext(jsCode)
 MediaLinksBookmarklets.isScriptInjectionAvailable()
   - Checks if script tag injection is available (not blocked by CSP)
   - Returns: boolean
+
+BACKGROUND EXECUTION (userScripts API - CSP Exempt):
+
+MediaLinksBookmarklets.executeViaBackground(jsCode, title)
+  - Sends bookmarklet to background script for execution via userScripts API
+  - The USER_SCRIPT world is exempt from page CSP
+  - Returns: Promise<boolean> (true if succeeded)
+
+MediaLinksBookmarklets.executeMultipleViaBackground(bookmarklets)
+  - Batch execution of multiple bookmarklets via background script
+  - Parameter: Array of { code, title } objects
+  - Returns: Promise<{ total, executed, failed, errors[] }>
 
 DOM ACTIONS (Enterprise-Safe - No eval needed):
 
@@ -244,6 +298,132 @@ MediaLinksBookmarklets.isEvalAvailable()
   - Checks if eval/new Function is available (not blocked by CSP)
   - Returns: boolean
 
+MediaLinksBookmarklets.isExtensionContextValid()
+  - Checks if extension context is valid for messaging background script
+  - Returns: boolean
+
+MediaLinksBookmarklets.getEngine()
+  - Returns the MonkeyEngine instance if available
+  - Returns: MonkeyEngine | undefined
+
+--------------------------------------------------------------------------------
+monkey.js - Script Injection Engine (CSP/Trusted Types Bypass)
+--------------------------------------------------------------------------------
+
+Exposes: window.MonkeyEngine API
+
+A dedicated script injection engine inspired by Tampermonkey and Violentmonkey.
+Provides multiple methods to execute JavaScript code in web pages, bypassing
+Content Security Policy (CSP) and Trusted Types restrictions.
+
+WHY THIS EXISTS:
+Modern websites like YouTube enforce strict CSP and Trusted Types policies that
+block traditional script execution methods. MonkeyEngine provides 7 different
+execution strategies, trying each in order until one succeeds.
+
+EXECUTION METHODS (in order of preference):
+1. Script tag injection - MAIN world, full page JS access
+2. Blob URL injection - Creates external script source, bypasses inline CSP
+3. Trusted Types policy - Creates policy for sites enforcing Trusted Types
+4. eval/Function - Isolated world, DOM access only
+5. Shadow DOM - Isolated container for script execution
+6. Sandboxed iframe - Iframe with minimal permissions
+7. Background execution - chrome.scripting.executeScript with MAIN world
+
+MAIN EXECUTION API:
+
+MonkeyEngine.execute(code, options)
+  - Executes code using all available methods (auto-fallback)
+  - Parameters:
+    - code: JavaScript code to execute
+    - options.title: Script title for logging
+    - options.nonce: CSP nonce to use
+    - options.preferredMethod: Try this method first
+    - options.skipMethods: Array of methods to skip
+  - Returns: Promise<{success: boolean, method: string, error?: string}>
+
+MonkeyEngine.executeMultiple(scripts, options)
+  - Executes multiple scripts sequentially with auto-fallback
+  - Parameters:
+    - scripts: Array of {code, title} objects
+    - options: Same as execute()
+  - Returns: Promise<{total, executed, failed, errors, results}>
+
+INDIVIDUAL EXECUTION METHODS:
+
+MonkeyEngine.executeViaScriptTag(code, options)
+  - Executes via script tag injection (MAIN world)
+  - Options: { nonce: string }
+  - Returns: {success: boolean, method: 'scriptTag', error?: string}
+
+MonkeyEngine.executeViaBlobUrl(code, options)
+  - Executes via Blob URL (bypasses inline CSP)
+  - Options: { nonce: string }
+  - Returns: Promise<{success: boolean, method: 'blobUrl', error?: string}>
+
+MonkeyEngine.executeViaTrustedTypes(code, options)
+  - Executes using Trusted Types policy
+  - Options: { policyName: string }
+  - Returns: {success: boolean, method: 'trustedTypes', error?: string}
+
+MonkeyEngine.executeViaEval(code, options)
+  - Executes via eval/Function constructor
+  - Returns: {success: boolean, method: 'eval', error?: string}
+
+MonkeyEngine.executeViaShadowDom(code, options)
+  - Executes via Shadow DOM isolation
+  - Options: { nonce: string }
+  - Returns: {success: boolean, method: 'shadowDom', error?: string}
+
+MonkeyEngine.executeViaIframe(code, options)
+  - Executes via sandboxed iframe
+  - Options: { shareWindow: boolean (default true) }
+  - Returns: Promise<{success: boolean, method: 'iframe', error?: string}>
+
+MonkeyEngine.executeViaBackground(code, title)
+  - Executes via background script (chrome.scripting.executeScript)
+  - Returns: Promise<{success: boolean, method: 'background', error?: string}>
+
+MonkeyEngine.executeMultipleViaBackground(scripts)
+  - Batch executes multiple scripts via background
+  - Parameters: Array of {code, title} objects
+  - Returns: Promise with results object
+
+DETECTION UTILITIES:
+
+MonkeyEngine.detectNonce()
+  - Detects CSP nonce from existing page scripts
+  - Returns: string | false
+
+MonkeyEngine.isScriptInjectionAvailable()
+  - Checks if script tag injection works
+  - Returns: boolean
+
+MonkeyEngine.isBlobUrlAvailable()
+  - Checks if Blob URL injection works
+  - Returns: Promise<boolean>
+
+MonkeyEngine.isTrustedTypesAvailable()
+  - Checks if Trusted Types API is available
+  - Returns: boolean
+
+MonkeyEngine.isEvalAvailable()
+  - Checks if eval/Function is available
+  - Returns: boolean
+
+MonkeyEngine.isExtensionContextValid()
+  - Checks if extension context is valid for messaging
+  - Returns: boolean
+
+STATUS AND CACHE:
+
+MonkeyEngine.getMethodStatus()
+  - Returns current method availability status
+  - Returns: { scriptInjection, eval, trustedTypes, nonce, extensionContext }
+
+MonkeyEngine.resetCache()
+  - Resets cached method availability (useful after page changes)
+
 --------------------------------------------------------------------------------
 stopwatch.js - Time tracking on websites
 --------------------------------------------------------------------------------
@@ -262,11 +442,11 @@ getBookmarksForCurrentDomain()
   - Checks exact match first, then partial matches (e.g., youtube.com matches www.youtube.com)
   - Matches against full URL when pattern contains a path, otherwise just hostname
 
-openSelectedBookmarks()
+openSelectedBookmarks() [async]
   - Opens bookmarks for current domain
   - Called AFTER user clicks "OK" to dismiss the notification alert (not before)
   - Only called if openBookmarksOnNotification is enabled and domain has configured bookmarks
-  - Bookmarklets: Handled by bookmarklets.js (MediaLinksBookmarklets API)
+  - Bookmarklets: Handled by bookmarklets.js (MediaLinksBookmarklets.executeMultiple - async)
   - Regular URLs: Sent to background script to open in new tabs
 
 formatTime(ms)
@@ -305,7 +485,7 @@ updateTime()
 showToastNotification(elapsed)
   - Shows alert notification and focuses tab
   - Flow: 1) Focus tab via background script, 2) Wait 150ms, 3) Show blocking alert()
-  - After user clicks "OK" to dismiss alert, opens bookmarks if enabled
+  - After user clicks "OK" to dismiss alert, calls openSelectedBookmarks() if enabled
 
 start()
   - Starts the stopwatch

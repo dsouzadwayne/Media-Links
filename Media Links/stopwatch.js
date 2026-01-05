@@ -498,7 +498,7 @@
       bookmarksByDomain: settings.bookmarksByDomain
     });
 
-    const showAlert = () => {
+    const showAlert = async () => {
       console.log('Stopwatch: Showing alert');
       alert(`Time Alert!\n\nYou've been on ${hostname} for ${timeStr}`);
       console.log('Stopwatch: Alert dismissed by user');
@@ -510,7 +510,11 @@
         console.log('Stopwatch: Domain bookmarks found:', domainBookmarks);
         if (domainBookmarks.length > 0) {
           console.log('Stopwatch: Calling openSelectedBookmarks');
-          openSelectedBookmarks();
+          try {
+            await openSelectedBookmarks();
+          } catch (e) {
+            console.error('Stopwatch: Error in openSelectedBookmarks:', e);
+          }
         } else {
           console.log('Stopwatch: No bookmarks configured for this domain');
         }
@@ -621,7 +625,7 @@
    * - Bookmarklets: Handled by bookmarklets.js (MediaLinksBookmarklets)
    * - Regular URLs: Send to background script to open in new tabs
    */
-  function openSelectedBookmarks() {
+  async function openSelectedBookmarks() {
     console.log('Stopwatch: openSelectedBookmarks called');
 
     const bookmarks = getBookmarksForCurrentDomain();
@@ -654,8 +658,13 @@
     // Execute bookmarklets using the bookmarklets.js handler
     if (bookmarklets.length > 0) {
       if (window.MediaLinksBookmarklets) {
-        const results = window.MediaLinksBookmarklets.executeMultiple(bookmarklets);
-        console.log(`Stopwatch: Bookmarklet execution results:`, results);
+        try {
+          // executeMultiple is async - must await it
+          const results = await window.MediaLinksBookmarklets.executeMultiple(bookmarklets);
+          console.log(`Stopwatch: Bookmarklet execution results:`, results);
+        } catch (e) {
+          console.error('Stopwatch: Bookmarklet execution error:', e);
+        }
       } else {
         console.error('Stopwatch: MediaLinksBookmarklets not available');
       }

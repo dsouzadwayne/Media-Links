@@ -2,8 +2,8 @@
  * Bookmarklets Handler
  * Handles execution of bookmarklets (javascript: URLs) and DOM actions
  *
- * For enterprise environments with strict CSP that blocks eval/new Function,
- * this module also supports config-based DOM actions as an alternative.
+ * Uses MonkeyEngine for script execution with CSP bypass capabilities.
+ * Also supports config-based DOM actions as a fallback for strict CSP environments.
  */
 
 (function() {
@@ -15,77 +15,118 @@
   }
   window.mediaLinksBookmarkletsInitialized = true;
 
-  // Track if eval/Function is available (enterprise CSP may block it)
-  let evalAvailable = null;
-  // Track if script injection is available
-  let scriptInjectionAvailable = null;
+  // Wait for MonkeyEngine to be available
+  function getMonkeyEngine() {
+    return window.MonkeyEngine;
+  }
+
+  /**
+   * Check if extension context is valid for messaging
+   */
+  function isExtensionContextValid() {
+    const engine = getMonkeyEngine();
+    if (engine) {
+      return engine.isExtensionContextValid();
+    }
+    // Fallback check
+    try {
+      return typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * Execute bookmarklet via background script
+   * Delegates to MonkeyEngine
+   */
+  async function executeViaBackground(jsCode, title) {
+    const engine = getMonkeyEngine();
+    if (engine) {
+      const result = await engine.executeViaBackground(jsCode, title);
+      if (result.success) {
+        console.log(`Bookmarklets: "${title}" executed successfully via background`);
+      }
+      return result.success;
+    }
+    console.log('Bookmarklets: MonkeyEngine not available for background execution');
+    return false;
+  }
+
+  /**
+   * Execute multiple bookmarklets via background script
+   * Delegates to MonkeyEngine
+   */
+  async function executeMultipleViaBackground(bookmarklets) {
+    const engine = getMonkeyEngine();
+    if (engine) {
+      const result = await engine.executeMultipleViaBackground(bookmarklets);
+      console.log(`Bookmarklets: Background batch execution complete:`, result.results);
+      return result.results;
+    }
+    return { total: bookmarklets.length, executed: 0, failed: bookmarklets.length, errors: ['MonkeyEngine not available'] };
+  }
 
   /**
    * Check if eval/new Function is available (not blocked by CSP)
    */
   function isEvalAvailable() {
-    if (evalAvailable !== null) return evalAvailable;
-
+    const engine = getMonkeyEngine();
+    if (engine) {
+      return engine.isEvalAvailable();
+    }
+    // Fallback check
     try {
       new Function('return true')();
-      evalAvailable = true;
+      return true;
     } catch (e) {
-      evalAvailable = false;
-      // Use log instead of warn to avoid showing in extension error page
-      console.log('Bookmarklets: eval/Function blocked by CSP - using action-based fallback');
+      console.log('Bookmarklets: eval/Function blocked by CSP');
+      return false;
     }
-    return evalAvailable;
   }
 
   /**
    * Check if script tag injection is available (not blocked by CSP)
    */
   function isScriptInjectionAvailable() {
-    if (scriptInjectionAvailable !== null) return scriptInjectionAvailable;
-
+    const engine = getMonkeyEngine();
+    if (engine) {
+      return engine.isScriptInjectionAvailable();
+    }
+    // Fallback check
     try {
       const testScript = document.createElement('script');
       testScript.textContent = 'window.__bookmarkletTestFlag = true;';
       document.documentElement.appendChild(testScript);
       testScript.remove();
-
       if (window.__bookmarkletTestFlag) {
         delete window.__bookmarkletTestFlag;
-        scriptInjectionAvailable = true;
-        console.log('Bookmarklets: Script injection available (MAIN world access)');
-      } else {
-        scriptInjectionAvailable = false;
+        return true;
       }
     } catch (e) {
-      scriptInjectionAvailable = false;
-      console.log('Bookmarklets: Script injection blocked by CSP');
+      // CSP blocked
     }
-    return scriptInjectionAvailable;
+    return false;
   }
 
   /**
-   * Execute code via script tag injection (Tampermonkey-style)
-   * This runs in the page's MAIN world context with full access to page JS
-   *
-   * @param {string} jsCode - The JavaScript code to execute
-   * @returns {boolean} - True if execution succeeded
+   * Execute code via script tag injection
+   * Delegates to MonkeyEngine if available
    */
   function executeViaScriptInjection(jsCode) {
+    const engine = getMonkeyEngine();
+    if (engine) {
+      const result = engine.executeViaScriptTag(jsCode);
+      return result.success;
+    }
+    // Fallback
     try {
       const script = document.createElement('script');
-      // Wrap in try-catch to handle errors gracefully
-      script.textContent = `
-        try {
-          ${jsCode}
-        } catch (e) {
-          console.error('Bookmarklet execution error:', e);
-        }
-      `;
+      script.textContent = `try { ${jsCode} } catch (e) { console.error('Bookmarklet error:', e); }`;
       document.documentElement.appendChild(script);
       script.remove();
       return true;
     } catch (e) {
-      console.log('Bookmarklets: Script injection failed:', e.message);
       return false;
     }
   }
@@ -405,61 +446,79 @@
   }
 
   /**
-   * Execute a bookmarklet - tries script injection first (like Tampermonkey),
-   * then eval, then falls back to action parsing
+   * Execute a bookmarklet - uses MonkeyEngine for multi-method execution
+   *
+   * MonkeyEngine tries these methods in order:
+   * 1. Script tag injection (MAIN world, full page access)
+   * 2. Blob URL injection (bypasses inline CSP)
+   * 3. Trusted Types policy (for sites enforcing Trusted Types)
+   * 4. eval/Function (isolated world, DOM access only)
+   * 5. Shadow DOM injection
+   * 6. Sandboxed iframe
+   * 7. Background script with chrome.scripting.executeScript
+   *
+   * Falls back to DOM action parsing if all methods fail.
    *
    * @param {string} jsCode - The JavaScript code to execute
    * @param {string} title - The bookmarklet title (for logging)
-   * @returns {boolean} - True if execution succeeded, false otherwise
+   * @returns {Promise<boolean>} - True if execution succeeded, false otherwise
    */
-  function executeBookmarklet(jsCode, title) {
+  async function executeBookmarklet(jsCode, title) {
     console.log(`Bookmarklets: Executing "${title}"`);
     console.log(`Bookmarklets: Code:`, jsCode.substring(0, 200) + (jsCode.length > 200 ? '...' : ''));
 
-    // Method 1: Try script tag injection (Tampermonkey-style)
-    // This runs in MAIN world with full access to page JS functions
-    if (isScriptInjectionAvailable()) {
-      console.log('Bookmarklets: Using script injection (MAIN world - full page access)');
-      if (executeViaScriptInjection(jsCode)) {
-        console.log(`Bookmarklets: "${title}" executed successfully via script injection`);
+    // Use MonkeyEngine if available
+    const engine = getMonkeyEngine();
+    if (engine) {
+      const result = await engine.execute(jsCode, { title });
+
+      if (result.success) {
+        console.log(`Bookmarklets: "${title}" executed successfully via ${result.method}`);
         return true;
       }
-      // Script injection failed, try next method
-      console.log('Bookmarklets: Script injection failed, trying eval');
-    }
 
-    // Method 2: Try eval/Function if available (isolated world, no page JS access)
-    if (isEvalAvailable()) {
-      try {
-        console.log('Bookmarklets: Using eval (isolated world - DOM access only)');
-        if (jsCode.trim().startsWith('(') || jsCode.trim().startsWith('!') || jsCode.trim().startsWith('void')) {
-          eval(jsCode);
-        } else {
-          const fn = new Function(jsCode);
-          fn();
+      console.log(`Bookmarklets: MonkeyEngine failed (${result.error}), trying DOM action parsing`);
+    } else {
+      // Fallback if MonkeyEngine not loaded
+      console.log('Bookmarklets: MonkeyEngine not available, using legacy methods');
+
+      // Try script injection
+      if (isScriptInjectionAvailable()) {
+        if (executeViaScriptInjection(jsCode)) {
+          console.log(`Bookmarklets: "${title}" executed via script injection`);
+          return true;
         }
-        console.log(`Bookmarklets: "${title}" executed successfully via eval`);
+      }
+
+      // Try eval
+      if (isEvalAvailable()) {
+        try {
+          if (jsCode.trim().startsWith('(') || jsCode.trim().startsWith('!') || jsCode.trim().startsWith('void')) {
+            eval(jsCode);
+          } else {
+            new Function(jsCode)();
+          }
+          console.log(`Bookmarklets: "${title}" executed via eval`);
+          return true;
+        } catch (e) {
+          console.log('Bookmarklets: eval failed:', e.message);
+        }
+      }
+
+      // Try background execution
+      const bgResult = await executeViaBackground(jsCode, title);
+      if (bgResult) {
         return true;
-      } catch (e) {
-        // If it's a CSP error, mark eval as unavailable and try fallback
-        if (e.name === 'EvalError' || e.message.includes('Content Security Policy')) {
-          evalAvailable = false;
-          console.log('Bookmarklets: eval blocked by CSP, trying action-based fallback');
-        } else {
-          console.log(`Bookmarklets: "${title}" execution failed:`, e.message);
-          return false;
-        }
       }
     }
 
-    // Method 3: Fallback - Try to parse bookmarklet into DOM actions
-    console.log('Bookmarklets: CSP blocks eval - attempting to parse bookmarklet into actions');
+    // Final fallback: DOM action parsing
+    console.log('Bookmarklets: Attempting to parse bookmarklet into DOM actions');
     const actions = parseBookmarkletToActions(jsCode);
 
     if (actions.length === 0) {
-      console.log(`Bookmarklets: Could not parse "${title}" into actions. Enterprise CSP blocks eval.`);
-      console.log('Bookmarklets: Consider using DOM Actions instead of bookmarklets.');
-      console.log('Bookmarklets: Original code:', jsCode);
+      console.log(`Bookmarklets: Could not parse "${title}" into actions.`);
+      console.log('Bookmarklets: All execution methods failed.');
       return false;
     }
 
@@ -536,9 +595,9 @@
    * Execute a bookmarklet from its URL
    *
    * @param {object} bookmark - Bookmark object with url and title properties
-   * @returns {boolean} - True if execution succeeded, false otherwise
+   * @returns {Promise<boolean>} - True if execution succeeded, false otherwise
    */
-  function executeBookmarkletFromUrl(bookmark) {
+  async function executeBookmarkletFromUrl(bookmark) {
     if (!bookmark || !bookmark.url) {
       console.log('Bookmarklets: No bookmark or URL provided');
       return false;
@@ -549,16 +608,17 @@
       return false;
     }
 
-    return executeBookmarklet(jsCode, bookmark.title || 'Untitled');
+    return await executeBookmarklet(jsCode, bookmark.title || 'Untitled');
   }
 
   /**
    * Execute multiple bookmarklets sequentially
+   * Uses MonkeyEngine for efficient multi-method execution
    *
    * @param {array} bookmarks - Array of bookmark objects with url and title
-   * @returns {object} - Results object with executed count and errors
+   * @returns {Promise<object>} - Results object with executed count and errors
    */
-  function executeMultipleBookmarklets(bookmarks) {
+  async function executeMultipleBookmarklets(bookmarks) {
     const results = {
       total: 0,
       executed: 0,
@@ -577,18 +637,51 @@
 
     console.log(`Bookmarklets: Processing ${bookmarklets.length} bookmarklet(s)`);
 
-    for (const bookmarklet of bookmarklets) {
-      try {
-        if (executeBookmarkletFromUrl(bookmarklet)) {
-          results.executed++;
-        } else {
-          results.failed++;
-          results.errors.push(`Failed to execute: ${bookmarklet.title || 'Untitled'}`);
+    // Parse all bookmarklet URLs first
+    const parsedBookmarklets = bookmarklets.map(b => ({
+      code: parseBookmarkletUrl(b.url),
+      title: b.title || 'Untitled'
+    })).filter(b => b.code !== null);
+
+    if (parsedBookmarklets.length === 0) {
+      results.failed = bookmarklets.length;
+      results.errors.push('Failed to parse bookmarklet URLs');
+      return results;
+    }
+
+    // Use MonkeyEngine if available
+    const engine = getMonkeyEngine();
+    if (engine) {
+      const engineResults = await engine.executeMultiple(parsedBookmarklets);
+      results.executed = engineResults.executed;
+      results.failed = engineResults.failed;
+      results.errors = engineResults.errors || [];
+    } else {
+      // Fallback: Check if local execution methods are available
+      const canExecuteLocally = isScriptInjectionAvailable() || isEvalAvailable();
+
+      if (canExecuteLocally) {
+        // Try local execution for each bookmarklet
+        for (const bookmarklet of bookmarklets) {
+          try {
+            if (await executeBookmarkletFromUrl(bookmarklet)) {
+              results.executed++;
+            } else {
+              results.failed++;
+              results.errors.push(`Failed to execute: ${bookmarklet.title || 'Untitled'}`);
+            }
+          } catch (e) {
+            results.failed++;
+            results.errors.push(`Error in "${bookmarklet.title || 'Untitled'}": ${e.message}`);
+          }
         }
-      } catch (e) {
-        results.failed++;
-        results.errors.push(`Error in "${bookmarklet.title || 'Untitled'}": ${e.message}`);
-        console.log(`Bookmarklets: Exception processing "${bookmarklet.title}":`, e.message);
+      } else {
+        // Use background batch execution
+        console.log('Bookmarklets: Local execution blocked, using background batch execution');
+        const bgResults = await executeMultipleViaBackground(parsedBookmarklets);
+        results.executed = bgResults.executed;
+        results.failed = bgResults.failed;
+        results.errors = bgResults.errors || [];
       }
     }
 
@@ -608,28 +701,43 @@
 
   // Expose functions globally for use by other scripts (like stopwatch.js)
   window.MediaLinksBookmarklets = {
-    // Bookmarklet execution (tries script injection, then eval, then action parsing)
+    // Bookmarklet execution (uses MonkeyEngine with multi-method fallback)
     execute: executeBookmarklet,
     executeFromUrl: executeBookmarkletFromUrl,
     executeMultiple: executeMultipleBookmarklets,
     parse: parseBookmarkletUrl,
     isBookmarklet: isBookmarklet,
 
-    // Script injection (Tampermonkey-style, MAIN world)
+    // Script injection (MAIN world)
     executeInPageContext: executeViaScriptInjection,
     isScriptInjectionAvailable: isScriptInjectionAvailable,
+
+    // Background execution (CSP-bypassing)
+    executeViaBackground: executeViaBackground,
+    executeMultipleViaBackground: executeMultipleViaBackground,
 
     // DOM Actions (enterprise-safe, no eval needed)
     action: executeDOMAction,
     parseToActions: parseBookmarkletToActions,
 
     // Utility
-    isEvalAvailable: isEvalAvailable
+    isEvalAvailable: isEvalAvailable,
+    isExtensionContextValid: isExtensionContextValid,
+
+    // MonkeyEngine access
+    getEngine: getMonkeyEngine
   };
 
   // Check availability on init
-  const scriptStatus = isScriptInjectionAvailable() ? 'available (MAIN world)' : 'blocked';
-  const evalStatus = isEvalAvailable() ? 'available' : 'blocked';
-  console.log(`Bookmarklets: Handler initialized - script injection: ${scriptStatus}, eval: ${evalStatus}`);
+  const engine = getMonkeyEngine();
+  if (engine) {
+    const status = engine.getMethodStatus();
+    console.log(`Bookmarklets: Handler initialized with MonkeyEngine`, status);
+  } else {
+    const scriptStatus = isScriptInjectionAvailable() ? 'available' : 'blocked';
+    const evalStatus = isEvalAvailable() ? 'available' : 'blocked';
+    const bgStatus = isExtensionContextValid() ? 'available' : 'unavailable';
+    console.log(`Bookmarklets: Handler initialized (legacy) - script: ${scriptStatus}, eval: ${evalStatus}, bg: ${bgStatus}`);
+  }
 
 })();

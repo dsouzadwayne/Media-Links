@@ -10,6 +10,175 @@ function generateUUID() {
 // Offscreen document management for Tesseract OCR
 let offscreenDocumentCreated = false;
 
+// UserScripts world configuration for bookmarklet execution
+let userScriptsWorldConfigured = false;
+
+/**
+ * Configure the userScripts world for bookmarklet execution
+ * The USER_SCRIPT world is exempt from page CSP, allowing bookmarklets to run
+ */
+async function configureUserScriptsWorld() {
+  if (userScriptsWorldConfigured) return;
+
+  try {
+    // Check if userScripts API is available
+    if (!chrome.userScripts) {
+      console.warn('Background: userScripts API not available');
+      return;
+    }
+
+    // Configure the world with permissive CSP and messaging enabled
+    await chrome.userScripts.configureWorld({
+      csp: "script-src 'unsafe-inline' 'unsafe-eval';",
+      messaging: true
+    });
+
+    userScriptsWorldConfigured = true;
+    console.log('Background: userScripts world configured for bookmarklet execution');
+  } catch (error) {
+    console.error('Background: Failed to configure userScripts world:', error);
+  }
+}
+
+/**
+ * Execute a bookmarklet in the specified tab using userScripts API
+ * This bypasses page CSP restrictions
+ *
+ * @param {number} tabId - The tab ID to execute in
+ * @param {string} code - The JavaScript code to execute
+ * @param {string} title - The bookmarklet title (for logging)
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function executeBookmarkletInTab(tabId, code, title) {
+  console.log(`Background: Executing bookmarklet "${title}" in tab ${tabId}`);
+
+  // Log Chrome version and API availability for debugging
+  const chromeVersion = navigator.userAgent.match(/Chrome\/(\d+)/)?.[1] || 'unknown';
+  console.log(`Background: Chrome version: ${chromeVersion}`);
+  console.log(`Background: userScripts API available: ${!!chrome.userScripts}`);
+  console.log(`Background: userScripts.execute available: ${!!(chrome.userScripts && chrome.userScripts.execute)}`);
+
+  try {
+    // Ensure userScripts world is configured
+    await configureUserScriptsWorld();
+
+    // Check if userScripts.execute is available (Chrome 135+)
+    if (chrome.userScripts && typeof chrome.userScripts.execute === 'function') {
+      try {
+        console.log('Background: Using userScripts.execute (CSP-exempt, Trusted Types-exempt)');
+        // Use userScripts.execute for CSP-exempt execution
+        // The USER_SCRIPT world bypasses both CSP and Trusted Types
+        await chrome.userScripts.execute({
+          target: { tabId: tabId },
+          js: [{ code: code }]
+        });
+
+        console.log(`Background: Bookmarklet "${title}" executed successfully via userScripts`);
+        return { success: true };
+      } catch (userScriptError) {
+        console.error(`Background: userScripts.execute failed:`, userScriptError);
+        console.log(`Background: Error name: ${userScriptError.name}, message: ${userScriptError.message}`);
+        // Fall through to scripting.executeScript fallback
+      }
+    } else {
+      console.log('Background: userScripts.execute not available (requires Chrome 135+ and Developer Mode)');
+    }
+
+    // Fallback: Try chrome.scripting.executeScript with MAIN world
+    // Must handle Trusted Types for sites like YouTube that enforce it
+    console.log('Background: Trying scripting.executeScript with Trusted Types handling');
+
+    const injectionResults = await chrome.scripting.executeScript({
+      target: { tabId: tabId },
+      func: (jsCode) => {
+        // Helper to execute code, handling Trusted Types if present
+        const executeCode = (codeStr) => {
+          try {
+            // Method 1: Try using Trusted Types policy if available
+            if (window.trustedTypes && window.trustedTypes.createPolicy) {
+              try {
+                // Create a policy for our bookmarklet execution
+                const policy = window.trustedTypes.createPolicy('mediaLinksBookmarklet', {
+                  createScript: (s) => s
+                });
+                const trustedCode = policy.createScript(codeStr);
+                return { method: 'trustedTypes', result: eval(trustedCode) };
+              } catch (ttError) {
+                // Policy creation might fail if site has strict CSP for policies
+                console.log('Trusted Types policy creation failed:', ttError.message);
+              }
+            }
+
+            // Method 2: Try direct eval (works if no Trusted Types or CSP allows it)
+            return { method: 'eval', result: eval(codeStr) };
+          } catch (evalError) {
+            // Method 3: Try Function constructor
+            try {
+              const fn = new Function(codeStr);
+              return { method: 'function', result: fn() };
+            } catch (fnError) {
+              // Method 4: Try script tag with Trusted Types handling
+              try {
+                const script = document.createElement('script');
+
+                if (window.trustedTypes && window.trustedTypes.createPolicy) {
+                  try {
+                    const scriptPolicy = window.trustedTypes.createPolicy('mediaLinksScript', {
+                      createScript: (s) => s
+                    });
+                    script.text = scriptPolicy.createScript(codeStr);
+                  } catch (e) {
+                    // Fallback to direct assignment (will fail if Trusted Types enforced)
+                    script.textContent = codeStr;
+                  }
+                } else {
+                  script.textContent = codeStr;
+                }
+
+                document.documentElement.appendChild(script);
+                script.remove();
+                return { method: 'script', result: undefined };
+              } catch (scriptError) {
+                throw new Error(`All execution methods failed. Last error: ${scriptError.message}`);
+              }
+            }
+          }
+        };
+
+        try {
+          const execResult = executeCode(jsCode);
+          console.log(`Bookmarklet executed via ${execResult.method}`);
+          return { success: true, method: execResult.method };
+        } catch (e) {
+          return { success: false, error: e.message };
+        }
+      },
+      args: [code],
+      world: 'MAIN'
+    });
+
+    // Check the injection result
+    if (injectionResults && injectionResults.length > 0) {
+      const result = injectionResults[0].result;
+      if (result && result.success) {
+        console.log(`Background: Bookmarklet "${title}" executed via scripting.executeScript (${result.method})`);
+        return { success: true };
+      } else {
+        const errorMsg = result?.error || 'Execution failed in page context';
+        console.log(`Background: scripting.executeScript failed: ${errorMsg}`);
+        return { success: false, error: errorMsg };
+      }
+    }
+
+    console.log(`Background: Bookmarklet "${title}" executed via scripting.executeScript (no result)`);
+    return { success: true };
+
+  } catch (error) {
+    console.error(`Background: Failed to execute bookmarklet "${title}":`, error);
+    return { success: false, error: error.message };
+  }
+}
+
 // Create offscreen document for OCR processing
 async function createOffscreenDocument() {
   if (offscreenDocumentCreated) {
@@ -1674,6 +1843,87 @@ chrome.runtime.onInstalled.addListener(() => {
 
         console.log(`Background: Finished. Opened: ${openedCount}, Errors: ${errors.length}`);
         sendResponse({ success: openedCount > 0, openedCount, errors: errors.length > 0 ? errors : undefined });
+      })();
+
+      return true; // Keep channel open for async response
+    }
+
+    // Handle executeBookmarklet request (used by bookmarklets.js when CSP blocks execution)
+    // Uses userScripts API which is exempt from page CSP
+    if (message.type === 'executeBookmarklet') {
+      const { code, title } = message;
+
+      console.log(`Background: Received executeBookmarklet request for "${title}"`);
+
+      if (!code) {
+        console.warn('Background: No code provided for bookmarklet execution');
+        sendResponse({ success: false, error: 'No code provided' });
+        return;
+      }
+
+      if (!sender.tab || !sender.tab.id) {
+        console.warn('Background: No tab info available for bookmarklet execution');
+        sendResponse({ success: false, error: 'No tab information available' });
+        return;
+      }
+
+      (async () => {
+        const result = await executeBookmarkletInTab(sender.tab.id, code, title || 'Untitled');
+        sendResponse(result);
+      })();
+
+      return true; // Keep channel open for async response
+    }
+
+    // Handle executeMultipleBookmarklets request (batch execution)
+    if (message.type === 'executeMultipleBookmarklets') {
+      const { bookmarklets } = message;
+
+      console.log(`Background: Received executeMultipleBookmarklets request for ${bookmarklets?.length || 0} bookmarklet(s)`);
+
+      if (!bookmarklets || !Array.isArray(bookmarklets) || bookmarklets.length === 0) {
+        console.warn('Background: No bookmarklets provided');
+        sendResponse({ success: false, error: 'No bookmarklets provided', results: { total: 0, executed: 0, failed: 0 } });
+        return;
+      }
+
+      if (!sender.tab || !sender.tab.id) {
+        console.warn('Background: No tab info available for bookmarklet execution');
+        sendResponse({ success: false, error: 'No tab information available' });
+        return;
+      }
+
+      (async () => {
+        const results = {
+          total: bookmarklets.length,
+          executed: 0,
+          failed: 0,
+          errors: []
+        };
+
+        for (const bookmarklet of bookmarklets) {
+          if (!bookmarklet.code) {
+            results.failed++;
+            results.errors.push(`${bookmarklet.title || 'Untitled'}: No code`);
+            continue;
+          }
+
+          const result = await executeBookmarkletInTab(
+            sender.tab.id,
+            bookmarklet.code,
+            bookmarklet.title || 'Untitled'
+          );
+
+          if (result.success) {
+            results.executed++;
+          } else {
+            results.failed++;
+            results.errors.push(`${bookmarklet.title || 'Untitled'}: ${result.error}`);
+          }
+        }
+
+        console.log(`Background: Batch bookmarklet execution complete. Executed: ${results.executed}/${results.total}`);
+        sendResponse({ success: results.executed > 0, results });
       })();
 
       return true; // Keep channel open for async response
