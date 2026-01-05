@@ -551,10 +551,13 @@
 
   /**
    * Get bookmarks for the current domain
-   * Checks for exact match first, then partial matches, then wildcards
+   * Checks for exact match first, then partial matches, then wildcards/URL patterns
+   * Supports same wildcard patterns as isDomainIncluded(): *.domain.com, domain.*, *keyword*
+   * Also supports URL patterns with paths: *example.com/path*
    */
   function getBookmarksForCurrentDomain() {
     const currentHostname = window.location.hostname.toLowerCase();
+    const currentUrl = window.location.href.toLowerCase();
 
     if (!settings.bookmarksByDomain || Object.keys(settings.bookmarksByDomain).length === 0) {
       return [];
@@ -567,13 +570,38 @@
       result = [...settings.bookmarksByDomain[currentHostname]];
     }
 
-    // Check for partial matches (e.g., "youtube.com" matches "www.youtube.com")
+    // Check for partial matches and wildcard patterns
     if (result.length === 0) {
       for (const domain of Object.keys(settings.bookmarksByDomain)) {
-        if (domain === '*') continue; // Handle wildcard separately
-        if (currentHostname === domain ||
-            currentHostname.endsWith('.' + domain) ||
-            domain.endsWith('.' + currentHostname)) {
+        if (domain === '*') continue; // Handle global wildcard separately
+
+        // Check if pattern contains path (/ after domain) - if so, match against full URL
+        const isUrlPattern = domain.includes('/') && !domain.startsWith('*://');
+        const matchTarget = isUrlPattern ? currentUrl : currentHostname;
+
+        let matches = false;
+
+        // Handle wildcard patterns (same logic as isDomainIncluded)
+        if (domain.startsWith('*') && domain.endsWith('*') && domain.length > 2) {
+          // *keyword* matches anything containing that pattern
+          const pattern = domain.slice(1, -1); // Remove both *
+          matches = matchTarget.includes(pattern);
+        } else if (domain.startsWith('*')) {
+          // *.example.com matches anything ending with that pattern
+          const pattern = domain.slice(1); // Remove the *
+          matches = matchTarget.endsWith(pattern);
+        } else if (domain.endsWith('*')) {
+          // example.* matches anything starting with that pattern
+          const pattern = domain.slice(0, -1); // Remove the *
+          matches = matchTarget.startsWith(pattern);
+        } else {
+          // Handle both exact match and subdomain match
+          matches = currentHostname === domain ||
+                    currentHostname.endsWith('.' + domain) ||
+                    domain.endsWith('.' + currentHostname);
+        }
+
+        if (matches) {
           result = [...settings.bookmarksByDomain[domain]];
           break;
         }

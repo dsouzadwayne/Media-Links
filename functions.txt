@@ -1,6 +1,6 @@
 ================================================================================
 MEDIA LINKS EXTENSION - FUNCTION REFERENCE
-Version: 0.841
+Version: 0.844
 ================================================================================
 
 This file documents all JavaScript functions in the Media Links extension.
@@ -227,7 +227,10 @@ isDomainIncluded()
 
 getBookmarksForCurrentDomain()
   - Looks up bookmarks configured for the current website domain
+  - Supports wildcard patterns: *.domain.com, domain.*, *keyword*
+  - Supports URL patterns with paths: *example.com/path*
   - Checks exact match first, then partial matches (e.g., youtube.com matches www.youtube.com)
+  - Matches against full URL when pattern contains a path, otherwise just hostname
 
 openSelectedBookmarks()
   - Opens bookmarks for current domain
