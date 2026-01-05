@@ -1575,6 +1575,54 @@ chrome.runtime.onInstalled.addListener(() => {
       }
     }
 
+    // Handle openBookmarks request (used by stopwatch notifications)
+    if (message.type === 'openBookmarks') {
+      const bookmarks = message.bookmarks;
+
+      if (!bookmarks || !Array.isArray(bookmarks) || bookmarks.length === 0) {
+        sendResponse({ success: false, error: 'No bookmarks provided' });
+        return;
+      }
+
+      console.log(`Background: Opening ${bookmarks.length} bookmark(s) sequentially`);
+
+      (async () => {
+        let openedCount = 0;
+        const delayBetweenTabs = 300; // ms between opening each tab
+
+        for (let i = 0; i < bookmarks.length; i++) {
+          const bookmark = bookmarks[i];
+
+          // Validate bookmark has a URL
+          if (!bookmark.url) {
+            console.warn(`Skipping bookmark without URL:`, bookmark);
+            continue;
+          }
+
+          try {
+            // Open bookmark in a new tab (first one active, rest in background)
+            await chrome.tabs.create({
+              url: bookmark.url,
+              active: i === 0 // First bookmark is active
+            });
+            openedCount++;
+            console.log(`Opened bookmark ${i + 1}/${bookmarks.length}: ${bookmark.title || bookmark.url}`);
+
+            // Wait before opening the next one (if there are more)
+            if (i < bookmarks.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, delayBetweenTabs));
+            }
+          } catch (error) {
+            console.error(`Failed to open bookmark ${bookmark.title || bookmark.url}:`, error);
+          }
+        }
+
+        sendResponse({ success: true, openedCount });
+      })();
+
+      return true; // Keep channel open for async response
+    }
+
     // Handle OCR requests from content script - forward to offscreen document
     if (message.action === 'performOCR') {
       console.log('Background: Received performOCR message from:', sender.tab?.id, sender.url);

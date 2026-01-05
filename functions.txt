@@ -4,7 +4,7 @@ Version: 0.834
 ================================================================================
 
 This file documents all JavaScript functions in the Media Links extension.
-Last updated: January 4, 2026
+Last updated: January 5, 2026
 
 ================================================================================
 CORE EXTENSION FILES
@@ -87,6 +87,7 @@ Message Handlers:
   - getCurrentTabId: Returns sender tab ID
   - openTranscriptView: Opens YouTube transcript view page
   - focusCurrentTab: Focuses current tab and window (for stopwatch notifications)
+  - openBookmarks: Opens selected bookmarks sequentially in new tabs (for stopwatch notifications)
   - performOCR: Forwards OCR requests to offscreen document
   - themeChanged: Broadcasts theme changes
   - selectionChanged: Updates context menu based on text selection
@@ -141,6 +142,14 @@ isExtensionContextValid()
 isDomainIncluded()
   - Checks if current domain is in allowed list (supports wildcards)
   - Includes type validation for robustness
+
+getBookmarksForCurrentDomain()
+  - Looks up bookmarks configured for the current website domain
+  - Checks exact match first, then partial matches (e.g., youtube.com matches www.youtube.com)
+
+openSelectedBookmarks()
+  - Opens bookmarks for current domain via background script
+  - Called after notification alert is dismissed (if enabled and domain has bookmarks)
 
 formatTime(ms)
   - Formats milliseconds to HH:MM:SS
@@ -240,10 +249,12 @@ getSeparatorOption(separatorString)
   - Converts separator string to option value
 
 renderDomainList()
-  - Renders domain filter list from hidden input value
+  - Renders domain list from hidden input value
+  - Each domain shows bookmark configuration button and bookmark info
 
-createDomainListItem(domain)
-  - Creates individual domain list item element with remove button
+createDomainListItem(domain, bookmarks)
+  - Creates domain list item with name, bookmark config button, and remove button
+  - Shows configured bookmark count and titles if any
 
 isValidDomainPattern(domain)
   - Validates domain format for stopwatch filter
@@ -280,6 +291,29 @@ deselectAllProfile()
 
 initializeSidebarNavigation()
   - Sets up sidebar scroll tracking for active state
+
+toggleBookmarkSettings(enabled)
+  - Shows/hides bookmark toggle based on notification enabled state
+
+toggleBookmarkSelector(enabled)
+  - Shows/hides bookmark selector based on open bookmarks enabled state
+
+parseBookmarksByDomain(value)
+  - Parses JSON object mapping domains to bookmark arrays from hidden input
+
+createDomainListItem(domain, bookmarks)
+  - Creates a domain list item with bookmark configuration button
+  - Shows bookmark count and titles if configured
+
+openEditSiteModal(domain, bookmarks)
+  - Opens modal to configure bookmarks for a domain
+
+openSiteBookmarkModal(domain, existingBookmarks)
+  - Modal for configuring bookmarks for a specific domain
+  - Shows bookmark tree browser and selected bookmarks preview
+
+renderBookmarkNodeForSite(container, node, selectedIds, selectedBookmarks, depth, onSelectionChange)
+  - Recursively renders bookmark folders and items in site configuration modal
 
 --------------------------------------------------------------------------------
 theme-manager.js - Centralized theme management
@@ -769,6 +803,8 @@ themeColors/themeColorPalettes (theme-manager.js, stopwatch.js)
 
 DEFAULT_SETTINGS (settings-utils.js)
   - All default extension settings (50+ settings)
+  - Includes stopwatchOpenBookmarksOnNotification (boolean, default: false)
+  - Includes stopwatchBookmarksByDomain (object mapping domains to bookmark arrays)
 
 VALIDATION_RULES (settings-utils.js)
   - Type and constraint validation for all settings

@@ -238,6 +238,18 @@ function applySettingsToUI() {
   toggleStopwatchSettings(currentSettings.stopwatchEnabled === true);
   toggleNotificationMinutes(currentSettings.stopwatchNotificationEnabled === true);
 
+  // Bookmark settings
+  safeSetChecked('stopwatch-open-bookmarks', currentSettings.stopwatchOpenBookmarksOnNotification === true);
+  toggleBookmarkSettings(currentSettings.stopwatchNotificationEnabled === true);
+  toggleBookmarkSelector(currentSettings.stopwatchOpenBookmarksOnNotification === true);
+
+  // Load bookmarks by domain (rendered as part of domain list)
+  const bookmarksByDomain = currentSettings.stopwatchBookmarksByDomain || {};
+  const bookmarksHiddenInput = document.getElementById('stopwatch-bookmarks-by-domain');
+  if (bookmarksHiddenInput) {
+    bookmarksHiddenInput.value = JSON.stringify(bookmarksByDomain);
+  }
+
   // Set default view columns
   const defaultColumns = currentSettings.defaultViewColumns || ['name', 'role', 'roleType'];
   const columnCheckboxes = document.querySelectorAll('.view-column-checkbox');
@@ -315,8 +327,16 @@ function attachEventListeners() {
   // Stopwatch notification toggle
   safeAddListener('stopwatch-notification-enabled', 'change', (e) => {
     toggleNotificationMinutes(e.target.checked);
+    toggleBookmarkSettings(e.target.checked);
     markUnsaved();
   });
+
+  // Stopwatch open bookmarks toggle
+  safeAddListener('stopwatch-open-bookmarks', 'change', (e) => {
+    toggleBookmarkSelector(e.target.checked);
+    markUnsaved();
+  });
+
 
   // Use event delegation for all input changes (single listener instead of many)
   // This prevents duplicate listeners from stacking when the page is reopened
@@ -469,6 +489,48 @@ function toggleNotificationMinutes(enabled) {
   }
 }
 
+// Toggle bookmark settings visibility (depends on notification being enabled)
+function toggleBookmarkSettings(enabled) {
+  const container = document.getElementById('open-bookmarks-container');
+  if (container) {
+    if (enabled) {
+      container.style.opacity = '1';
+      container.style.pointerEvents = 'auto';
+      const input = container.querySelector('input');
+      if (input) input.disabled = false;
+    } else {
+      container.style.opacity = '0.5';
+      container.style.pointerEvents = 'none';
+      const input = container.querySelector('input');
+      if (input) input.disabled = true;
+      // Also disable bookmark selector when notification is disabled
+      toggleBookmarkSelector(false);
+    }
+  }
+}
+
+// Toggle bookmark selector visibility (depends on open bookmarks being enabled)
+function toggleBookmarkSelector(enabled) {
+  const container = document.getElementById('bookmark-selector-container');
+  if (container) {
+    // Only enable if parent setting (notification) is also enabled
+    const notifEnabled = document.getElementById('stopwatch-notification-enabled');
+    const actuallyEnabled = enabled && notifEnabled && notifEnabled.checked;
+
+    if (actuallyEnabled) {
+      container.style.opacity = '1';
+      container.style.pointerEvents = 'auto';
+      const btn = container.querySelector('button');
+      if (btn) btn.disabled = false;
+    } else {
+      container.style.opacity = '0.5';
+      container.style.pointerEvents = 'none';
+      const btn = container.querySelector('button');
+      if (btn) btn.disabled = true;
+    }
+  }
+}
+
 // Save settings
 function saveSettings() {
   // Helper function to safely get element values with fallbacks
@@ -547,7 +609,9 @@ function saveSettings() {
     stopwatchMinimizedByDefault: getSafeValue('stopwatch-minimized-default', 'checked'),
     stopwatchNotificationEnabled: getSafeValue('stopwatch-notification-enabled', 'checked'),
     stopwatchNotificationMinutes: validateNumericInput(getSafeValue('stopwatch-notification-minutes'), 1, 1440, 30),
-    stopwatchIncludedDomains: getSafeValue('stopwatch-included-domains')
+    stopwatchIncludedDomains: getSafeValue('stopwatch-included-domains'),
+    stopwatchOpenBookmarksOnNotification: getSafeValue('stopwatch-open-bookmarks', 'checked'),
+    stopwatchBookmarksByDomain: parseBookmarksByDomain(getSafeValue('stopwatch-bookmarks-by-domain'))
   };
 
   // Save to storage using SettingsUtils with validation
@@ -685,6 +749,7 @@ function getSeparatorOption(separatorString) {
 function renderDomainList() {
   const listContainer = document.getElementById('stopwatch-domain-list');
   const hiddenInput = document.getElementById('stopwatch-included-domains');
+  const bookmarksInput = document.getElementById('stopwatch-bookmarks-by-domain');
 
   if (!listContainer || !hiddenInput) return;
 
@@ -695,30 +760,76 @@ function renderDomainList() {
   const domainsStr = hiddenInput.value || '';
   const domains = domainsStr.split(',').map(d => d.trim()).filter(d => d.length > 0);
 
+  // Get bookmarks by domain
+  const bookmarksByDomain = parseBookmarksByDomain(bookmarksInput ? bookmarksInput.value : '');
+
+  if (domains.length === 0) {
+    const emptyMsg = document.createElement('div');
+    emptyMsg.style.cssText = 'color: var(--text-secondary); font-size: 12px; padding: 8px 0;';
+    emptyMsg.textContent = 'No domains added. Stopwatch will appear on all sites.';
+    listContainer.appendChild(emptyMsg);
+    return;
+  }
+
   // Create list items for each domain
   domains.forEach(domain => {
-    const item = createDomainListItem(domain);
+    const bookmarks = bookmarksByDomain[domain] || [];
+    const item = createDomainListItem(domain, bookmarks);
     listContainer.appendChild(item);
   });
 }
 
-function createDomainListItem(domain) {
+function createDomainListItem(domain, bookmarks) {
   const item = document.createElement('div');
   item.className = 'domain-list-item';
+  item.style.cssText = 'display: flex; flex-direction: column; padding: 12px; margin: 6px 0; background: var(--surface-bg); border-radius: 8px; gap: 8px;';
+
+  // Top row: domain name and actions
+  const topRow = document.createElement('div');
+  topRow.style.cssText = 'display: flex; align-items: center; justify-content: space-between; gap: 8px;';
 
   const nameSpan = document.createElement('span');
   nameSpan.className = 'domain-name';
   nameSpan.textContent = domain;
+  nameSpan.style.cssText = 'font-weight: 600; color: var(--text-primary); flex: 1;';
+
+  const actions = document.createElement('div');
+  actions.style.cssText = 'display: flex; gap: 8px; align-items: center;';
+
+  const configBtn = document.createElement('button');
+  configBtn.type = 'button';
+  configBtn.className = 'secondary-button';
+  configBtn.style.cssText = 'padding: 4px 10px; font-size: 12px;';
+  configBtn.textContent = bookmarks.length > 0 ? 'Edit Bookmarks' : 'Add Bookmarks';
+  configBtn.addEventListener('click', () => openEditSiteModal(domain, bookmarks));
 
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';
   removeBtn.className = 'remove-domain';
   removeBtn.innerHTML = '×';
   removeBtn.title = 'Remove ' + domain;
+  removeBtn.style.cssText = 'background: none; border: none; color: var(--text-secondary); font-size: 18px; cursor: pointer; padding: 0 4px;';
   removeBtn.addEventListener('click', () => removeDomain(domain));
+  removeBtn.addEventListener('mouseenter', () => removeBtn.style.color = 'var(--danger)');
+  removeBtn.addEventListener('mouseleave', () => removeBtn.style.color = 'var(--text-secondary)');
 
-  item.appendChild(nameSpan);
-  item.appendChild(removeBtn);
+  actions.appendChild(configBtn);
+  actions.appendChild(removeBtn);
+
+  topRow.appendChild(nameSpan);
+  topRow.appendChild(actions);
+
+  item.appendChild(topRow);
+
+  // Bottom row: bookmark info (only if bookmarks configured)
+  if (bookmarks.length > 0) {
+    const bookmarkInfo = document.createElement('div');
+    bookmarkInfo.style.cssText = 'font-size: 12px; color: var(--text-secondary); padding-left: 4px;';
+    const bookmarkNames = bookmarks.map(b => b.title || 'Untitled').join(', ');
+    bookmarkInfo.textContent = `📚 ${bookmarks.length} bookmark${bookmarks.length !== 1 ? 's' : ''}: ${bookmarkNames}`;
+    bookmarkInfo.style.cssText += ' white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
+    item.appendChild(bookmarkInfo);
+  }
 
   return item;
 }
@@ -788,6 +899,7 @@ function addDomain(domain) {
 
 function removeDomain(domain) {
   const hiddenInput = document.getElementById('stopwatch-included-domains');
+  const bookmarksInput = document.getElementById('stopwatch-bookmarks-by-domain');
   if (!hiddenInput) return;
 
   // Get current domains
@@ -801,6 +913,13 @@ function removeDomain(domain) {
   }
 
   hiddenInput.value = domains.join(', ');
+
+  // Also remove bookmarks for this domain
+  if (bookmarksInput) {
+    let bookmarksByDomain = parseBookmarksByDomain(bookmarksInput.value);
+    delete bookmarksByDomain[domain];
+    bookmarksInput.value = JSON.stringify(bookmarksByDomain);
+  }
 
   // Re-render tags
   renderDomainTags();
@@ -1035,6 +1154,245 @@ function initializeSidebarNavigation() {
 
   // Initial check
   updateActiveLink();
+}
+
+// ==========================================
+// Per-Site Bookmark Functions
+// ==========================================
+
+/**
+ * Parse bookmarks by domain from hidden input
+ */
+function parseBookmarksByDomain(value) {
+  if (!value || value === '') return {};
+  try {
+    const parsed = JSON.parse(value);
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    console.warn('Failed to parse bookmarks by domain:', e);
+    return {};
+  }
+}
+
+/**
+ * Open modal to edit bookmarks for a domain (called from domain list)
+ */
+function openEditSiteModal(domain, bookmarks) {
+  openSiteBookmarkModal(domain, bookmarks);
+}
+
+/**
+ * Open the site bookmark configuration modal
+ * @param {string} domain - Domain to configure bookmarks for
+ * @param {Array} existingBookmarks - Current bookmarks for this domain
+ */
+function openSiteBookmarkModal(domain, existingBookmarks) {
+  const existingModal = document.getElementById('bookmark-selector-modal');
+  if (existingModal) existingModal.remove();
+
+  // Track selected bookmarks for this modal session
+  let selectedBookmarks = [...existingBookmarks];
+  let selectedIds = new Set(selectedBookmarks.map(b => b.id));
+
+  const modal = document.createElement('div');
+  modal.id = 'bookmark-selector-modal';
+  modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+
+  const modalContent = document.createElement('div');
+  modalContent.style.cssText = 'background: var(--primary-bg); border-radius: 12px; width: 90%; max-width: 600px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); color: var(--text-primary);';
+
+  // Header
+  const header = document.createElement('div');
+  header.style.cssText = 'padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;';
+
+  const headerTitle = document.createElement('h3');
+  headerTitle.textContent = `Bookmarks for ${domain}`;
+  headerTitle.style.cssText = 'margin: 0; font-size: 18px; font-weight: 600; color: var(--text-primary);';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '×';
+  closeBtn.style.cssText = 'background: none; border: none; font-size: 24px; cursor: pointer; color: var(--text-secondary); padding: 0;';
+  closeBtn.addEventListener('click', () => modal.remove());
+
+  header.appendChild(headerTitle);
+  header.appendChild(closeBtn);
+
+  // Instructions
+  const instructions = document.createElement('div');
+  instructions.style.cssText = 'padding: 12px 20px; background: var(--surface-bg); font-size: 13px; color: var(--text-secondary);';
+  instructions.textContent = 'Select bookmarks to open when the stopwatch notification is dismissed on this site.';
+
+  // Selected bookmarks preview
+  const selectedPreview = document.createElement('div');
+  selectedPreview.id = 'modal-selected-preview';
+  selectedPreview.style.cssText = 'padding: 12px 20px; border-bottom: 1px solid var(--border); max-height: 100px; overflow-y: auto;';
+
+  function updateSelectedPreview() {
+    selectedPreview.innerHTML = '';
+    if (selectedBookmarks.length === 0) {
+      selectedPreview.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px;">No bookmarks selected</div>';
+    } else {
+      const label = document.createElement('div');
+      label.textContent = `Selected (${selectedBookmarks.length}):`;
+      label.style.cssText = 'font-size: 12px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px;';
+      selectedPreview.appendChild(label);
+
+      selectedBookmarks.forEach((bm, idx) => {
+        const chip = document.createElement('span');
+        chip.textContent = `${idx + 1}. ${bm.title || 'Untitled'}`;
+        chip.style.cssText = 'display: inline-block; background: var(--accent-glow); color: var(--text-primary); padding: 4px 8px; border-radius: 4px; font-size: 11px; margin: 2px 4px 2px 0;';
+        selectedPreview.appendChild(chip);
+      });
+    }
+  }
+  updateSelectedPreview();
+
+  // Bookmark tree container
+  const treeContainer = document.createElement('div');
+  treeContainer.style.cssText = 'flex: 1; overflow-y: auto; padding: 16px 20px;';
+
+  const loading = document.createElement('div');
+  loading.textContent = 'Loading bookmarks...';
+  loading.style.cssText = 'text-align: center; padding: 40px; color: var(--text-secondary);';
+  treeContainer.appendChild(loading);
+
+  // Footer
+  const footer = document.createElement('div');
+  footer.style.cssText = 'padding: 16px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px;';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.textContent = 'Cancel';
+  cancelBtn.className = 'secondary-button';
+  cancelBtn.addEventListener('click', () => modal.remove());
+
+  const saveBtn = document.createElement('button');
+  saveBtn.textContent = 'Save Bookmarks';
+  saveBtn.className = 'primary-button';
+  saveBtn.addEventListener('click', () => {
+    const hiddenInput = document.getElementById('stopwatch-bookmarks-by-domain');
+    if (!hiddenInput) return;
+
+    let bookmarksByDomain = parseBookmarksByDomain(hiddenInput.value);
+    bookmarksByDomain[domain] = selectedBookmarks;
+    hiddenInput.value = JSON.stringify(bookmarksByDomain);
+    renderDomainList();
+    markUnsaved();
+    modal.remove();
+  });
+
+  footer.appendChild(cancelBtn);
+  footer.appendChild(saveBtn);
+
+  modalContent.appendChild(header);
+  modalContent.appendChild(instructions);
+  modalContent.appendChild(selectedPreview);
+  modalContent.appendChild(treeContainer);
+  modalContent.appendChild(footer);
+  modal.appendChild(modalContent);
+
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) modal.remove();
+  });
+
+  document.body.appendChild(modal);
+
+  // Load bookmarks into tree
+  chrome.bookmarks.getTree((bookmarkTreeNodes) => {
+    treeContainer.innerHTML = '';
+
+    if (!bookmarkTreeNodes || bookmarkTreeNodes.length === 0) {
+      treeContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 40px;">No bookmarks found</div>';
+      return;
+    }
+
+    bookmarkTreeNodes.forEach(node => {
+      renderBookmarkNodeForSite(treeContainer, node, selectedIds, selectedBookmarks, 0, updateSelectedPreview);
+    });
+  });
+}
+
+/**
+ * Render a bookmark node for site configuration modal
+ */
+function renderBookmarkNodeForSite(container, node, selectedIds, selectedBookmarks, depth, onSelectionChange) {
+  if (!node.title && node.children) {
+    node.children.forEach(child => {
+      renderBookmarkNodeForSite(container, child, selectedIds, selectedBookmarks, depth, onSelectionChange);
+    });
+    return;
+  }
+
+  const item = document.createElement('div');
+  item.style.cssText = `padding-left: ${depth * 20}px;`;
+
+  if (node.children) {
+    const folderHeader = document.createElement('div');
+    folderHeader.style.cssText = 'display: flex; align-items: center; padding: 8px 12px; cursor: pointer; border-radius: 6px; margin: 2px 0;';
+    folderHeader.addEventListener('mouseenter', () => folderHeader.style.background = 'var(--hover-color)');
+    folderHeader.addEventListener('mouseleave', () => folderHeader.style.background = 'transparent');
+
+    folderHeader.innerHTML = `<span style="margin-right: 8px;">📁</span><span style="font-weight: 500; color: var(--text-primary);">${node.title || 'Bookmarks'}</span><span style="margin-left: auto; font-size: 10px; color: var(--text-secondary);">▼</span>`;
+
+    const childrenContainer = document.createElement('div');
+    childrenContainer.style.cssText = 'display: block;';
+
+    node.children.forEach(child => {
+      renderBookmarkNodeForSite(childrenContainer, child, selectedIds, selectedBookmarks, depth + 1, onSelectionChange);
+    });
+
+    folderHeader.addEventListener('click', () => {
+      const isCollapsed = childrenContainer.style.display === 'none';
+      childrenContainer.style.display = isCollapsed ? 'block' : 'none';
+      folderHeader.querySelector('span:last-child').style.transform = isCollapsed ? 'rotate(0deg)' : 'rotate(-90deg)';
+    });
+
+    item.appendChild(folderHeader);
+    item.appendChild(childrenContainer);
+  } else if (node.url) {
+    const bookmarkItem = document.createElement('div');
+    const isSelected = selectedIds.has(node.id);
+    bookmarkItem.style.cssText = `display: flex; align-items: center; padding: 8px 12px; cursor: pointer; border-radius: 6px; margin: 2px 0; border: 2px solid ${isSelected ? 'var(--accent)' : 'transparent'}; background: ${isSelected ? 'var(--accent-glow)' : 'transparent'};`;
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = isSelected;
+    checkbox.style.cssText = 'margin-right: 10px; cursor: pointer; accent-color: var(--accent);';
+
+    bookmarkItem.innerHTML = `<span style="margin-right: 8px;">🔖</span><div style="flex: 1; min-width: 0; overflow: hidden;"><div style="font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-primary);">${node.title || 'Untitled'}</div><div style="font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${node.url}</div></div>`;
+    bookmarkItem.prepend(checkbox);
+
+    const toggleSelection = () => {
+      const existingIndex = selectedBookmarks.findIndex(b => b.id === node.id);
+
+      if (existingIndex >= 0) {
+        selectedBookmarks.splice(existingIndex, 1);
+        selectedIds.delete(node.id);
+        checkbox.checked = false;
+        bookmarkItem.style.border = '2px solid transparent';
+        bookmarkItem.style.background = 'transparent';
+      } else {
+        selectedBookmarks.push({ id: node.id, title: node.title, url: node.url });
+        selectedIds.add(node.id);
+        checkbox.checked = true;
+        bookmarkItem.style.border = '2px solid var(--accent)';
+        bookmarkItem.style.background = 'var(--accent-glow)';
+      }
+
+      onSelectionChange();
+    };
+
+    bookmarkItem.addEventListener('click', toggleSelection);
+    bookmarkItem.addEventListener('mouseenter', () => {
+      if (!selectedIds.has(node.id)) bookmarkItem.style.background = 'var(--hover-color)';
+    });
+    bookmarkItem.addEventListener('mouseleave', () => {
+      if (!selectedIds.has(node.id)) bookmarkItem.style.background = 'transparent';
+    });
+
+    item.appendChild(bookmarkItem);
+  }
+
+  container.appendChild(item);
 }
 
 // Listen for storage changes from other tabs/windows

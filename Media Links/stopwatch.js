@@ -26,7 +26,9 @@
     notificationEnabled: false,
     notificationMinutes: 30,
     minimizedByDefault: false,
-    includedDomains: ''
+    includedDomains: '',
+    openBookmarksOnNotification: false,
+    bookmarksByDomain: {}
   };
 
   /**
@@ -483,6 +485,7 @@
 
   /**
    * Show browser alert notification and focus the tab
+   * After user dismisses the alert, open selected bookmarks if enabled
    */
   function showToastNotification(elapsed) {
     const hostname = window.location.hostname;
@@ -490,6 +493,14 @@
 
     const showAlert = () => {
       alert(`Time Alert!\n\nYou've been on ${hostname} for ${timeStr}`);
+
+      // After alert is dismissed, open bookmarks if enabled and configured for this domain
+      if (settings.openBookmarksOnNotification) {
+        const domainBookmarks = getBookmarksForCurrentDomain();
+        if (domainBookmarks.length > 0) {
+          openSelectedBookmarks();
+        }
+      }
     };
 
     // First, request to focus this tab (brings user to this tab)
@@ -515,6 +526,66 @@
       }
     } else {
       showAlert();
+    }
+  }
+
+  /**
+   * Get bookmarks for the current domain
+   * Checks for exact match first, then partial matches
+   */
+  function getBookmarksForCurrentDomain() {
+    const currentHostname = window.location.hostname.toLowerCase();
+
+    if (!settings.bookmarksByDomain || Object.keys(settings.bookmarksByDomain).length === 0) {
+      return [];
+    }
+
+    // Check for exact match first
+    if (settings.bookmarksByDomain[currentHostname]) {
+      return settings.bookmarksByDomain[currentHostname];
+    }
+
+    // Check for partial matches (e.g., "youtube.com" matches "www.youtube.com")
+    for (const domain of Object.keys(settings.bookmarksByDomain)) {
+      if (currentHostname === domain ||
+          currentHostname.endsWith('.' + domain) ||
+          domain.endsWith('.' + currentHostname)) {
+        return settings.bookmarksByDomain[domain];
+      }
+    }
+
+    return [];
+  }
+
+  /**
+   * Open bookmarks for current domain via background script
+   */
+  function openSelectedBookmarks() {
+    if (!isExtensionContextValid()) {
+      console.warn('Extension context invalid, cannot open bookmarks');
+      return;
+    }
+
+    const bookmarks = getBookmarksForCurrentDomain();
+
+    if (!bookmarks || bookmarks.length === 0) {
+      console.log('No bookmarks configured for this domain:', window.location.hostname);
+      return;
+    }
+
+    try {
+      chrome.runtime.sendMessage({
+        type: 'openBookmarks',
+        bookmarks: bookmarks
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.warn('Error opening bookmarks:', chrome.runtime.lastError.message);
+        } else if (response && response.success) {
+          console.log(`Opened ${response.openedCount} bookmark(s) for ${window.location.hostname}`);
+        }
+      });
+    } catch (e) {
+      console.warn('Exception opening bookmarks:', e);
     }
   }
 
@@ -566,7 +637,9 @@
           'stopwatchNotificationEnabled',
           'stopwatchNotificationMinutes',
           'stopwatchMinimizedByDefault',
-          'stopwatchIncludedDomains'
+          'stopwatchIncludedDomains',
+          'stopwatchOpenBookmarksOnNotification',
+          'stopwatchBookmarksByDomain'
         ], (result) => {
           if (chrome.runtime.lastError) {
             console.warn('Error loading stopwatch settings:', chrome.runtime.lastError);
@@ -580,6 +653,8 @@
           settings.notificationMinutes = result.stopwatchNotificationMinutes || 30;
           settings.minimizedByDefault = result.stopwatchMinimizedByDefault === true;
           settings.includedDomains = result.stopwatchIncludedDomains || '';
+          settings.openBookmarksOnNotification = result.stopwatchOpenBookmarksOnNotification === true;
+          settings.bookmarksByDomain = (result.stopwatchBookmarksByDomain && typeof result.stopwatchBookmarksByDomain === 'object') ? result.stopwatchBookmarksByDomain : {};
 
           resolve();
         });
@@ -658,6 +733,13 @@
         if (changes.stopwatchIncludedDomains !== undefined) {
           settings.includedDomains = changes.stopwatchIncludedDomains.newValue || '';
           shouldRestart = true;
+        }
+        if (changes.stopwatchOpenBookmarksOnNotification !== undefined) {
+          settings.openBookmarksOnNotification = changes.stopwatchOpenBookmarksOnNotification.newValue === true;
+        }
+        if (changes.stopwatchBookmarksByDomain !== undefined) {
+          const newValue = changes.stopwatchBookmarksByDomain.newValue;
+          settings.bookmarksByDomain = (newValue && typeof newValue === 'object') ? newValue : {};
         }
 
         // Handle theme changes

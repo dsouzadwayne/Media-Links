@@ -766,10 +766,21 @@
             <input type="number" id="stopwatch-notification-minutes" class="setting-input" min="1" max="1440" value="30" style="max-width: 150px;">
           </div>
 
+          <div class="setting-item" id="open-bookmarks-container" style="opacity: 0.5; pointer-events: none;">
+            <label class="setting-label">
+              <span class="label-text">Open Bookmarks on Notification</span>
+              <span class="label-description">Automatically open selected bookmarks when you dismiss the notification</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="stopwatch-open-bookmarks">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
           <div class="setting-item">
             <label class="setting-label">
               <span class="label-text">Included Domains</span>
-              <span class="label-description">Domains where stopwatch should appear. Leave empty to show on all sites.</span>
+              <span class="label-description">Domains where stopwatch should appear. Each domain can have its own bookmarks to open on notification.</span>
             </label>
             <div class="domain-list-container">
               <div class="domain-input-row">
@@ -777,9 +788,10 @@
                 <button type="button" id="stopwatch-add-domain-btn" class="add-domain-btn" title="Add domain">+</button>
               </div>
               <div class="domain-list" id="stopwatch-domain-list">
-                <!-- List items will be added here dynamically -->
+                <!-- List items with bookmark config will be added here dynamically -->
               </div>
               <input type="hidden" id="stopwatch-included-domains">
+              <input type="hidden" id="stopwatch-bookmarks-by-domain">
             </div>
           </div>
         </div>

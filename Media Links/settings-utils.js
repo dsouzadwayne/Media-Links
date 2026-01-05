@@ -93,7 +93,9 @@ window.SettingsUtils = (() => {
     stopwatchNotificationEnabled: false,
     stopwatchNotificationMinutes: 30,
     stopwatchMinimizedByDefault: false,
-    stopwatchIncludedDomains: ''
+    stopwatchIncludedDomains: '',
+    stopwatchOpenBookmarksOnNotification: false,
+    stopwatchBookmarksByDomain: {}
   };
 
   // Validation rules
@@ -337,6 +339,14 @@ window.SettingsUtils = (() => {
     stopwatchIncludedDomains: {
       type: 'string',
       default: ''
+    },
+    stopwatchOpenBookmarksOnNotification: {
+      type: 'boolean',
+      default: false
+    },
+    stopwatchBookmarksByDomain: {
+      type: 'object',
+      default: {}
     }
   };
 
