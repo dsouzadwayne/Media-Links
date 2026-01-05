@@ -1578,6 +1578,7 @@ chrome.runtime.onInstalled.addListener(() => {
     // Handle openBookmarks request (used by stopwatch notifications)
     if (message.type === 'openBookmarks') {
       const bookmarks = message.bookmarks;
+      const currentTabId = sender.tab?.id; // Tab where stopwatch notification was shown
 
       if (!bookmarks || !Array.isArray(bookmarks) || bookmarks.length === 0) {
         sendResponse({ success: false, error: 'No bookmarks provided' });
@@ -1600,13 +1601,42 @@ chrome.runtime.onInstalled.addListener(() => {
           }
 
           try {
-            // Open bookmark in a new tab (first one active, rest in background)
-            await chrome.tabs.create({
-              url: bookmark.url,
-              active: i === 0 // First bookmark is active
-            });
-            openedCount++;
-            console.log(`Opened bookmark ${i + 1}/${bookmarks.length}: ${bookmark.title || bookmark.url}`);
+            // Check if this is a bookmarklet (javascript: URL)
+            if (bookmark.url.startsWith('javascript:')) {
+              // Execute bookmarklet in the current tab using chrome.scripting.executeScript
+              if (currentTabId) {
+                // Extract the JavaScript code from the bookmarklet URL
+                const jsCode = decodeURIComponent(bookmark.url.slice(11)); // Remove 'javascript:'
+
+                await chrome.scripting.executeScript({
+                  target: { tabId: currentTabId },
+                  func: (code) => {
+                    // Execute the bookmarklet code in the page context
+                    try {
+                      // Use Function constructor to execute in global scope
+                      const fn = new Function(code);
+                      fn();
+                    } catch (e) {
+                      console.error('Bookmarklet execution error:', e);
+                    }
+                  },
+                  args: [jsCode],
+                  world: 'MAIN' // Execute in the page's context, not extension context
+                });
+                openedCount++;
+                console.log(`Executed bookmarklet ${i + 1}/${bookmarks.length}: ${bookmark.title || 'Untitled'}`);
+              } else {
+                console.warn('Cannot execute bookmarklet: no current tab ID available');
+              }
+            } else {
+              // Regular URL - open in a new tab (first one active, rest in background)
+              await chrome.tabs.create({
+                url: bookmark.url,
+                active: i === 0 // First bookmark is active
+              });
+              openedCount++;
+              console.log(`Opened bookmark ${i + 1}/${bookmarks.length}: ${bookmark.title || bookmark.url}`);
+            }
 
             // Wait before opening the next one (if there are more)
             if (i < bookmarks.length - 1) {

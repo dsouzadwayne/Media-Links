@@ -1,10 +1,21 @@
 ================================================================================
 MEDIA LINKS EXTENSION - FUNCTION REFERENCE
-Version: 0.834
+Version: 0.841
 ================================================================================
 
 This file documents all JavaScript functions in the Media Links extension.
 Last updated: January 5, 2026
+
+RECENT BUG FIXES:
+- Fixed stopwatch settings persistence bug where included domains and bookmarks
+  would disappear after saving. The issue was a race condition in applySettingsToUI()
+  where renderDomainTags() was called BEFORE the bookmarks hidden input was populated.
+  Now bookmarksByDomain is populated before rendering the domain list.
+
+- Added bookmarklet support for stopwatch notifications. When a bookmark has a
+  javascript: URL, it now executes via chrome.scripting.executeScript() in the
+  current tab's page context (world: 'MAIN') instead of trying to open it as a
+  URL (which Chrome blocks for security).
 
 ================================================================================
 CORE EXTENSION FILES
@@ -88,6 +99,7 @@ Message Handlers:
   - openTranscriptView: Opens YouTube transcript view page
   - focusCurrentTab: Focuses current tab and window (for stopwatch notifications)
   - openBookmarks: Opens selected bookmarks sequentially in new tabs (for stopwatch notifications)
+    - Supports bookmarklets (javascript: URLs) via chrome.scripting.executeScript in page context
   - performOCR: Forwards OCR requests to offscreen document
   - themeChanged: Broadcasts theme changes
   - selectionChanged: Updates context menu based on text selection

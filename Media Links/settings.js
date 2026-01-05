@@ -231,7 +231,15 @@ function applySettingsToUI() {
   safeSetValue('stopwatch-notification-minutes', currentSettings.stopwatchNotificationMinutes || 30);
   safeSetValue('stopwatch-included-domains', currentSettings.stopwatchIncludedDomains || '');
 
-  // Render domain tags from the hidden input value
+  // Load bookmarks by domain BEFORE rendering domain list
+  // This ensures renderDomainTags() can access bookmark data
+  const bookmarksByDomain = currentSettings.stopwatchBookmarksByDomain || {};
+  const bookmarksHiddenInput = document.getElementById('stopwatch-bookmarks-by-domain');
+  if (bookmarksHiddenInput) {
+    bookmarksHiddenInput.value = JSON.stringify(bookmarksByDomain);
+  }
+
+  // Render domain tags from the hidden input value (now has bookmark data)
   renderDomainTags();
 
   // Toggle stopwatch options subsection based on enable state
@@ -243,12 +251,7 @@ function applySettingsToUI() {
   toggleBookmarkSettings(currentSettings.stopwatchNotificationEnabled === true);
   toggleBookmarkSelector(currentSettings.stopwatchOpenBookmarksOnNotification === true);
 
-  // Load bookmarks by domain (rendered as part of domain list)
-  const bookmarksByDomain = currentSettings.stopwatchBookmarksByDomain || {};
-  const bookmarksHiddenInput = document.getElementById('stopwatch-bookmarks-by-domain');
-  if (bookmarksHiddenInput) {
-    bookmarksHiddenInput.value = JSON.stringify(bookmarksByDomain);
-  }
+  // Note: bookmarksByDomain hidden input is now populated earlier (before renderDomainTags)
 
   // Set default view columns
   const defaultColumns = currentSettings.defaultViewColumns || ['name', 'role', 'roleType'];
