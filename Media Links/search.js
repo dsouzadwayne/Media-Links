@@ -574,7 +574,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       const queries = generateQueries(elements);
-      const selectedEngine = engineSelector.value;
+      const selectedEngine = engineSelector.value || 'google';
 
       queries.forEach((query, index) => {
         setTimeout(() => {

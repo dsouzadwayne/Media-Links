@@ -90,31 +90,46 @@
 
   /**
    * Check if script tag injection is available
+   * Uses CSP detection to avoid triggering console errors
    */
   function isScriptInjectionAvailable() {
     if (methodAvailability.scriptInjection !== null) {
       return methodAvailability.scriptInjection;
     }
 
-    try {
-      const testScript = document.createElement('script');
-      testScript.textContent = 'window.__monkeyTestFlag = true;';
-      document.documentElement.appendChild(testScript);
-      testScript.remove();
-
-      if (window.__monkeyTestFlag) {
-        delete window.__monkeyTestFlag;
-        methodAvailability.scriptInjection = true;
-        console.log('Monkey: Script injection available');
-        return true;
-      }
-    } catch (e) {
-      // CSP blocked it
+    // Check known strict CSP sites first (fastest check, works across all browsers)
+    const hostname = window.location.hostname;
+    const strictCspSites = ['youtube.com', 'www.youtube.com', 'music.youtube.com', 'google.com', 'www.google.com'];
+    if (strictCspSites.some(site => hostname === site || hostname.endsWith('.' + site))) {
+      methodAvailability.scriptInjection = false;
+      console.log('Monkey: Script injection blocked (strict CSP site)');
+      return false;
     }
 
-    methodAvailability.scriptInjection = false;
-    console.log('Monkey: Script injection blocked by CSP');
-    return false;
+    // Check for CSP meta tag that would block inline scripts
+    const cspMeta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+    if (cspMeta) {
+      const cspContent = cspMeta.getAttribute('content') || '';
+      // If CSP has script-src without 'unsafe-inline', inline scripts are blocked
+      if (cspContent.includes('script-src') && !cspContent.includes("'unsafe-inline'")) {
+        methodAvailability.scriptInjection = false;
+        console.log('Monkey: Script injection blocked (CSP meta detected)');
+        return false;
+      }
+    }
+
+    // Check if Trusted Types are required (indicates strict CSP)
+    if (window.trustedTypes && typeof window.trustedTypes.createPolicy === 'function') {
+      methodAvailability.scriptInjection = false;
+      console.log('Monkey: Script injection blocked (Trusted Types detected)');
+      return false;
+    }
+
+    // If no CSP indicators found, assume script injection is available
+    // We avoid the actual test to prevent CSP console errors
+    methodAvailability.scriptInjection = true;
+    console.log('Monkey: Script injection assumed available');
+    return true;
   }
 
   /**
@@ -196,22 +211,38 @@
 
   /**
    * Check if eval/Function is available
+   * Uses CSP detection to avoid triggering console errors
    */
   function isEvalAvailable() {
     if (methodAvailability.eval !== null) {
       return methodAvailability.eval;
     }
 
-    try {
-      new Function('return true')();
-      methodAvailability.eval = true;
-      console.log('Monkey: eval/Function available');
-      return true;
-    } catch (e) {
+    // Check known strict CSP sites first (fastest check, works across all browsers)
+    const hostname = window.location.hostname;
+    const strictCspSites = ['youtube.com', 'www.youtube.com', 'music.youtube.com', 'google.com', 'www.google.com'];
+    if (strictCspSites.some(site => hostname === site || hostname.endsWith('.' + site))) {
       methodAvailability.eval = false;
-      console.log('Monkey: eval/Function blocked by CSP');
+      console.log('Monkey: eval blocked (strict CSP site)');
       return false;
     }
+
+    // Check for CSP meta tag that would block eval
+    const cspMeta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
+    if (cspMeta) {
+      const cspContent = cspMeta.getAttribute('content') || '';
+      // If CSP has script-src without 'unsafe-eval', eval is blocked
+      if (cspContent.includes('script-src') && !cspContent.includes("'unsafe-eval'")) {
+        methodAvailability.eval = false;
+        console.log('Monkey: eval blocked (CSP meta detected)');
+        return false;
+      }
+    }
+
+    // Assume eval is available if no CSP indicators found
+    methodAvailability.eval = true;
+    console.log('Monkey: eval assumed available');
+    return true;
   }
 
   /**
@@ -607,16 +638,31 @@
 
     console.log(`Monkey: Executing "${title}"`);
 
+    // Check which methods are available to avoid triggering CSP errors
+    const scriptInjectionAvailable = isScriptInjectionAvailable();
+    const evalAvailable = isEvalAvailable();
+
+    // On strict CSP sites, most client-side methods are blocked:
+    // - blobUrl: blob: URLs not in script-src
+    // - trustedTypes: uses eval internally
+    // - iframe: inherits CSP from parent with allow-same-origin
+    const blobUrlAvailable = scriptInjectionAvailable;
+    const trustedTypesAvailable = isTrustedTypesAvailable() && evalAvailable;
+    const iframeAvailable = scriptInjectionAvailable; // iframe with allow-same-origin inherits parent CSP
+
     // Define execution order
     let methods = [
-      { name: 'scriptTag', fn: () => executeViaScriptTag(code, options), async: false },
-      { name: 'blobUrl', fn: () => executeViaBlobUrl(code, options), async: true },
-      { name: 'trustedTypes', fn: () => executeViaTrustedTypes(code, options), async: false },
-      { name: 'eval', fn: () => executeViaEval(code, options), async: false },
-      { name: 'shadowDom', fn: () => executeViaShadowDom(code, options), async: false },
-      { name: 'iframe', fn: () => executeViaIframe(code, options), async: true },
-      { name: 'background', fn: () => executeViaBackground(code, title), async: true }
+      { name: 'scriptTag', fn: () => executeViaScriptTag(code, options), async: false, available: scriptInjectionAvailable },
+      { name: 'blobUrl', fn: () => executeViaBlobUrl(code, options), async: true, available: blobUrlAvailable },
+      { name: 'trustedTypes', fn: () => executeViaTrustedTypes(code, options), async: false, available: trustedTypesAvailable },
+      { name: 'eval', fn: () => executeViaEval(code, options), async: false, available: evalAvailable },
+      { name: 'shadowDom', fn: () => executeViaShadowDom(code, options), async: false, available: scriptInjectionAvailable },
+      { name: 'iframe', fn: () => executeViaIframe(code, options), async: true, available: iframeAvailable },
+      { name: 'background', fn: () => executeViaBackground(code, title), async: true, available: isExtensionContextValid() }
     ];
+
+    // Filter out unavailable methods to prevent CSP errors
+    methods = methods.filter(m => m.available !== false);
 
     // Move preferred method to front
     if (options.preferredMethod) {

@@ -90,12 +90,16 @@ window.SettingsUtils = (() => {
     // Stopwatch Settings
     stopwatchEnabled: false,
     stopwatchPosition: 'bottom-right',
+    stopwatchCustomPosition: null, // { x, y } pixel coordinates from dragging
     stopwatchNotificationEnabled: false,
     stopwatchNotificationMinutes: 30,
     stopwatchMinimizedByDefault: false,
     stopwatchIncludedDomains: '',
     stopwatchOpenBookmarksOnNotification: false,
-    stopwatchBookmarksByDomain: {}
+    stopwatchBookmarksByDomain: {},
+    // Per-domain notification times in seconds (e.g., 671 = 11:11)
+    // Format: { "youtube.com": 671, "twitter.com": 300 }
+    stopwatchNotificationTimeByDomain: {}
   };
 
   // Validation rules
@@ -322,6 +326,11 @@ window.SettingsUtils = (() => {
       enum: ['top-left', 'top-right', 'bottom-left', 'bottom-right'],
       default: 'bottom-right'
     },
+    stopwatchCustomPosition: {
+      type: 'object',
+      nullable: true,
+      default: null
+    },
     stopwatchNotificationEnabled: {
       type: 'boolean',
       default: false
@@ -345,6 +354,10 @@ window.SettingsUtils = (() => {
       default: false
     },
     stopwatchBookmarksByDomain: {
+      type: 'object',
+      default: {}
+    },
+    stopwatchNotificationTimeByDomain: {
       type: 'object',
       default: {}
     }

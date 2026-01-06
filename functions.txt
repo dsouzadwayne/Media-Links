@@ -1,12 +1,89 @@
 ================================================================================
 MEDIA LINKS EXTENSION - FUNCTION REFERENCE
-Version: 0.847
+Version: 0.850
 ================================================================================
 
 This file documents all JavaScript functions in the Media Links extension.
-Last updated: January 5, 2026
+Last updated: January 6, 2026
 
 RECENT CHANGES:
+- Search feature bug fix: selectedEngine now defaults to 'google' if empty (line 577)
+- Note: Pattern Settings UI already exists in settings.html (Query Patterns section)
+  - Uses same storage key 'profileSettings' as search.js
+  - Access via ⚙️ button in search page header
+
+- Fixed CSP console errors in monkey.js on YouTube and other strict CSP sites:
+  - isScriptInjectionAvailable() now checks known strict CSP sites FIRST before
+    any other detection methods (works across all browsers including Brave)
+  - isEvalAvailable() also checks strict CSP sites first
+  - execute() now pre-checks method availability before attempting execution,
+    filtering out methods that would trigger CSP errors
+  - Added 'available' property to method definitions in execute()
+  - Methods with available=false are filtered out before trying them
+  - This prevents CSP violation errors from appearing in browser console
+  - Strict CSP sites list: youtube.com, www.youtube.com, music.youtube.com,
+    google.com, www.google.com
+  - Additional bug fixes found during review:
+    - blobUrl method now marked unavailable on strict CSP (blob: not in script-src)
+    - trustedTypes method requires evalAvailable (uses eval internally)
+    - iframe method marked unavailable on strict CSP (inherits parent CSP with
+      allow-same-origin sandbox attribute)
+    - On strict CSP sites, only 'background' method is used (chrome.scripting API)
+
+PREVIOUS CHANGES:
+- Added per-domain notification time support for stopwatch. Each domain can now have
+  its own notification time instead of a single global time for all domains.
+  - New setting: stopwatchNotificationTimeByDomain (object mapping domains to seconds)
+  - Time format supports MM:SS (e.g., "11:11" = 11 minutes 11 seconds = 671 seconds)
+  - Falls back to global stopwatchNotificationMinutes if no per-domain time is set
+  - Domain matching supports wildcards: *.domain.com, domain.*, *keyword*
+
+- Updated settings.js with new helper functions:
+  - parseNotificationTimeByDomain(): Parses JSON object of domain notification times
+  - formatSecondsToMMSS(): Formats seconds to MM:SS display (e.g., 671 -> "11:11")
+  - parseMMSSToSeconds(): Parses MM:SS string to seconds (e.g., "11:11" -> 671)
+
+- Updated stopwatch.js with new function:
+  - getNotificationTimeForCurrentDomain(): Returns notification time in seconds
+    for the current domain, with wildcard pattern matching support
+
+BUG FIXES (January 6, 2026):
+- Fixed domain matching logic in getNotificationTimeForCurrentDomain() and
+  getBookmarksForCurrentDomain() - removed incorrect third condition that would
+  match when pattern was a subdomain of current hostname (backwards logic)
+- Fixed formatSecondsToMMSS() to properly handle 0 seconds (was returning empty
+  string due to falsy check on 0)
+- Fixed save handler in domain config modal - entering "0" or "0:00" now properly
+  clears the custom time (uses default) instead of showing confusing error message
+
+UI IMPROVEMENTS (January 6, 2026):
+- Added bookmark search in domain configuration modal - search by title or URL
+  - Search input filters bookmark tree in real-time
+  - Shows matching bookmarks and their parent folders
+  - Data attributes added to bookmark items for filtering (data-bookmark-title,
+    data-bookmark-url, data-folder, data-folder-children)
+- Improved responsive design for settings page:
+  - Added @media query for extra small screens (< 480px)
+  - Better spacing and sizing for mobile devices
+  - Modal now takes 95% width with proper margins
+  - Improved touch targets for buttons
+  - Domain input row stacks vertically on small screens
+  - Consistent padding across all modal sections
+- Stopwatch is now draggable with edge snapping:
+  - Drag the stopwatch anywhere on screen with mouse
+  - Automatically snaps to screen edges (20px threshold)
+  - Position is saved to storage and persists across page loads
+  - New setting: stopwatchCustomPosition (object with x, y coordinates)
+  - "Reset to Default" button in settings to restore bottom-right position
+  - Replaced position dropdown with drag instructions
+  - New functions in stopwatch.js:
+    - snapToEdge(): Snaps position to nearest screen edge
+    - constrainToViewport(): Keeps stopwatch within screen bounds
+    - saveCustomPosition(): Persists position to chrome.storage
+    - handleDragStart/Move/End(): Mouse drag event handlers
+    - setupDragHandlers(): Initializes drag functionality
+
+PREVIOUS CHANGES:
 - Created monkey.js - Dedicated script injection engine inspired by Tampermonkey
   and Violentmonkey. Provides 7 execution methods to bypass CSP and Trusted Types:
   1. Script tag injection (MAIN world)
@@ -435,6 +512,13 @@ isDomainIncluded()
   - Checks if current domain is in allowed list (supports wildcards)
   - Includes type validation for robustness
 
+getNotificationTimeForCurrentDomain()
+  - Returns notification time in seconds for the current domain
+  - Checks exact match first, then partial matches, then wildcards
+  - Supports wildcard patterns: *.domain.com, domain.*, *keyword*
+  - Falls back to global stopwatchNotificationMinutes * 60 if no per-domain time set
+  - Returns: number (time in seconds)
+
 getBookmarksForCurrentDomain()
   - Looks up bookmarks configured for the current website domain
   - Supports wildcard patterns: *.domain.com, domain.*, *keyword*
@@ -601,16 +685,32 @@ toggleBookmarkSelector(enabled)
 parseBookmarksByDomain(value)
   - Parses JSON object mapping domains to bookmark arrays from hidden input
 
-createDomainListItem(domain, bookmarks)
+parseNotificationTimeByDomain(value)
+  - Parses JSON object mapping domains to notification times (in seconds)
+  - Returns empty object if invalid or empty
+
+formatSecondsToMMSS(totalSeconds)
+  - Formats seconds to MM:SS display format
+  - Example: 671 -> "11:11", 300 -> "5:00"
+  - Returns empty string if invalid
+
+parseMMSSToSeconds(timeStr)
+  - Parses MM:SS format or plain minutes to seconds
+  - Example: "11:11" -> 671, "5:00" -> 300, "30" -> 1800
+  - Returns null if invalid format
+
+createDomainListItem(domain, bookmarks, notificationTimeSeconds)
   - Creates a domain list item with bookmark configuration button
-  - Shows bookmark count and titles if configured
+  - Shows notification time (if set) and bookmark count
+  - Displays time in MM:SS format (e.g., ⏰ 11:11)
 
-openEditSiteModal(domain, bookmarks)
-  - Opens modal to configure bookmarks for a domain
+openEditSiteModal(domain, bookmarks, notificationTimeSeconds)
+  - Opens modal to configure bookmarks and notification time for a domain
 
-openSiteBookmarkModal(domain, existingBookmarks)
-  - Modal for configuring bookmarks for a specific domain
-  - Shows bookmark tree browser and selected bookmarks preview
+openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTime)
+  - Modal for configuring bookmarks and notification time for a specific domain
+  - Shows notification time input (MM:SS format), bookmark tree browser, and selected bookmarks preview
+  - Notification time is stored in seconds
 
 renderBookmarkNodeForSite(container, node, selectedIds, selectedBookmarks, depth, onSelectionChange)
   - Recursively renders bookmark folders and items in site configuration modal
@@ -1105,6 +1205,10 @@ DEFAULT_SETTINGS (settings-utils.js)
   - All default extension settings (50+ settings)
   - Includes stopwatchOpenBookmarksOnNotification (boolean, default: false)
   - Includes stopwatchBookmarksByDomain (object mapping domains to bookmark arrays)
+  - Includes stopwatchNotificationTimeByDomain (object mapping domains to time in seconds)
+    - Per-domain notification times, format: { "youtube.com": 671, "twitter.com": 300 }
+    - Time is stored in seconds (e.g., 671 = 11 minutes 11 seconds)
+    - Falls back to stopwatchNotificationMinutes * 60 if not set for domain
 
 VALIDATION_RULES (settings-utils.js)
   - Type and constraint validation for all settings

@@ -20,16 +20,24 @@
   let isMinimized = false;
   let notificationSent = false;
   let listenersAttached = false;
+  let isDragging = false;
+  let dragOffset = { x: 0, y: 0 };
   let settings = {
     enabled: false,
     position: 'bottom-right',
+    customPosition: null, // { x, y } pixel coordinates, null means use default position
     notificationEnabled: false,
     notificationMinutes: 30,
     minimizedByDefault: false,
     includedDomains: '',
     openBookmarksOnNotification: false,
-    bookmarksByDomain: {}
+    bookmarksByDomain: {},
+    notificationTimeByDomain: {} // Per-domain notification times in seconds
   };
+
+  // Edge snapping threshold in pixels
+  const SNAP_THRESHOLD = 20;
+  const EDGE_MARGIN = 15;
 
   /**
    * Check if extension context is valid
@@ -104,9 +112,20 @@
   }
 
   /**
-   * Get position styles based on setting
+   * Get position styles based on setting or custom position
    */
   function getPositionStyles() {
+    // If we have a custom position from dragging, use that
+    if (settings.customPosition && typeof settings.customPosition.x === 'number') {
+      return {
+        top: `${settings.customPosition.y}px`,
+        left: `${settings.customPosition.x}px`,
+        bottom: 'auto',
+        right: 'auto'
+      };
+    }
+
+    // Otherwise use the preset positions
     const positions = {
       'top-left': { top: '20px', left: '20px', bottom: 'auto', right: 'auto' },
       'top-right': { top: '20px', right: '20px', bottom: 'auto', left: 'auto' },
@@ -114,6 +133,158 @@
       'bottom-right': { bottom: '20px', right: '20px', top: 'auto', left: 'auto' }
     };
     return positions[settings.position] || positions['bottom-right'];
+  }
+
+  /**
+   * Snap position to nearest edge if within threshold
+   */
+  function snapToEdge(x, y, elementWidth, elementHeight) {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let snappedX = x;
+    let snappedY = y;
+
+    // Snap to left edge
+    if (x < SNAP_THRESHOLD) {
+      snappedX = EDGE_MARGIN;
+    }
+    // Snap to right edge
+    else if (x + elementWidth > viewportWidth - SNAP_THRESHOLD) {
+      snappedX = viewportWidth - elementWidth - EDGE_MARGIN;
+    }
+
+    // Snap to top edge
+    if (y < SNAP_THRESHOLD) {
+      snappedY = EDGE_MARGIN;
+    }
+    // Snap to bottom edge
+    else if (y + elementHeight > viewportHeight - SNAP_THRESHOLD) {
+      snappedY = viewportHeight - elementHeight - EDGE_MARGIN;
+    }
+
+    return { x: snappedX, y: snappedY };
+  }
+
+  /**
+   * Constrain position within viewport
+   */
+  function constrainToViewport(x, y, elementWidth, elementHeight) {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    return {
+      x: Math.max(EDGE_MARGIN, Math.min(x, viewportWidth - elementWidth - EDGE_MARGIN)),
+      y: Math.max(EDGE_MARGIN, Math.min(y, viewportHeight - elementHeight - EDGE_MARGIN))
+    };
+  }
+
+  /**
+   * Save custom position to storage
+   */
+  function saveCustomPosition(position) {
+    if (!isExtensionContextValid()) return;
+
+    settings.customPosition = position;
+
+    try {
+      chrome.storage.sync.set({ stopwatchCustomPosition: position }, () => {
+        if (chrome.runtime.lastError) {
+          console.warn('Error saving stopwatch position:', chrome.runtime.lastError);
+        }
+      });
+    } catch (e) {
+      console.warn('Error saving stopwatch position:', e);
+    }
+  }
+
+  /**
+   * Handle drag start
+   */
+  function handleDragStart(e) {
+    if (!stopwatchElement) return;
+
+    // Don't start drag if clicking on minimize button
+    if (e.target.id === 'stopwatch-minimize') return;
+
+    isDragging = true;
+    stopwatchElement.style.transition = 'none'; // Disable transition during drag
+    stopwatchElement.style.cursor = 'grabbing';
+
+    const rect = stopwatchElement.getBoundingClientRect();
+    dragOffset.x = e.clientX - rect.left;
+    dragOffset.y = e.clientY - rect.top;
+
+    // Add move and end listeners to document
+    document.addEventListener('mousemove', handleDragMove);
+    document.addEventListener('mouseup', handleDragEnd);
+
+    e.preventDefault();
+  }
+
+  /**
+   * Handle drag move
+   */
+  function handleDragMove(e) {
+    if (!isDragging || !stopwatchElement) return;
+
+    const newX = e.clientX - dragOffset.x;
+    const newY = e.clientY - dragOffset.y;
+
+    // Apply position directly during drag
+    stopwatchElement.style.left = `${newX}px`;
+    stopwatchElement.style.top = `${newY}px`;
+    stopwatchElement.style.right = 'auto';
+    stopwatchElement.style.bottom = 'auto';
+
+    e.preventDefault();
+  }
+
+  /**
+   * Handle drag end
+   */
+  function handleDragEnd(e) {
+    if (!isDragging || !stopwatchElement) return;
+
+    isDragging = false;
+    stopwatchElement.style.transition = 'all 0.3s ease'; // Re-enable transition
+    stopwatchElement.style.cursor = isMinimized ? 'pointer' : 'grab';
+
+    // Get current position
+    const rect = stopwatchElement.getBoundingClientRect();
+    let finalX = rect.left;
+    let finalY = rect.top;
+
+    // Constrain to viewport
+    const constrained = constrainToViewport(finalX, finalY, rect.width, rect.height);
+    finalX = constrained.x;
+    finalY = constrained.y;
+
+    // Snap to edges
+    const snapped = snapToEdge(finalX, finalY, rect.width, rect.height);
+
+    // Apply snapped position with animation
+    stopwatchElement.style.left = `${snapped.x}px`;
+    stopwatchElement.style.top = `${snapped.y}px`;
+
+    // Save position
+    saveCustomPosition(snapped);
+
+    // Remove listeners
+    document.removeEventListener('mousemove', handleDragMove);
+    document.removeEventListener('mouseup', handleDragEnd);
+
+    e.preventDefault();
+  }
+
+  /**
+   * Setup drag handlers on the stopwatch element
+   */
+  function setupDragHandlers() {
+    if (!stopwatchElement) return;
+
+    stopwatchElement.addEventListener('mousedown', handleDragStart);
+    stopwatchElement.style.cursor = isMinimized ? 'pointer' : 'grab';
   }
 
   // Theme color definitions (matching theme-manager.js)
@@ -273,6 +444,9 @@
     updateStopwatchUI();
     document.body.appendChild(stopwatchElement);
 
+    // Setup drag handlers for moving the stopwatch
+    setupDragHandlers();
+
     // Only attach listeners once to prevent duplicates
     if (!listenersAttached) {
       listenersAttached = true;
@@ -339,7 +513,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        cursor: pointer;
+        cursor: grab;
         opacity: 0.9;
         border: 2px solid ${colors.border};
       `;
@@ -367,7 +541,7 @@
         border-radius: 12px;
         padding: 12px 16px;
         min-width: 120px;
-        cursor: default;
+        cursor: grab;
         opacity: 1;
       `;
 
@@ -475,8 +649,9 @@
 
     // Check for notification
     if (settings.notificationEnabled && !notificationSent) {
-      const elapsedMinutes = elapsed / (1000 * 60);
-      if (elapsedMinutes >= settings.notificationMinutes) {
+      const notificationTimeSeconds = getNotificationTimeForCurrentDomain();
+      const elapsedSeconds = elapsed / 1000;
+      if (elapsedSeconds >= notificationTimeSeconds) {
         showToastNotification(elapsed);
         notificationSent = true;
       }
@@ -554,6 +729,66 @@
   }
 
   /**
+   * Get notification time in seconds for the current domain
+   * Checks for exact match first, then partial matches, then wildcards
+   * Falls back to default (notificationMinutes * 60) if no per-domain time set
+   * @returns {number} Time in seconds
+   */
+  function getNotificationTimeForCurrentDomain() {
+    const currentHostname = window.location.hostname.toLowerCase();
+    const currentUrl = window.location.href.toLowerCase();
+
+    if (!settings.notificationTimeByDomain || Object.keys(settings.notificationTimeByDomain).length === 0) {
+      // No per-domain times set, use default (convert minutes to seconds)
+      return settings.notificationMinutes * 60;
+    }
+
+    // Check for exact match first
+    if (settings.notificationTimeByDomain[currentHostname] !== undefined) {
+      return settings.notificationTimeByDomain[currentHostname];
+    }
+
+    // Check for partial matches and wildcard patterns
+    for (const domain of Object.keys(settings.notificationTimeByDomain)) {
+      if (domain === '*') continue; // Handle global wildcard separately
+
+      // Check if pattern contains path - if so, match against full URL
+      const isUrlPattern = domain.includes('/') && !domain.startsWith('*://');
+      const matchTarget = isUrlPattern ? currentUrl : currentHostname;
+
+      let matches = false;
+
+      // Handle wildcard patterns (same logic as isDomainIncluded)
+      if (domain.startsWith('*') && domain.endsWith('*') && domain.length > 2) {
+        const pattern = domain.slice(1, -1);
+        matches = matchTarget.includes(pattern);
+      } else if (domain.startsWith('*')) {
+        const pattern = domain.slice(1);
+        matches = matchTarget.endsWith(pattern);
+      } else if (domain.endsWith('*')) {
+        const pattern = domain.slice(0, -1);
+        matches = matchTarget.startsWith(pattern);
+      } else {
+        // Exact match or current hostname is a subdomain of the pattern
+        matches = currentHostname === domain ||
+                  currentHostname.endsWith('.' + domain);
+      }
+
+      if (matches) {
+        return settings.notificationTimeByDomain[domain];
+      }
+    }
+
+    // Check for global wildcard (*)
+    if (settings.notificationTimeByDomain['*'] !== undefined) {
+      return settings.notificationTimeByDomain['*'];
+    }
+
+    // Fall back to default (convert minutes to seconds)
+    return settings.notificationMinutes * 60;
+  }
+
+  /**
    * Get bookmarks for the current domain
    * Checks for exact match first, then partial matches, then wildcards/URL patterns
    * Supports same wildcard patterns as isDomainIncluded(): *.domain.com, domain.*, *keyword*
@@ -599,10 +834,9 @@
           const pattern = domain.slice(0, -1); // Remove the *
           matches = matchTarget.startsWith(pattern);
         } else {
-          // Handle both exact match and subdomain match
+          // Exact match or current hostname is a subdomain of the pattern
           matches = currentHostname === domain ||
-                    currentHostname.endsWith('.' + domain) ||
-                    domain.endsWith('.' + currentHostname);
+                    currentHostname.endsWith('.' + domain);
         }
 
         if (matches) {
@@ -748,12 +982,14 @@
         chrome.storage.sync.get([
           'stopwatchEnabled',
           'stopwatchPosition',
+          'stopwatchCustomPosition',
           'stopwatchNotificationEnabled',
           'stopwatchNotificationMinutes',
           'stopwatchMinimizedByDefault',
           'stopwatchIncludedDomains',
           'stopwatchOpenBookmarksOnNotification',
-          'stopwatchBookmarksByDomain'
+          'stopwatchBookmarksByDomain',
+          'stopwatchNotificationTimeByDomain'
         ], (result) => {
           if (chrome.runtime.lastError) {
             console.warn('Error loading stopwatch settings:', chrome.runtime.lastError);
@@ -763,12 +999,14 @@
 
           settings.enabled = result.stopwatchEnabled === true;
           settings.position = result.stopwatchPosition || 'bottom-right';
+          settings.customPosition = (result.stopwatchCustomPosition && typeof result.stopwatchCustomPosition === 'object') ? result.stopwatchCustomPosition : null;
           settings.notificationEnabled = result.stopwatchNotificationEnabled === true;
           settings.notificationMinutes = result.stopwatchNotificationMinutes || 30;
           settings.minimizedByDefault = result.stopwatchMinimizedByDefault === true;
           settings.includedDomains = result.stopwatchIncludedDomains || '';
           settings.openBookmarksOnNotification = result.stopwatchOpenBookmarksOnNotification === true;
           settings.bookmarksByDomain = (result.stopwatchBookmarksByDomain && typeof result.stopwatchBookmarksByDomain === 'object') ? result.stopwatchBookmarksByDomain : {};
+          settings.notificationTimeByDomain = (result.stopwatchNotificationTimeByDomain && typeof result.stopwatchNotificationTimeByDomain === 'object') ? result.stopwatchNotificationTimeByDomain : {};
 
           resolve();
         });
@@ -822,6 +1060,15 @@
         }
         if (changes.stopwatchPosition !== undefined) {
           settings.position = changes.stopwatchPosition.newValue || 'bottom-right';
+          // When position preset changes, clear custom position
+          settings.customPosition = null;
+          if (stopwatchElement) {
+            updateStopwatchUI();
+          }
+        }
+        if (changes.stopwatchCustomPosition !== undefined) {
+          const newPos = changes.stopwatchCustomPosition.newValue;
+          settings.customPosition = (newPos && typeof newPos === 'object') ? newPos : null;
           if (stopwatchElement) {
             updateStopwatchUI();
           }
@@ -835,8 +1082,22 @@
           // This allows a new notification if user increases the time limit
           if (notificationSent && startTime) {
             const elapsed = Date.now() - startTime;
-            const elapsedMinutes = elapsed / (1000 * 60);
-            if (elapsedMinutes < settings.notificationMinutes) {
+            const notificationTimeSeconds = getNotificationTimeForCurrentDomain();
+            const elapsedSeconds = elapsed / 1000;
+            if (elapsedSeconds < notificationTimeSeconds) {
+              notificationSent = false;
+            }
+          }
+        }
+        if (changes.stopwatchNotificationTimeByDomain !== undefined) {
+          const newValue = changes.stopwatchNotificationTimeByDomain.newValue;
+          settings.notificationTimeByDomain = (newValue && typeof newValue === 'object') ? newValue : {};
+          // Reset notification flag if per-domain time was extended
+          if (notificationSent && startTime) {
+            const elapsed = Date.now() - startTime;
+            const notificationTimeSeconds = getNotificationTimeForCurrentDomain();
+            const elapsedSeconds = elapsed / 1000;
+            if (elapsedSeconds < notificationTimeSeconds) {
               notificationSent = false;
             }
           }

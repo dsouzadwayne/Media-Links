@@ -239,6 +239,13 @@ function applySettingsToUI() {
     bookmarksHiddenInput.value = JSON.stringify(bookmarksByDomain);
   }
 
+  // Load notification times by domain
+  const notificationTimeByDomain = currentSettings.stopwatchNotificationTimeByDomain || {};
+  const notificationTimeHiddenInput = document.getElementById('stopwatch-notification-time-by-domain');
+  if (notificationTimeHiddenInput) {
+    notificationTimeHiddenInput.value = JSON.stringify(notificationTimeByDomain);
+  }
+
   // Render domain tags from the hidden input value (now has bookmark data)
   renderDomainTags();
 
@@ -340,6 +347,17 @@ function attachEventListeners() {
     markUnsaved();
   });
 
+  // Stopwatch reset position button
+  safeAddListener('stopwatch-reset-position', 'click', () => {
+    // Clear the custom position from storage
+    chrome.storage.sync.set({ stopwatchCustomPosition: null }, () => {
+      if (chrome.runtime.lastError) {
+        console.warn('Error resetting stopwatch position:', chrome.runtime.lastError);
+      } else {
+        showStatus('Stopwatch position reset to default (bottom-right)', 'success');
+      }
+    });
+  });
 
   // Use event delegation for all input changes (single listener instead of many)
   // This prevents duplicate listeners from stacking when the page is reopened
@@ -614,7 +632,8 @@ function saveSettings() {
     stopwatchNotificationMinutes: validateNumericInput(getSafeValue('stopwatch-notification-minutes'), 1, 1440, 30),
     stopwatchIncludedDomains: getSafeValue('stopwatch-included-domains'),
     stopwatchOpenBookmarksOnNotification: getSafeValue('stopwatch-open-bookmarks', 'checked'),
-    stopwatchBookmarksByDomain: parseBookmarksByDomain(getSafeValue('stopwatch-bookmarks-by-domain'))
+    stopwatchBookmarksByDomain: parseBookmarksByDomain(getSafeValue('stopwatch-bookmarks-by-domain')),
+    stopwatchNotificationTimeByDomain: parseNotificationTimeByDomain(getSafeValue('stopwatch-notification-time-by-domain'))
   };
 
   // Save to storage using SettingsUtils with validation
@@ -753,6 +772,7 @@ function renderDomainList() {
   const listContainer = document.getElementById('stopwatch-domain-list');
   const hiddenInput = document.getElementById('stopwatch-included-domains');
   const bookmarksInput = document.getElementById('stopwatch-bookmarks-by-domain');
+  const notificationTimeInput = document.getElementById('stopwatch-notification-time-by-domain');
 
   if (!listContainer || !hiddenInput) return;
 
@@ -766,6 +786,9 @@ function renderDomainList() {
   // Get bookmarks by domain
   const bookmarksByDomain = parseBookmarksByDomain(bookmarksInput ? bookmarksInput.value : '');
 
+  // Get notification times by domain
+  const notificationTimeByDomain = parseNotificationTimeByDomain(notificationTimeInput ? notificationTimeInput.value : '');
+
   if (domains.length === 0) {
     const emptyMsg = document.createElement('div');
     emptyMsg.style.cssText = 'color: var(--text-secondary); font-size: 12px; padding: 8px 0;';
@@ -777,12 +800,13 @@ function renderDomainList() {
   // Create list items for each domain
   domains.forEach(domain => {
     const bookmarks = bookmarksByDomain[domain] || [];
-    const item = createDomainListItem(domain, bookmarks);
+    const notificationTime = notificationTimeByDomain[domain]; // in seconds, may be undefined
+    const item = createDomainListItem(domain, bookmarks, notificationTime);
     listContainer.appendChild(item);
   });
 }
 
-function createDomainListItem(domain, bookmarks) {
+function createDomainListItem(domain, bookmarks, notificationTimeSeconds) {
   const item = document.createElement('div');
   item.className = 'domain-list-item';
   item.style.cssText = 'display: flex; flex-direction: column; padding: 12px; margin: 6px 0; background: var(--surface-bg); border-radius: 8px; gap: 8px;';
@@ -803,8 +827,8 @@ function createDomainListItem(domain, bookmarks) {
   configBtn.type = 'button';
   configBtn.className = 'secondary-button';
   configBtn.style.cssText = 'padding: 4px 10px; font-size: 12px;';
-  configBtn.textContent = bookmarks.length > 0 ? 'Edit Bookmarks' : 'Add Bookmarks';
-  configBtn.addEventListener('click', () => openEditSiteModal(domain, bookmarks));
+  configBtn.textContent = 'Configure';
+  configBtn.addEventListener('click', () => openEditSiteModal(domain, bookmarks, notificationTimeSeconds));
 
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';
@@ -824,14 +848,30 @@ function createDomainListItem(domain, bookmarks) {
 
   item.appendChild(topRow);
 
-  // Bottom row: bookmark info (only if bookmarks configured)
+  // Info row: notification time and bookmarks
+  const infoRow = document.createElement('div');
+  infoRow.style.cssText = 'font-size: 12px; color: var(--text-secondary); padding-left: 4px; display: flex; flex-wrap: wrap; gap: 12px;';
+
+  // Notification time info
+  if (notificationTimeSeconds && notificationTimeSeconds > 0) {
+    const timeInfo = document.createElement('span');
+    timeInfo.textContent = `⏰ ${formatSecondsToMMSS(notificationTimeSeconds)}`;
+    timeInfo.title = 'Notification time (MM:SS)';
+    infoRow.appendChild(timeInfo);
+  }
+
+  // Bookmark info
   if (bookmarks.length > 0) {
-    const bookmarkInfo = document.createElement('div');
-    bookmarkInfo.style.cssText = 'font-size: 12px; color: var(--text-secondary); padding-left: 4px;';
+    const bookmarkInfo = document.createElement('span');
     const bookmarkNames = bookmarks.map(b => b.title || 'Untitled').join(', ');
-    bookmarkInfo.textContent = `📚 ${bookmarks.length} bookmark${bookmarks.length !== 1 ? 's' : ''}: ${bookmarkNames}`;
-    bookmarkInfo.style.cssText += ' white-space: nowrap; overflow: hidden; text-overflow: ellipsis;';
-    item.appendChild(bookmarkInfo);
+    bookmarkInfo.textContent = `📚 ${bookmarks.length} bookmark${bookmarks.length !== 1 ? 's' : ''}`;
+    bookmarkInfo.title = bookmarkNames;
+    bookmarkInfo.style.cssText = 'cursor: help;';
+    infoRow.appendChild(bookmarkInfo);
+  }
+
+  if (infoRow.children.length > 0) {
+    item.appendChild(infoRow);
   }
 
   return item;
@@ -903,6 +943,7 @@ function addDomain(domain) {
 function removeDomain(domain) {
   const hiddenInput = document.getElementById('stopwatch-included-domains');
   const bookmarksInput = document.getElementById('stopwatch-bookmarks-by-domain');
+  const notificationTimeInput = document.getElementById('stopwatch-notification-time-by-domain');
   if (!hiddenInput) return;
 
   // Get current domains
@@ -922,6 +963,13 @@ function removeDomain(domain) {
     let bookmarksByDomain = parseBookmarksByDomain(bookmarksInput.value);
     delete bookmarksByDomain[domain];
     bookmarksInput.value = JSON.stringify(bookmarksByDomain);
+  }
+
+  // Also remove notification time for this domain
+  if (notificationTimeInput) {
+    let notificationTimeByDomain = parseNotificationTimeByDomain(notificationTimeInput.value);
+    delete notificationTimeByDomain[domain];
+    notificationTimeInput.value = JSON.stringify(notificationTimeByDomain);
   }
 
   // Re-render tags
@@ -1178,18 +1226,79 @@ function parseBookmarksByDomain(value) {
 }
 
 /**
- * Open modal to edit bookmarks for a domain (called from domain list)
+ * Parse notification time by domain from hidden input
+ * Values are stored in seconds
  */
-function openEditSiteModal(domain, bookmarks) {
-  openSiteBookmarkModal(domain, bookmarks);
+function parseNotificationTimeByDomain(value) {
+  if (!value || value === '') return {};
+  try {
+    const parsed = JSON.parse(value);
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    console.warn('Failed to parse notification time by domain:', e);
+    return {};
+  }
+}
+
+/**
+ * Format seconds to MM:SS display
+ * @param {number} totalSeconds - Time in seconds
+ * @returns {string} Formatted time like "11:11" or "5:00"
+ */
+function formatSecondsToMMSS(totalSeconds) {
+  if (totalSeconds === null || totalSeconds === undefined || typeof totalSeconds !== 'number' || totalSeconds < 0) {
+    return '';
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+/**
+ * Parse MM:SS format to seconds
+ * @param {string} timeStr - Time string like "11:11" or "5:00" or just "30" (minutes only)
+ * @returns {number|null} Time in seconds, or null if invalid
+ */
+function parseMMSSToSeconds(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string') return null;
+
+  const trimmed = timeStr.trim();
+  if (!trimmed) return null;
+
+  // Check if it contains a colon (MM:SS format)
+  if (trimmed.includes(':')) {
+    const parts = trimmed.split(':');
+    if (parts.length !== 2) return null;
+
+    const minutes = parseInt(parts[0], 10);
+    const seconds = parseInt(parts[1], 10);
+
+    if (isNaN(minutes) || isNaN(seconds)) return null;
+    if (minutes < 0 || seconds < 0 || seconds >= 60) return null;
+
+    return (minutes * 60) + seconds;
+  } else {
+    // Just a number - treat as minutes for backwards compatibility
+    const minutes = parseInt(trimmed, 10);
+    if (isNaN(minutes) || minutes < 0) return null;
+    return minutes * 60;
+  }
+}
+
+/**
+ * Open modal to edit bookmarks and notification time for a domain (called from domain list)
+ */
+function openEditSiteModal(domain, bookmarks, notificationTimeSeconds) {
+  openSiteBookmarkModal(domain, bookmarks, notificationTimeSeconds);
 }
 
 /**
  * Open the site bookmark configuration modal
  * @param {string} domain - Domain to configure bookmarks for
  * @param {Array} existingBookmarks - Current bookmarks for this domain
+ * @param {number} existingNotificationTime - Current notification time in seconds for this domain
  */
-function openSiteBookmarkModal(domain, existingBookmarks) {
+function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTime) {
   const existingModal = document.getElementById('bookmark-selector-modal');
   if (existingModal) existingModal.remove();
 
@@ -1197,20 +1306,23 @@ function openSiteBookmarkModal(domain, existingBookmarks) {
   let selectedBookmarks = [...existingBookmarks];
   let selectedIds = new Set(selectedBookmarks.map(b => b.id));
 
+  // Track notification time for this modal session
+  let currentNotificationTime = existingNotificationTime || 0;
+
   const modal = document.createElement('div');
   modal.id = 'bookmark-selector-modal';
   modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;';
 
   const modalContent = document.createElement('div');
-  modalContent.style.cssText = 'background: var(--primary-bg); border-radius: 12px; width: 90%; max-width: 600px; max-height: 85vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); color: var(--text-primary);';
+  modalContent.style.cssText = 'background: var(--primary-bg); border-radius: 12px; width: 95%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.3); color: var(--text-primary); margin: 10px;';
 
   // Header
   const header = document.createElement('div');
-  header.style.cssText = 'padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;';
+  header.style.cssText = 'padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;';
 
   const headerTitle = document.createElement('h3');
-  headerTitle.textContent = `Bookmarks for ${domain}`;
-  headerTitle.style.cssText = 'margin: 0; font-size: 18px; font-weight: 600; color: var(--text-primary);';
+  headerTitle.textContent = `Configure ${domain}`;
+  headerTitle.style.cssText = 'margin: 0; font-size: 16px; font-weight: 600; color: var(--text-primary); word-break: break-word;';
 
   const closeBtn = document.createElement('button');
   closeBtn.textContent = '×';
@@ -1220,15 +1332,43 @@ function openSiteBookmarkModal(domain, existingBookmarks) {
   header.appendChild(headerTitle);
   header.appendChild(closeBtn);
 
+  // Notification Time Section
+  const notificationSection = document.createElement('div');
+  notificationSection.style.cssText = 'padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface-bg); flex-shrink: 0;';
+
+  const notificationLabel = document.createElement('label');
+  notificationLabel.style.cssText = 'display: block; font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px;';
+  notificationLabel.textContent = 'Notification Time for this domain';
+
+  const notificationInputRow = document.createElement('div');
+  notificationInputRow.style.cssText = 'display: flex; align-items: center; gap: 10px; flex-wrap: wrap;';
+
+  const notificationTimeInput = document.createElement('input');
+  notificationTimeInput.type = 'text';
+  notificationTimeInput.id = 'modal-notification-time';
+  notificationTimeInput.placeholder = 'MM:SS (e.g., 11:11)';
+  notificationTimeInput.value = currentNotificationTime > 0 ? formatSecondsToMMSS(currentNotificationTime) : '';
+  notificationTimeInput.style.cssText = 'width: 120px; min-width: 100px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text-primary); font-size: 14px;';
+
+  const notificationHint = document.createElement('span');
+  notificationHint.style.cssText = 'font-size: 12px; color: var(--text-secondary); flex: 1; min-width: 150px;';
+  notificationHint.textContent = 'Leave empty to use default time';
+
+  notificationInputRow.appendChild(notificationTimeInput);
+  notificationInputRow.appendChild(notificationHint);
+
+  notificationSection.appendChild(notificationLabel);
+  notificationSection.appendChild(notificationInputRow);
+
   // Instructions
   const instructions = document.createElement('div');
-  instructions.style.cssText = 'padding: 12px 20px; background: var(--surface-bg); font-size: 13px; color: var(--text-secondary);';
-  instructions.innerHTML = 'Select bookmarks or <strong>add custom code</strong> to run when the stopwatch notification is dismissed.';
+  instructions.style.cssText = 'padding: 10px 16px; background: var(--surface-bg); font-size: 12px; color: var(--text-secondary); border-bottom: 1px solid var(--border); flex-shrink: 0;';
+  instructions.innerHTML = 'Select bookmarks or <strong>add custom code</strong> to run when notification is dismissed.';
 
   // Selected bookmarks preview
   const selectedPreview = document.createElement('div');
   selectedPreview.id = 'modal-selected-preview';
-  selectedPreview.style.cssText = 'padding: 12px 20px; border-bottom: 1px solid var(--border); max-height: 100px; overflow-y: auto;';
+  selectedPreview.style.cssText = 'padding: 10px 16px; border-bottom: 1px solid var(--border); max-height: 80px; overflow-y: auto; flex-shrink: 0;';
 
   function updateSelectedPreview() {
     selectedPreview.innerHTML = '';
@@ -1244,7 +1384,10 @@ function openSiteBookmarkModal(domain, existingBookmarks) {
         const chip = document.createElement('span');
         const isCode = bm.isCustomCode || (bm.url && bm.url.startsWith('javascript:'));
         chip.textContent = `${idx + 1}. ${isCode ? '< / > ' : ''}${bm.title || 'Untitled'}`;
-        chip.style.cssText = `display: inline-block; background: ${isCode ? 'var(--warning-bg, #fef3c7)' : 'var(--accent-glow)'}; color: var(--text-primary); padding: 4px 8px; border-radius: 4px; font-size: 11px; margin: 2px 4px 2px 0;`;
+        // Custom code uses surface bg with accent border, regular bookmarks use accent glow
+        const codeStyle = 'background: var(--surface-bg); border: 1px solid var(--accent); color: var(--accent);';
+        const bookmarkStyle = 'background: var(--accent-glow); border: 1px solid transparent; color: var(--text-primary);';
+        chip.style.cssText = `display: inline-block; ${isCode ? codeStyle : bookmarkStyle} padding: 4px 8px; border-radius: 4px; font-size: 11px; margin: 2px 4px 2px 0;`;
         selectedPreview.appendChild(chip);
       });
     }
@@ -1253,7 +1396,7 @@ function openSiteBookmarkModal(domain, existingBookmarks) {
 
   // Add Custom Code section
   const customCodeSection = document.createElement('div');
-  customCodeSection.style.cssText = 'padding: 12px 20px; border-bottom: 1px solid var(--border);';
+  customCodeSection.style.cssText = 'padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;';
 
   const addCodeBtn = document.createElement('button');
   addCodeBtn.textContent = '+ Add Custom Code';
@@ -1347,9 +1490,73 @@ function openSiteBookmarkModal(domain, existingBookmarks) {
   customCodeSection.appendChild(addCodeBtn);
   customCodeSection.appendChild(codeInputContainer);
 
+  // Search section for bookmarks
+  const searchSection = document.createElement('div');
+  searchSection.style.cssText = 'padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;';
+
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search bookmarks...';
+  searchInput.style.cssText = 'width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text-primary); font-size: 14px;';
+
+  // Search functionality
+  searchInput.addEventListener('input', () => {
+    const query = searchInput.value.toLowerCase().trim();
+    const bookmarkItems = treeContainer.querySelectorAll('[data-bookmark-title]');
+    const folderItems = treeContainer.querySelectorAll('[data-folder]');
+
+    if (!query) {
+      // Show all items when search is empty
+      bookmarkItems.forEach(item => {
+        item.style.display = 'flex';
+      });
+      folderItems.forEach(folder => {
+        folder.style.display = 'block';
+        const childrenContainer = folder.querySelector('[data-folder-children]');
+        if (childrenContainer) {
+          childrenContainer.style.display = 'block';
+        }
+      });
+      return;
+    }
+
+    // Hide all folders first, then show ones with matching bookmarks
+    folderItems.forEach(folder => {
+      folder.style.display = 'none';
+    });
+
+    // Filter bookmarks by title or URL
+    bookmarkItems.forEach(item => {
+      const title = (item.getAttribute('data-bookmark-title') || '').toLowerCase();
+      const url = (item.getAttribute('data-bookmark-url') || '').toLowerCase();
+      const matches = title.includes(query) || url.includes(query);
+      item.style.display = matches ? 'flex' : 'none';
+
+      // If matches, show parent folders
+      if (matches) {
+        let parent = item.parentElement;
+        while (parent && parent !== treeContainer) {
+          if (parent.hasAttribute('data-folder')) {
+            parent.style.display = 'block';
+            const childrenContainer = parent.querySelector('[data-folder-children]');
+            if (childrenContainer) {
+              childrenContainer.style.display = 'block';
+            }
+          }
+          if (parent.hasAttribute('data-folder-children')) {
+            parent.style.display = 'block';
+          }
+          parent = parent.parentElement;
+        }
+      }
+    });
+  });
+
+  searchSection.appendChild(searchInput);
+
   // Bookmark tree container
   const treeContainer = document.createElement('div');
-  treeContainer.style.cssText = 'flex: 1; overflow-y: auto; padding: 16px 20px;';
+  treeContainer.style.cssText = 'flex: 1; overflow-y: auto; padding: 12px 16px; min-height: 150px;';
 
   const loading = document.createElement('div');
   loading.textContent = 'Loading bookmarks...';
@@ -1358,7 +1565,7 @@ function openSiteBookmarkModal(domain, existingBookmarks) {
 
   // Footer
   const footer = document.createElement('div');
-  footer.style.cssText = 'padding: 16px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px;';
+  footer.style.cssText = 'padding: 12px 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; flex-wrap: wrap;';
 
   const cancelBtn = document.createElement('button');
   cancelBtn.textContent = 'Cancel';
@@ -1366,15 +1573,45 @@ function openSiteBookmarkModal(domain, existingBookmarks) {
   cancelBtn.addEventListener('click', () => modal.remove());
 
   const saveBtn = document.createElement('button');
-  saveBtn.textContent = 'Save Bookmarks';
+  saveBtn.textContent = 'Save';
   saveBtn.className = 'primary-button';
   saveBtn.addEventListener('click', () => {
-    const hiddenInput = document.getElementById('stopwatch-bookmarks-by-domain');
-    if (!hiddenInput) return;
+    const bookmarksHiddenInput = document.getElementById('stopwatch-bookmarks-by-domain');
+    const notificationTimeHiddenInput = document.getElementById('stopwatch-notification-time-by-domain');
 
-    let bookmarksByDomain = parseBookmarksByDomain(hiddenInput.value);
+    if (!bookmarksHiddenInput) return;
+
+    // Save bookmarks
+    let bookmarksByDomain = parseBookmarksByDomain(bookmarksHiddenInput.value);
     bookmarksByDomain[domain] = selectedBookmarks;
-    hiddenInput.value = JSON.stringify(bookmarksByDomain);
+    bookmarksHiddenInput.value = JSON.stringify(bookmarksByDomain);
+
+    // Save notification time
+    if (notificationTimeHiddenInput) {
+      let notificationTimeByDomain = parseNotificationTimeByDomain(notificationTimeHiddenInput.value);
+      const timeInputValue = notificationTimeInput.value.trim();
+
+      if (timeInputValue) {
+        const parsedSeconds = parseMMSSToSeconds(timeInputValue);
+        if (parsedSeconds === null) {
+          // Invalid format
+          alert('Invalid time format. Use MM:SS (e.g., 11:11 for 11 minutes 11 seconds)');
+          return;
+        } else if (parsedSeconds > 0) {
+          // Valid time, save it
+          notificationTimeByDomain[domain] = parsedSeconds;
+        } else {
+          // parsedSeconds is 0 - treat as "use default" (don't save)
+          delete notificationTimeByDomain[domain];
+        }
+      } else {
+        // Empty - remove custom time for this domain (will use default)
+        delete notificationTimeByDomain[domain];
+      }
+
+      notificationTimeHiddenInput.value = JSON.stringify(notificationTimeByDomain);
+    }
+
     renderDomainList();
     markUnsaved();
     modal.remove();
@@ -1384,9 +1621,11 @@ function openSiteBookmarkModal(domain, existingBookmarks) {
   footer.appendChild(saveBtn);
 
   modalContent.appendChild(header);
+  modalContent.appendChild(notificationSection);
   modalContent.appendChild(instructions);
   modalContent.appendChild(selectedPreview);
   modalContent.appendChild(customCodeSection);
+  modalContent.appendChild(searchSection);
   modalContent.appendChild(treeContainer);
   modalContent.appendChild(footer);
   modal.appendChild(modalContent);
@@ -1427,6 +1666,9 @@ function renderBookmarkNodeForSite(container, node, selectedIds, selectedBookmar
   item.style.cssText = `padding-left: ${depth * 20}px;`;
 
   if (node.children) {
+    // Add data attribute for folder filtering
+    item.setAttribute('data-folder', 'true');
+
     const folderHeader = document.createElement('div');
     folderHeader.style.cssText = 'display: flex; align-items: center; padding: 8px 12px; cursor: pointer; border-radius: 6px; margin: 2px 0;';
     folderHeader.addEventListener('mouseenter', () => folderHeader.style.background = 'var(--hover-color)');
@@ -1436,6 +1678,7 @@ function renderBookmarkNodeForSite(container, node, selectedIds, selectedBookmar
 
     const childrenContainer = document.createElement('div');
     childrenContainer.style.cssText = 'display: block;';
+    childrenContainer.setAttribute('data-folder-children', 'true');
 
     node.children.forEach(child => {
       renderBookmarkNodeForSite(childrenContainer, child, selectedIds, selectedBookmarks, depth + 1, onSelectionChange);
@@ -1453,6 +1696,10 @@ function renderBookmarkNodeForSite(container, node, selectedIds, selectedBookmar
     const bookmarkItem = document.createElement('div');
     const isSelected = selectedIds.has(node.id);
     bookmarkItem.style.cssText = `display: flex; align-items: center; padding: 8px 12px; cursor: pointer; border-radius: 6px; margin: 2px 0; border: 2px solid ${isSelected ? 'var(--accent)' : 'transparent'}; background: ${isSelected ? 'var(--accent-glow)' : 'transparent'};`;
+
+    // Add data attributes for search filtering
+    bookmarkItem.setAttribute('data-bookmark-title', node.title || '');
+    bookmarkItem.setAttribute('data-bookmark-url', node.url || '');
 
     const checkbox = document.createElement('input');
     checkbox.type = 'checkbox';

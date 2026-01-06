@@ -724,16 +724,14 @@
 
         <div class="setting-subsection" id="stopwatch-options" style="margin-left: 20px; margin-top: 15px; padding-left: 20px; border-left: 3px solid var(--border-color); opacity: 0.5; pointer-events: none;">
           <div class="setting-item">
-            <label for="stopwatch-position" class="setting-label">
+            <label class="setting-label">
               <span class="label-text">Stopwatch Position</span>
-              <span class="label-description">Where to display the stopwatch on the page</span>
+              <span class="label-description">Drag the stopwatch to move it. It snaps to screen edges.</span>
             </label>
-            <select id="stopwatch-position" class="setting-input">
-              <option value="top-left">Top Left</option>
-              <option value="top-right">Top Right</option>
-              <option value="bottom-left">Bottom Left</option>
-              <option value="bottom-right">Bottom Right</option>
-            </select>
+            <button type="button" id="stopwatch-reset-position" class="secondary-button" style="padding: 8px 16px; font-size: 13px;">
+              Reset to Default
+            </button>
+            <input type="hidden" id="stopwatch-position" value="bottom-right">
           </div>
 
           <div class="setting-item">
@@ -792,6 +790,7 @@
               </div>
               <input type="hidden" id="stopwatch-included-domains">
               <input type="hidden" id="stopwatch-bookmarks-by-domain">
+              <input type="hidden" id="stopwatch-notification-time-by-domain">
             </div>
           </div>
         </div>
