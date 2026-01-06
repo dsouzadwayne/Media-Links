@@ -1,12 +1,20 @@
 ================================================================================
 MEDIA LINKS EXTENSION - FUNCTION REFERENCE
-Version: 0.850
+Version: 0.851
 ================================================================================
 
 This file documents all JavaScript functions in the Media Links extension.
-Last updated: January 6, 2026
+Last updated: January 7, 2026
 
 RECENT CHANGES:
+- Fixed false positive success in trustedTypes execution on sites with strict CSP:
+  - isEvalAvailable() now checks for Trusted Types presence
+  - Sites with Trusted Types typically have strict CSP that blocks eval
+  - This prevents trustedTypes method from being tried when it would fail
+  - On TT sites, only 'background' method is now used (chrome.scripting API)
+  - Fixes CSP console errors that appeared even with pre-filtering
+
+PREVIOUS CHANGES:
 - Search feature bug fix: selectedEngine now defaults to 'google' if empty (line 577)
 - Note: Pattern Settings UI already exists in settings.html (Query Patterns section)
   - Uses same storage key 'profileSettings' as search.js
@@ -15,7 +23,7 @@ RECENT CHANGES:
 - Fixed CSP console errors in monkey.js on YouTube and other strict CSP sites:
   - isScriptInjectionAvailable() now checks known strict CSP sites FIRST before
     any other detection methods (works across all browsers including Brave)
-  - isEvalAvailable() also checks strict CSP sites first
+  - isEvalAvailable() also checks strict CSP sites first AND Trusted Types presence
   - execute() now pre-checks method availability before attempting execution,
     filtering out methods that would trigger CSP errors
   - Added 'available' property to method definitions in execute()

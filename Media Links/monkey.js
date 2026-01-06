@@ -227,6 +227,14 @@
       return false;
     }
 
+    // If Trusted Types is present, assume eval is also blocked
+    // (sites with TT typically have strict CSP that blocks eval)
+    if (window.trustedTypes && typeof window.trustedTypes.createPolicy === 'function') {
+      methodAvailability.eval = false;
+      console.log('Monkey: eval blocked (Trusted Types detected)');
+      return false;
+    }
+
     // Check for CSP meta tag that would block eval
     const cspMeta = document.querySelector('meta[http-equiv="Content-Security-Policy"]');
     if (cspMeta) {
