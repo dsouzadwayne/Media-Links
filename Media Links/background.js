@@ -6,13 +6,6 @@ try {
   console.warn('Background: Failed to import scheduler.js:', e);
 }
 
-// Import CDP input module
-try {
-  importScripts('lib/cdp-input.js');
-  console.log('Background: CDPInput module imported');
-} catch (e) {
-  console.warn('Background: Failed to import cdp-input.js:', e);
-}
 
 // Helper function to generate unique IDs (UUID v4)
 function generateUUID() {
@@ -891,48 +884,98 @@ function compareData(wikipediaData, imdbData) {
   return comparison;
 }
 
+// Grouping patterns for word combinations (must be defined before use in context menu setup)
+const groupingPatterns = {
+  1: [
+    { id: '1', display: 'word1', pattern: [[0]] }
+  ],
+  2: [
+    { id: '1-1', display: 'word1 | word2', pattern: [[0], [1]] },
+    { id: '2', display: 'word1-word2', pattern: [[0, 1]] }
+  ],
+  3: [
+    { id: '1-1-1', display: 'word1 | word2 | word3', pattern: [[0], [1], [2]] },
+    { id: '1-2', display: 'word1 | word2-word3', pattern: [[0], [1, 2]] },
+    { id: '2-1', display: 'word1-word2 | word3', pattern: [[0, 1], [2]] },
+    { id: '3', display: 'word1-word2-word3', pattern: [[0, 1, 2]] }
+  ],
+  4: [
+    { id: '1-1-1-1', display: 'word1 | word2 | word3 | word4', pattern: [[0], [1], [2], [3]] },
+    { id: '1-1-2', display: 'word1 | word2 | word3-word4', pattern: [[0], [1], [2, 3]] },
+    { id: '1-2-1', display: 'word1 | word2-word3 | word4', pattern: [[0], [1, 2], [3]] },
+    { id: '2-1-1', display: 'word1-word2 | word3 | word4', pattern: [[0, 1], [2], [3]] },
+    { id: '1-3', display: 'word1 | word2-word3-word4', pattern: [[0], [1, 2, 3]] },
+    { id: '2-2', display: 'word1-word2 | word3-word4', pattern: [[0, 1], [2, 3]] },
+    { id: '3-1', display: 'word1-word2-word3 | word4', pattern: [[0, 1, 2], [3]] },
+    { id: '4', display: 'word1-word2-word3-word4', pattern: [[0, 1, 2, 3]] }
+  ]
+};
+
+// Function to create context menus
+function createContextMenus() {
+  // Create static parent context menu
+  chrome.contextMenus.create({
+    id: 'search-selection',
+    title: 'Search with Media Links',
+    contexts: ['selection']
+  });
+
+  // Create CBFC India search submenu (static)
+  chrome.contextMenus.create({
+    id: 'cbfc-search',
+    parentId: 'search-selection',
+    title: 'Search on CBFC India',
+    contexts: ['selection']
+  });
+
+  // Create separator (static)
+  chrome.contextMenus.create({
+    id: 'cbfc-separator',
+    parentId: 'search-selection',
+    type: 'separator',
+    contexts: ['selection']
+  });
+
+  // Pre-create all possible menu structures for 1-4 words
+  // We'll show/hide and update titles dynamically
+  for (let wordCount = 1; wordCount <= 4; wordCount++) {
+    const patterns = groupingPatterns[wordCount] || [];
+    patterns.forEach(pattern => {
+      chrome.contextMenus.create({
+        id: `grouping-${wordCount}-${pattern.id}`,
+        parentId: 'search-selection',
+        title: pattern.display,  // Placeholder, will be updated
+        contexts: ['selection'],
+        visible: false  // Hidden by default
+      });
+    });
+  }
+}
+
+// Ensure context menus exist (called on service worker startup)
+function ensureContextMenusExist() {
+  // Check if parent menu exists by trying to update it
+  chrome.contextMenus.update('search-selection', {}, () => {
+    if (chrome.runtime.lastError) {
+      // Menu doesn't exist, create all menus
+      console.log('Context menus not found, creating them...');
+      createContextMenus();
+    }
+  });
+}
+
+// Create menus on service worker startup
+ensureContextMenusExist();
+
 chrome.runtime.onInstalled.addListener(() => {
     chrome.sidePanel.setPanelBehavior({
       openPanelOnActionClick: true
     });
 
-    // Create static parent context menu
-    chrome.contextMenus.create({
-      id: 'search-selection',
-      title: 'Search with Media Links',
-      contexts: ['selection']
+    // Remove all existing menus and recreate to ensure clean state
+    chrome.contextMenus.removeAll(() => {
+      createContextMenus();
     });
-
-    // Create CBFC India search submenu (static)
-    chrome.contextMenus.create({
-      id: 'cbfc-search',
-      parentId: 'search-selection',
-      title: 'Search on CBFC India',
-      contexts: ['selection']
-    });
-
-    // Create separator (static)
-    chrome.contextMenus.create({
-      id: 'cbfc-separator',
-      parentId: 'search-selection',
-      type: 'separator',
-      contexts: ['selection']
-    });
-
-    // Pre-create all possible menu structures for 1-4 words
-    // We'll show/hide and update titles dynamically
-    for (let wordCount = 1; wordCount <= 4; wordCount++) {
-      const patterns = groupingPatterns[wordCount] || [];
-      patterns.forEach(pattern => {
-        chrome.contextMenus.create({
-          id: `grouping-${wordCount}-${pattern.id}`,
-          parentId: 'search-selection',
-          title: pattern.display,  // Placeholder, will be updated
-          contexts: ['selection'],
-          visible: false  // Hidden by default
-        });
-      });
-    }
 
     // Create offscreen document for Tesseract
     createOffscreenDocument().catch(err => {
@@ -954,33 +997,6 @@ chrome.runtime.onInstalled.addListener(() => {
       chrome.sidePanel.open();
     }
   });
-
-  // Grouping patterns for word combinations
-  const groupingPatterns = {
-    1: [
-      { id: '1', display: 'word1', pattern: [[0]] }
-    ],
-    2: [
-      { id: '1-1', display: 'word1 | word2', pattern: [[0], [1]] },
-      { id: '2', display: 'word1-word2', pattern: [[0, 1]] }
-    ],
-    3: [
-      { id: '1-1-1', display: 'word1 | word2 | word3', pattern: [[0], [1], [2]] },
-      { id: '1-2', display: 'word1 | word2-word3', pattern: [[0], [1, 2]] },
-      { id: '2-1', display: 'word1-word2 | word3', pattern: [[0, 1], [2]] },
-      { id: '3', display: 'word1-word2-word3', pattern: [[0, 1, 2]] }
-    ],
-    4: [
-      { id: '1-1-1-1', display: 'word1 | word2 | word3 | word4', pattern: [[0], [1], [2], [3]] },
-      { id: '1-1-2', display: 'word1 | word2 | word3-word4', pattern: [[0], [1], [2, 3]] },
-      { id: '1-2-1', display: 'word1 | word2-word3 | word4', pattern: [[0], [1, 2], [3]] },
-      { id: '2-1-1', display: 'word1-word2 | word3 | word4', pattern: [[0, 1], [2], [3]] },
-      { id: '1-3', display: 'word1 | word2-word3-word4', pattern: [[0], [1, 2, 3]] },
-      { id: '2-2', display: 'word1-word2 | word3-word4', pattern: [[0, 1], [2, 3]] },
-      { id: '3-1', display: 'word1-word2-word3 | word4', pattern: [[0, 1, 2], [3]] },
-      { id: '4', display: 'word1-word2-word3-word4', pattern: [[0, 1, 2, 3]] }
-    ]
-  };
 
   // Pattern templates for generating queries
   const patternDescriptions = {
@@ -2076,237 +2092,6 @@ chrome.runtime.onInstalled.addListener(() => {
       return true;
     }
 
-    // ============ CDP Input Handlers ============
-
-    // Handle CDP pressKey request
-    if (message.type === 'cdpPressKey') {
-      (async () => {
-        try {
-          if (typeof CDPInput === 'undefined') {
-            sendResponse({ success: false, error: 'CDP module not available' });
-            return;
-          }
-
-          const tabId = message.tabId || sender.tab?.id;
-          if (!tabId) {
-            sendResponse({ success: false, error: 'No tab ID provided' });
-            return;
-          }
-
-          const result = await CDPInput.pressKey(tabId, message.key);
-          sendResponse(result);
-        } catch (error) {
-          console.error('Background: CDP pressKey error:', error);
-          sendResponse({ success: false, error: error.message });
-        }
-      })();
-      return true;
-    }
-
-    // Handle CDP typeText request
-    if (message.type === 'cdpTypeText') {
-      (async () => {
-        try {
-          if (typeof CDPInput === 'undefined') {
-            sendResponse({ success: false, error: 'CDP module not available' });
-            return;
-          }
-
-          const tabId = message.tabId || sender.tab?.id;
-          if (!tabId) {
-            sendResponse({ success: false, error: 'No tab ID provided' });
-            return;
-          }
-
-          const result = await CDPInput.typeText(tabId, message.text, message.delay);
-          sendResponse(result);
-        } catch (error) {
-          console.error('Background: CDP typeText error:', error);
-          sendResponse({ success: false, error: error.message });
-        }
-      })();
-      return true;
-    }
-
-    // Handle CDP click request
-    if (message.type === 'cdpClick') {
-      (async () => {
-        try {
-          if (typeof CDPInput === 'undefined') {
-            sendResponse({ success: false, error: 'CDP module not available' });
-            return;
-          }
-
-          const tabId = message.tabId || sender.tab?.id;
-          if (!tabId) {
-            sendResponse({ success: false, error: 'No tab ID provided' });
-            return;
-          }
-
-          const result = await CDPInput.click(tabId, message.x, message.y, {
-            button: message.button,
-            clickCount: message.clickCount
-          });
-          sendResponse(result);
-        } catch (error) {
-          console.error('Background: CDP click error:', error);
-          sendResponse({ success: false, error: error.message });
-        }
-      })();
-      return true;
-    }
-
-    // Handle CDP scroll request
-    if (message.type === 'cdpScroll') {
-      (async () => {
-        try {
-          if (typeof CDPInput === 'undefined') {
-            sendResponse({ success: false, error: 'CDP module not available' });
-            return;
-          }
-
-          const tabId = message.tabId || sender.tab?.id;
-          if (!tabId) {
-            sendResponse({ success: false, error: 'No tab ID provided' });
-            return;
-          }
-
-          const result = await CDPInput.scroll(tabId, {
-            deltaX: message.deltaX,
-            deltaY: message.deltaY,
-            x: message.x,
-            y: message.y
-          });
-          sendResponse(result);
-        } catch (error) {
-          console.error('Background: CDP scroll error:', error);
-          sendResponse({ success: false, error: error.message });
-        }
-      })();
-      return true;
-    }
-
-    // Handle CDP scrollPageDown request
-    if (message.type === 'cdpScrollPageDown') {
-      (async () => {
-        try {
-          if (typeof CDPInput === 'undefined') {
-            sendResponse({ success: false, error: 'CDP module not available' });
-            return;
-          }
-
-          const tabId = message.tabId || sender.tab?.id;
-          if (!tabId) {
-            sendResponse({ success: false, error: 'No tab ID provided' });
-            return;
-          }
-
-          const result = await CDPInput.scrollPageDown(tabId);
-          sendResponse(result);
-        } catch (error) {
-          console.error('Background: CDP scrollPageDown error:', error);
-          sendResponse({ success: false, error: error.message });
-        }
-      })();
-      return true;
-    }
-
-    // Handle CDP scrollPageUp request
-    if (message.type === 'cdpScrollPageUp') {
-      (async () => {
-        try {
-          if (typeof CDPInput === 'undefined') {
-            sendResponse({ success: false, error: 'CDP module not available' });
-            return;
-          }
-
-          const tabId = message.tabId || sender.tab?.id;
-          if (!tabId) {
-            sendResponse({ success: false, error: 'No tab ID provided' });
-            return;
-          }
-
-          const result = await CDPInput.scrollPageUp(tabId);
-          sendResponse(result);
-        } catch (error) {
-          console.error('Background: CDP scrollPageUp error:', error);
-          sendResponse({ success: false, error: error.message });
-        }
-      })();
-      return true;
-    }
-
-    // Handle CDP scrollToTop request
-    if (message.type === 'cdpScrollToTop') {
-      (async () => {
-        try {
-          if (typeof CDPInput === 'undefined') {
-            sendResponse({ success: false, error: 'CDP module not available' });
-            return;
-          }
-
-          const tabId = message.tabId || sender.tab?.id;
-          if (!tabId) {
-            sendResponse({ success: false, error: 'No tab ID provided' });
-            return;
-          }
-
-          const result = await CDPInput.scrollToTop(tabId);
-          sendResponse(result);
-        } catch (error) {
-          console.error('Background: CDP scrollToTop error:', error);
-          sendResponse({ success: false, error: error.message });
-        }
-      })();
-      return true;
-    }
-
-    // Handle CDP scrollToBottom request
-    if (message.type === 'cdpScrollToBottom') {
-      (async () => {
-        try {
-          if (typeof CDPInput === 'undefined') {
-            sendResponse({ success: false, error: 'CDP module not available' });
-            return;
-          }
-
-          const tabId = message.tabId || sender.tab?.id;
-          if (!tabId) {
-            sendResponse({ success: false, error: 'No tab ID provided' });
-            return;
-          }
-
-          const result = await CDPInput.scrollToBottom(tabId);
-          sendResponse(result);
-        } catch (error) {
-          console.error('Background: CDP scrollToBottom error:', error);
-          sendResponse({ success: false, error: error.message });
-        }
-      })();
-      return true;
-    }
-
-    // Handle CDP session close request
-    if (message.type === 'cdpCloseSession') {
-      (async () => {
-        try {
-          if (typeof CDPInput === 'undefined') {
-            sendResponse({ success: false, error: 'CDP module not available' });
-            return;
-          }
-
-          const tabId = message.tabId || sender.tab?.id;
-          if (tabId) {
-            await CDPInput.closeSession(tabId);
-          }
-          sendResponse({ success: true });
-        } catch (error) {
-          console.error('Background: CDP closeSession error:', error);
-          sendResponse({ success: false, error: error.message });
-        }
-      })();
-      return true;
-    }
   });
 
   // Handle context menu click

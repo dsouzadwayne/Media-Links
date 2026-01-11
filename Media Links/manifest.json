@@ -71,7 +71,7 @@
    "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAg7lsvd5P2DYSQrFcVsv4OUxx3/2FCs6Osaxufuikf/QZz5LXWTqnyk3MUtFFPk16hvNROLoRrfm/uHzGwWRTCMWe9cbepoNeNko863NQsGpy+XQXU3YKSCqdU5l/7vweqdR7Z1rEwvVG+NDxqpmqwsnOaFhFMLTS5lzTGF5HelkXQeQrT1UoJsNoo87gfiNcOb31vYaogtJqDcO1rxlve9wcmQPwODUBk/XeXoIl5nFKOtpOy0JjD2ErAfln8YDnGwOXvtvOLx7OJIsZ/gfDKKf/bIX2uXVNGHQM+P2gcSZVyxo6B0xOEd/iSmLWbdU4bBvM65VW+87Blp3Oejk9CQIDAQAB",
    "manifest_version": 3,
    "name": "Media Links",
-   "permissions": [ "activeTab", "sidePanel", "scripting", "storage", "contextMenus", "offscreen", "tabs", "bookmarks", "userScripts", "alarms", "debugger" ],
+   "permissions": [ "activeTab", "sidePanel", "scripting", "storage", "contextMenus", "offscreen", "tabs", "bookmarks", "userScripts", "alarms" ],
    "side_panel": {
       "default_path": "sidebar.html",
       "default_width": 300
@@ -83,7 +83,7 @@
    "version": "0.856",
    "web_accessible_resources": [
       {
-         "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html", "offscreen.html", "consolidated-view-page.html", "consolidated-view-page.js", "comparison-view-page.html", "comparison-view-page.js", "customized-views.js", "theme-manager.js", "settings-utils.js", "hotstar-episode-copy.js", "hotstar-show-title-copy.js", "airtelxstream-episode-copy.js", "airtelxstream-cast-copy.js", "appletv-view-page.html", "appletv-view-page.js", "appletv-customized-views.js", "filters/role-filters.js", "youtube-transcript-view.html", "youtube-transcript-view.js", "bookmarklet-editor/bookmarkleteditor.html", "bookmarklet-editor/bookmarkleteditor.js", "bookmarklet-editor/bookmarkleteditor.css", "bookmarklet-editor/scheduler-storage.js", "lib/element-detection.js", "lib/cdp-input.js", "lib/bookmarklet-parser.js"],
+         "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html", "offscreen.html", "consolidated-view-page.html", "consolidated-view-page.js", "comparison-view-page.html", "comparison-view-page.js", "customized-views.js", "theme-manager.js", "settings-utils.js", "hotstar-episode-copy.js", "hotstar-show-title-copy.js", "airtelxstream-episode-copy.js", "airtelxstream-cast-copy.js", "appletv-view-page.html", "appletv-view-page.js", "appletv-customized-views.js", "filters/role-filters.js", "youtube-transcript-view.html", "youtube-transcript-view.js", "bookmarklet-editor/bookmarkleteditor.html", "bookmarklet-editor/bookmarkleteditor.js", "bookmarklet-editor/bookmarkleteditor.css", "bookmarklet-editor/scheduler-storage.js", "lib/element-detection.js", "lib/bookmarklet-parser.js"],
          "matches": ["<all_urls>"],
          "use_dynamic_url": true
       }

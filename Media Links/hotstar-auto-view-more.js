@@ -80,7 +80,7 @@
         return buttons;
     }
 
-    // Click a button with a delay, with CDP fallback if standard click fails
+    // Click a button with a delay
     function clickButton(button) {
         return new Promise((resolve) => {
             setTimeout(async () => {
@@ -93,33 +93,6 @@
                         button.click();
                         clickCount++;
                         log(`Clicked button #${clickCount}`);
-
-                        // Check if click worked after a short delay (button should disappear or change)
-                        await new Promise(r => setTimeout(r, 100));
-
-                        // If button is still connected and looks unchanged, try CDP fallback
-                        if (button.isConnected && !button.disabled && button.offsetParent !== null) {
-                            log('Standard click may have failed, trying CDP fallback...');
-                            try {
-                                const rect = button.getBoundingClientRect();
-                                const x = Math.round(rect.left + rect.width / 2);
-                                const y = Math.round(rect.top + rect.height / 2);
-
-                                const result = await chrome.runtime.sendMessage({
-                                    type: 'cdpClick',
-                                    x: x,
-                                    y: y
-                                });
-
-                                if (result && result.success) {
-                                    log('CDP click fallback succeeded');
-                                } else {
-                                    log('CDP click fallback returned:', result);
-                                }
-                            } catch (cdpError) {
-                                log('CDP click fallback error:', cdpError);
-                            }
-                        }
                     } else {
                         log('Error: button.click is not available');
                     }
@@ -678,16 +651,6 @@
             });
         } catch (error) {
             log('Error saving pause state:', error);
-        }
-
-        // If paused, close CDP session to release debugger
-        if (isPaused) {
-            try {
-                chrome.runtime.sendMessage({ type: 'cdpCloseSession' });
-                log('CDP session closed (debugger detached)');
-            } catch (e) {
-                // Ignore errors - session may not exist
-            }
         }
 
         // If resumed, immediately check for buttons
