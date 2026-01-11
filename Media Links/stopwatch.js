@@ -32,7 +32,8 @@
     includedDomains: '',
     openBookmarksOnNotification: false,
     bookmarksByDomain: {},
-    notificationTimeByDomain: {} // Per-domain notification times in seconds
+    notificationTimeByDomain: {}, // Per-domain notification times in seconds
+    globalBookmarklets: [] // Global custom bookmarklet IDs (from editor)
   };
 
   // Edge snapping threshold in pixels
@@ -692,9 +693,13 @@
           }
         } else {
           console.log('Stopwatch: No bookmarks configured for this domain');
+          // Still execute custom bookmarklets even if no browser bookmarks configured
+          await executeCustomBookmarklets();
         }
       } else {
         console.log('Stopwatch: openBookmarksOnNotification is disabled');
+        // Execute custom bookmarklets even when browser bookmarks feature is disabled
+        await executeCustomBookmarklets();
       }
     };
 
@@ -855,6 +860,60 @@
   }
 
   /**
+   * Execute custom bookmarklets (from the bookmarklet editor)
+   * Fetches bookmarklet code from chrome.storage.local and executes via MediaLinksBookmarklets
+   */
+  async function executeCustomBookmarklets() {
+    const bookmarkletIds = settings.globalBookmarklets || [];
+
+    if (bookmarkletIds.length === 0) {
+      console.log('Stopwatch: No global custom bookmarklets configured');
+      return;
+    }
+
+    if (!isExtensionContextValid()) {
+      console.warn('Stopwatch: Extension context invalid, cannot execute custom bookmarklets');
+      return;
+    }
+
+    console.log(`Stopwatch: Executing ${bookmarkletIds.length} global custom bookmarklet(s)`);
+
+    try {
+      // Fetch bookmarklet code from chrome.storage.local
+      const data = await new Promise((resolve) => {
+        chrome.storage.local.get(['customBookmarklets'], resolve);
+      });
+
+      const allBookmarklets = data.customBookmarklets || {};
+
+      // Get the bookmarklets that match our IDs
+      const toExecute = bookmarkletIds
+        .map(id => allBookmarklets[id])
+        .filter(bm => bm && bm.enabled !== false && bm.code);
+
+      if (toExecute.length === 0) {
+        console.log('Stopwatch: No enabled custom bookmarklets found with code');
+        return;
+      }
+
+      // Convert to bookmark format for MediaLinksBookmarklets
+      const bookmarkletsWithUrl = toExecute.map(bm => ({
+        title: bm.name || 'Custom Bookmarklet',
+        url: 'javascript:' + encodeURIComponent(bm.code)
+      }));
+
+      if (window.MediaLinksBookmarklets) {
+        const results = await window.MediaLinksBookmarklets.executeMultiple(bookmarkletsWithUrl);
+        console.log('Stopwatch: Custom bookmarklet execution results:', results);
+      } else {
+        console.error('Stopwatch: MediaLinksBookmarklets not available');
+      }
+    } catch (e) {
+      console.error('Stopwatch: Error executing custom bookmarklets:', e);
+    }
+  }
+
+  /**
    * Open bookmarks for current domain
    * - Bookmarklets: Handled by bookmarklets.js (MediaLinksBookmarklets)
    * - Regular URLs: Send to background script to open in new tabs
@@ -870,11 +929,18 @@
       return;
     }
 
-    // Separate bookmarklets from regular URLs
+    // Separate bookmarklets from regular URLs and editor bookmarklets
     const bookmarklets = [];
     const regularBookmarks = [];
+    const editorBookmarkletIds = [];
 
     for (const bookmark of bookmarks) {
+      // Check if it's an editor bookmarklet (from bookmarklet editor)
+      if (bookmark.isEditorBookmarklet && bookmark.editorBookmarkletId) {
+        editorBookmarkletIds.push(bookmark.editorBookmarkletId);
+        continue;
+      }
+
       if (!bookmark.url) continue;
 
       // Check if it's a bookmarklet (javascript: URL)
@@ -887,7 +953,29 @@
       }
     }
 
-    console.log(`Stopwatch: Found ${bookmarklets.length} bookmarklet(s) and ${regularBookmarks.length} regular bookmark(s)`);
+    // Fetch and add editor bookmarklets to the bookmarklets array
+    if (editorBookmarkletIds.length > 0) {
+      try {
+        const data = await new Promise((resolve) => {
+          chrome.storage.local.get(['customBookmarklets'], resolve);
+        });
+        const allBookmarklets = data.customBookmarklets || {};
+
+        for (const id of editorBookmarkletIds) {
+          const bm = allBookmarklets[id];
+          if (bm && bm.enabled !== false && bm.code) {
+            bookmarklets.push({
+              title: bm.name || 'Editor Bookmarklet',
+              url: 'javascript:' + encodeURIComponent(bm.code)
+            });
+          }
+        }
+      } catch (e) {
+        console.error('Stopwatch: Error fetching editor bookmarklets:', e);
+      }
+    }
+
+    console.log(`Stopwatch: Found ${bookmarklets.length} bookmarklet(s) (including ${editorBookmarkletIds.length} from editor) and ${regularBookmarks.length} regular bookmark(s)`);
 
     // Execute bookmarklets using the bookmarklets.js handler
     if (bookmarklets.length > 0) {
@@ -935,6 +1023,9 @@
         console.error('Stopwatch: Exception sending openBookmarks message:', e);
       }
     }
+
+    // Execute global custom bookmarklets (from the bookmarklet editor)
+    await executeCustomBookmarklets();
   }
 
   /**
@@ -989,7 +1080,8 @@
           'stopwatchIncludedDomains',
           'stopwatchOpenBookmarksOnNotification',
           'stopwatchBookmarksByDomain',
-          'stopwatchNotificationTimeByDomain'
+          'stopwatchNotificationTimeByDomain',
+          'stopwatchGlobalBookmarklets'
         ], (result) => {
           if (chrome.runtime.lastError) {
             console.warn('Error loading stopwatch settings:', chrome.runtime.lastError);
@@ -1007,6 +1099,7 @@
           settings.openBookmarksOnNotification = result.stopwatchOpenBookmarksOnNotification === true;
           settings.bookmarksByDomain = (result.stopwatchBookmarksByDomain && typeof result.stopwatchBookmarksByDomain === 'object') ? result.stopwatchBookmarksByDomain : {};
           settings.notificationTimeByDomain = (result.stopwatchNotificationTimeByDomain && typeof result.stopwatchNotificationTimeByDomain === 'object') ? result.stopwatchNotificationTimeByDomain : {};
+          settings.globalBookmarklets = Array.isArray(result.stopwatchGlobalBookmarklets) ? result.stopwatchGlobalBookmarklets : [];
 
           resolve();
         });
@@ -1115,6 +1208,9 @@
         if (changes.stopwatchBookmarksByDomain !== undefined) {
           const newValue = changes.stopwatchBookmarksByDomain.newValue;
           settings.bookmarksByDomain = (newValue && typeof newValue === 'object') ? newValue : {};
+        }
+        if (changes.stopwatchGlobalBookmarklets !== undefined) {
+          settings.globalBookmarklets = Array.isArray(changes.stopwatchGlobalBookmarklets.newValue) ? changes.stopwatchGlobalBookmarklets.newValue : [];
         }
 
         // Handle theme changes

@@ -167,6 +167,178 @@ const updateLinks = () => {
   });
 };
 
+// ==================== Bookmarklet Runner ====================
+
+/**
+ * Load custom bookmarklets and populate dropdown
+ */
+async function loadBookmarkletDropdown() {
+  const select = document.getElementById('bookmarklet-select');
+  const runBtn = document.getElementById('run-bookmarklet-btn');
+  const controls = document.querySelector('.bookmarklet-runner-controls');
+  const emptyState = document.getElementById('bookmarklet-empty-state');
+
+  if (!select) return;
+
+  // Clear existing options (except placeholder)
+  select.innerHTML = '<option value="">Select a bookmarklet...</option>';
+
+  try {
+    const data = await chrome.storage.local.get(['customBookmarklets']);
+    const bookmarklets = data.customBookmarklets || {};
+
+    // Convert to sorted array, filter enabled only
+    const sorted = Object.values(bookmarklets)
+      .filter(bm => bm.enabled !== false)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    if (sorted.length === 0) {
+      // Show empty state, hide controls
+      if (controls) controls.style.display = 'none';
+      if (emptyState) emptyState.style.display = 'flex';
+      return;
+    }
+
+    // Show controls, hide empty state
+    if (controls) controls.style.display = 'flex';
+    if (emptyState) emptyState.style.display = 'none';
+
+    sorted.forEach(bm => {
+      const option = document.createElement('option');
+      option.value = bm.id;
+      option.textContent = bm.name || 'Untitled';
+      option.title = bm.description || '';
+      select.appendChild(option);
+    });
+
+  } catch (error) {
+    console.error('Failed to load bookmarklets:', error);
+  }
+}
+
+/**
+ * Run the selected bookmarklet in the current tab
+ */
+async function runSelectedBookmarklet() {
+  const select = document.getElementById('bookmarklet-select');
+  const runBtn = document.getElementById('run-bookmarklet-btn');
+
+  if (!select || !select.value) return;
+
+  const bookmarkletId = select.value;
+
+  // Disable button during execution
+  runBtn.disabled = true;
+  const originalText = runBtn.textContent;
+  runBtn.textContent = '...';
+
+  try {
+    // Fetch the bookmarklet
+    const data = await chrome.storage.local.get(['customBookmarklets']);
+    const bookmarklets = data.customBookmarklets || {};
+    const bookmarklet = bookmarklets[bookmarkletId];
+
+    if (!bookmarklet || !bookmarklet.code) {
+      console.error('Bookmarklet not found or has no code');
+      showRunResult(runBtn, originalText, false);
+      return;
+    }
+
+    // Send to background for execution
+    const response = await chrome.runtime.sendMessage({
+      type: 'runBookmarkletInActiveTab',
+      code: bookmarklet.code,
+      title: bookmarklet.name || 'Untitled'
+    });
+
+    if (response && response.success) {
+      console.log('Bookmarklet executed successfully');
+      showRunResult(runBtn, originalText, true);
+    } else {
+      console.error('Bookmarklet execution failed:', response?.error);
+      showRunResult(runBtn, originalText, false);
+    }
+  } catch (error) {
+    console.error('Error running bookmarklet:', error);
+    showRunResult(runBtn, originalText, false);
+  }
+}
+
+/**
+ * Show visual feedback on run button
+ */
+function showRunResult(btn, originalText, success) {
+  btn.textContent = success ? '\u2713' : '\u2717';
+  btn.classList.add(success ? 'success' : 'error');
+
+  setTimeout(() => {
+    btn.textContent = originalText;
+    btn.classList.remove('success', 'error');
+    btn.disabled = !document.getElementById('bookmarklet-select')?.value;
+  }, 1000);
+}
+
+/**
+ * Update bookmarklet runner visibility based on settings
+ */
+async function updateBookmarkletRunnerVisibility() {
+  const runner = document.getElementById('bookmarklet-runner');
+  if (!runner) return;
+
+  try {
+    const data = await chrome.storage.sync.get(['showSidebarBookmarkletRunner']);
+    const isVisible = data.showSidebarBookmarkletRunner === true;
+    runner.style.display = isVisible ? 'flex' : 'none';
+  } catch (error) {
+    console.error('Failed to get bookmarklet runner visibility setting:', error);
+  }
+}
+
+/**
+ * Initialize bookmarklet runner UI
+ */
+async function initBookmarkletRunner() {
+  // Check visibility setting first
+  await updateBookmarkletRunnerVisibility();
+  await loadBookmarkletDropdown();
+
+  const select = document.getElementById('bookmarklet-select');
+  const runBtn = document.getElementById('run-bookmarklet-btn');
+  const editBtn = document.getElementById('edit-bookmarklets-btn');
+
+  if (select) {
+    select.addEventListener('change', () => {
+      if (runBtn) {
+        runBtn.disabled = !select.value;
+      }
+    });
+  }
+
+  if (runBtn) {
+    runBtn.addEventListener('click', runSelectedBookmarklet);
+  }
+
+  if (editBtn) {
+    editBtn.addEventListener('click', () => {
+      // Open bookmarklet editor in a new tab
+      const editorUrl = chrome.runtime.getURL('bookmarklet-editor/bookmarkleteditor.html');
+      chrome.tabs.create({ url: editorUrl });
+    });
+  }
+
+  // Listen for storage changes
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local' && changes.customBookmarklets) {
+      loadBookmarkletDropdown();
+    }
+    if (namespace === 'sync' && changes.showSidebarBookmarkletRunner) {
+      updateBookmarkletRunnerVisibility();
+    }
+  });
+}
+
+// ==================== Main Initialization ====================
+
 const init = async () => {
   try {
     // Initialize ThemeManager and load theme
@@ -216,6 +388,9 @@ const init = async () => {
       }
     }
   });
+
+  // Initialize bookmarklet runner
+  await initBookmarkletRunner();
 
   updateLinks();
 };

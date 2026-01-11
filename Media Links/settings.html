@@ -29,6 +29,7 @@
           <li><a href="#comparison-feature" class="sidebar-link" data-section="comparison-feature">⚔️ Comparison</a></li>
           <li><a href="#hotstar-settings" class="sidebar-link" data-section="hotstar-settings">🎬 Hotstar</a></li>
           <li><a href="#stopwatch-settings" class="sidebar-link" data-section="stopwatch-settings">⏱️ Stopwatch</a></li>
+          <li><a href="#bookmarklet-editor" class="sidebar-link" data-section="bookmarklet-editor">JS Bookmarklets</a></li>
           <li><a href="#advanced" class="sidebar-link" data-section="advanced">⚡ Advanced</a></li>
         </ul>
       </nav>
@@ -63,6 +64,17 @@
               <input type="text" class="preview-input" placeholder="Input field" readonly>
             </div>
           </div>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">
+            <span class="label-text">Show Bookmarklet Runner in Sidebar</span>
+            <span class="label-description">Display the bookmarklet quick-run dropdown in the sidebar</span>
+          </label>
+          <label class="toggle">
+            <input type="checkbox" id="show-sidebar-bookmarklet-runner">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
       </section>
 
@@ -775,6 +787,23 @@
             </label>
           </div>
 
+          <!-- Custom Bookmarklets Selection -->
+          <div class="setting-item" id="custom-bookmarklets-container" style="opacity: 0.5; pointer-events: none;">
+            <label class="setting-label">
+              <span class="label-text">Custom Bookmarklets on Notification</span>
+              <span class="label-description">Select bookmarklets from the editor to run when notification is dismissed</span>
+            </label>
+            <div class="bookmarklet-selection-group" style="margin-top: 10px;">
+              <h5 style="font-size: 13px; margin: 0 0 8px 0; color: var(--text-secondary);">Global Bookmarklets (run on all sites)</h5>
+              <div id="global-bookmarklets-list" class="bookmarklet-checklist" style="max-height: 200px; overflow-y: auto; background: var(--surface-bg); border-radius: 6px; padding: 8px; border: 1px solid var(--border);">
+                <p style="margin: 0; font-size: 12px; color: var(--text-muted); font-style: italic;">No bookmarklets saved. Create some in the Editor.</p>
+              </div>
+              <p class="hint" style="margin-top: 8px; font-size: 11px; color: var(--text-muted);">These run on ALL domains in addition to per-domain bookmarklets configured below.</p>
+            </div>
+            <input type="hidden" id="stopwatch-global-bookmarklets">
+            <input type="hidden" id="stopwatch-custom-bookmarklets-by-domain">
+          </div>
+
           <div class="setting-item">
             <label class="setting-label">
               <span class="label-text">Included Domains</span>
@@ -793,6 +822,37 @@
               <input type="hidden" id="stopwatch-notification-time-by-domain">
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- Bookmarklet Editor Section -->
+      <section class="settings-section" id="bookmarklet-editor">
+        <div class="section-header">
+          <h2>JS Bookmarklets</h2>
+          <p class="section-description">Create and schedule custom JavaScript bookmarklets</p>
+        </div>
+
+        <div class="setting-item">
+          <label class="setting-label">
+            <span class="label-text">Bookmarklet Editor</span>
+            <span class="label-description">Create, edit, and schedule custom JavaScript bookmarklets with auto-run or manual triggers</span>
+          </label>
+          <button id="open-bookmarklet-editor" class="action-button" style="padding: 8px 16px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+            Open Editor
+          </button>
+        </div>
+
+        <div class="setting-item" style="margin-top: 15px; padding: 15px; background: var(--surface-bg); border-radius: 8px; border: 1px solid var(--border);">
+          <p style="margin: 0 0 10px 0; font-size: 13px; color: var(--text-secondary);">
+            <strong>Features:</strong>
+          </p>
+          <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: var(--text-secondary); line-height: 1.8;">
+            <li>Create and test JavaScript bookmarklets</li>
+            <li>Import bookmarklets from browser bookmarks</li>
+            <li>Schedule execution: one-time, recurring, or per-domain</li>
+            <li>Auto-run or confirmation dialog options</li>
+            <li>Track execution history and statistics</li>
+          </ul>
         </div>
       </section>
 

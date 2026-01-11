@@ -1,12 +1,62 @@
 ================================================================================
 MEDIA LINKS EXTENSION - FUNCTION REFERENCE
-Version: 0.851
+Version: 0.852
 ================================================================================
 
 This file documents all JavaScript functions in the Media Links extension.
-Last updated: January 7, 2026
+Last updated: January 11, 2026
+
+BUG REVIEW (January 11, 2026):
+- Code review completed across all major files
+- Found 1 dead code issue in bookmarklets.js (see below)
+- Found 1 potential type inconsistency in monkey.js (see below)
+- All other major files (stopwatch.js, settings.js, background.js, content.js,
+  search.js) have proper validation and error handling
+
+POTENTIAL ISSUES FOUND:
+
+1. bookmarklets.js - Dead code in extractSelector() (lines 291-292)
+   The following lines in the extractSelector function are no-ops:
+     if (char === '"' && quoteChar === "'") depth += 0; // ignore
+     if (char === "'" && quoteChar === '"') depth += 0; // ignore
+   Adding 0 to depth does nothing. Either remove these lines or implement
+   actual depth tracking if nested quote handling is needed.
+   Impact: Low (code works but has dead/useless statements)
+
+2. monkey.js - isBlobUrlAvailable() returns mixed types (lines 139-183)
+   This function can return either a boolean (cached value) or a Promise.
+   - Line 139-141: Returns cached boolean value
+   - Line 153-183: Returns Promise<boolean>
+   Callers must handle both cases. The execute() function uses it correctly
+   but direct callers should be aware of this.
+   Impact: Low (currently handled correctly in usage)
 
 RECENT CHANGES:
+- Sidebar Bookmarklet Runner (January 11, 2026):
+  - Added quick dropdown in sidebar to run bookmarklets on any page
+  - Select from saved custom bookmarklets and run with one click
+  - Visual feedback (checkmark/X) for execution success/failure
+  - Dropdown refreshes automatically when bookmarklets are added/removed
+  - New CSS: .bookmarklet-runner, .bookmarklet-dropdown, .run-btn
+
+- Stopwatch Custom Bookmarklet Integration (January 11, 2026):
+  - Select custom bookmarklets (from editor) to run on timer expiry
+  - Global bookmarklets: Run on ALL domains when any timer fires
+  - New storage key: stopwatchGlobalBookmarklets (array of bookmarklet IDs)
+  - Settings UI: Checklist in stopwatch settings to select global bookmarklets
+  - Execution via MediaLinksBookmarklets.executeMultiple() in content script
+
+- Added Bookmarklet Editor & Scheduler feature (January 11, 2026):
+  - New bookmarklet-editor/ folder with dedicated editor page
+  - Create, edit, and manage custom JavaScript bookmarklets
+  - Import bookmarklets from browser bookmarks
+  - Schedule execution: one-time, recurring (daily/weekly), per-domain, interval
+  - Auto-run or confirmation dialog per bookmarklet
+  - Uses chrome.alarms API for scheduling
+  - Domain triggers via content script for page-load/URL-change execution
+  - Track execution history and statistics
+  - Access via Settings > JS Bookmarklets section
+
 - Fixed false positive success in trustedTypes execution on sites with strict CSP:
   - isEvalAvailable() now checks for Trusted Types presence
   - Sites with Trusted Types typically have strict CSP that blocks eval
@@ -277,6 +327,23 @@ updateLinks()
 init()
   - Initializes sidebar with event listeners
 
+loadBookmarkletDropdown()
+  - Loads custom bookmarklets from storage and populates dropdown
+  - Filters to enabled bookmarklets only, sorted alphabetically
+
+runSelectedBookmarklet()
+  - Executes selected bookmarklet in current active tab
+  - Uses chrome.runtime.sendMessage with type 'runBookmarkletInActiveTab'
+  - Shows visual feedback on success/failure
+
+showRunResult(btn, originalText, success)
+  - Shows visual feedback on run button (checkmark or X)
+  - Reverts to original state after 1 second
+
+initBookmarkletRunner()
+  - Initializes dropdown, run button, and storage change listener
+  - Called from init()
+
 --------------------------------------------------------------------------------
 bookmarklets.js - Bookmarklet execution handler
 --------------------------------------------------------------------------------
@@ -540,6 +607,13 @@ openSelectedBookmarks() [async]
   - Only called if openBookmarksOnNotification is enabled and domain has configured bookmarks
   - Bookmarklets: Handled by bookmarklets.js (MediaLinksBookmarklets.executeMultiple - async)
   - Regular URLs: Sent to background script to open in new tabs
+  - Also calls executeCustomBookmarklets() to run global custom bookmarklets
+
+executeCustomBookmarklets() [async]
+  - Executes global custom bookmarklets from the bookmarklet editor
+  - Fetches bookmarklet code from chrome.storage.local using settings.globalBookmarklets IDs
+  - Converts to bookmark format and executes via MediaLinksBookmarklets.executeMultiple()
+  - Called from openSelectedBookmarks() after browser bookmarks are processed
 
 formatTime(ms)
   - Formats milliseconds to HH:MM:SS
@@ -590,6 +664,153 @@ loadSettings()
 
 init()
   - Initializes stopwatch based on settings
+
+--------------------------------------------------------------------------------
+bookmarklet-editor/bookmarkleteditor.js - Bookmarklet Editor UI
+--------------------------------------------------------------------------------
+
+init()
+  - Initializes editor, caches elements, loads bookmarklets, applies theme
+
+loadBookmarklets()
+  - Loads all bookmarklets from storage
+
+renderBookmarkletList(filter)
+  - Renders the sidebar list of bookmarklets with optional search filter
+
+selectBookmarklet(id)
+  - Selects a bookmarklet for editing, populates form
+
+createNewBookmarklet()
+  - Creates a new empty bookmarklet for editing
+
+saveCurrentBookmarklet()
+  - Validates and saves current bookmarklet to storage
+  - Updates schedule via background script
+
+deleteCurrentBookmarklet()
+  - Deletes current bookmarklet and cancels its schedule
+
+duplicateCurrentBookmarklet()
+  - Creates a copy of the current bookmarklet
+
+runCurrentBookmarklet()
+  - Executes bookmarklet code in current active tab
+
+buildScheduleConfig()
+  - Builds schedule configuration object from form inputs
+
+handleScheduleTypeChange()
+  - Shows/hides schedule config panels based on selected type
+
+openImportModal()
+  - Opens modal to import from browser bookmarks
+  - Uses chrome.bookmarks.getTree() to list bookmarklets
+
+importSelectedBookmarks()
+  - Imports selected bookmarklets from browser bookmarks
+
+formatCode()
+  - Basic JavaScript code formatting
+
+wrapInIife()
+  - Wraps code in an IIFE: (function() { ... })();
+
+testCodeSyntax()
+  - Tests code syntax using new Function()
+
+--------------------------------------------------------------------------------
+bookmarklet-editor/scheduler.js - Scheduling Engine
+--------------------------------------------------------------------------------
+
+BookmarkletScheduler.scheduleBookmarklet(bookmarklet)
+  - Schedules a bookmarklet based on its schedule configuration
+  - Cancels existing alarms first, then creates new ones
+
+BookmarkletScheduler.scheduleOneTime(bookmarkletId, datetime)
+  - Creates a one-time chrome.alarm for specified datetime
+
+BookmarkletScheduler.scheduleRecurring(bookmarkletId, config)
+  - Creates recurring alarm (daily with periodInMinutes, weekly recreated)
+
+BookmarkletScheduler.scheduleInterval(bookmarkletId, intervalMinutes)
+  - Creates interval-based alarm that fires every N minutes
+
+BookmarkletScheduler.cancelSchedule(bookmarkletId)
+  - Clears all alarms associated with a bookmarklet
+
+BookmarkletScheduler.handleAlarm(alarm)
+  - Handles alarm firing, checks domain filter, executes or shows confirmation
+
+BookmarkletScheduler.executeBookmarklet(bookmarklet)
+  - Executes bookmarklet in active tab (auto-run or confirmation)
+
+BookmarkletScheduler.showConfirmationDialog(tabId, bookmarklet)
+  - Injects confirmation dialog into tab for non-auto-run bookmarklets
+
+BookmarkletScheduler.calculateNextRun(config)
+  - Calculates next run time for recurring schedules
+
+BookmarkletScheduler.initializeSchedules()
+  - Initializes all schedules from storage on extension start
+
+--------------------------------------------------------------------------------
+bookmarklet-editor/scheduler-storage.js - Storage Utilities
+--------------------------------------------------------------------------------
+
+BookmarkletStorage.getAllBookmarklets()
+  - Returns all bookmarklets from chrome.storage.local
+
+BookmarkletStorage.getBookmarklet(id)
+  - Returns a single bookmarklet by ID
+
+BookmarkletStorage.saveBookmarklet(bookmarklet)
+  - Saves a bookmarklet (create or update)
+
+BookmarkletStorage.deleteBookmarklet(id)
+  - Deletes a bookmarklet by ID
+
+BookmarkletStorage.updateBookmarkletStats(id)
+  - Updates lastExecuted and executionCount
+
+BookmarkletStorage.importFromBrowserBookmarks(bookmarks)
+  - Imports javascript: URLs from browser bookmark array
+
+BookmarkletStorage.getScheduledTasks()
+  - Returns all scheduled task records
+
+BookmarkletStorage.saveScheduledTask(alarmName, bookmarkletId, nextRun)
+  - Saves scheduled task record
+
+BookmarkletStorage.removeScheduledTask(alarmName)
+  - Removes scheduled task record
+
+--------------------------------------------------------------------------------
+bookmarklet-editor/domain-trigger.js - Domain Trigger Content Script
+--------------------------------------------------------------------------------
+
+checkDomainTriggers(trigger)
+  - Checks for domain-triggered bookmarklets on pageload or urlchange
+  - Executes matching bookmarklets (auto-run or confirmation)
+
+matchesPattern(pattern)
+  - Checks if current URL matches a domain pattern
+  - Supports wildcards: *.domain.com, domain.*, *keyword*
+
+executeBookmarklet(bookmarklet)
+  - Executes bookmarklet code, uses MediaLinksBookmarklets if available
+
+showConfirmationDialog(bookmarklet)
+  - Shows themed confirmation dialog before execution
+
+showNotification(name, status, errorMsg)
+  - Shows toast notification after execution
+
+updateStats(bookmarkletId)
+  - Updates bookmarklet execution statistics
+
+setupUrlMonitor()
+  - Monitors URL changes for SPA navigation (pushState, popstate)
 
 --------------------------------------------------------------------------------
 settings.js - Extension settings management
@@ -689,6 +910,19 @@ toggleBookmarkSettings(enabled)
 
 toggleBookmarkSelector(enabled)
   - Shows/hides bookmark selector based on open bookmarks enabled state
+  - Also calls toggleCustomBookmarkletsContainer()
+
+toggleCustomBookmarkletsContainer(enabled)
+  - Shows/hides custom bookmarklets container based on notification enabled state
+
+loadGlobalBookmarkletsList() [async]
+  - Loads custom bookmarklets from chrome.storage.local
+  - Renders checklist with checkboxes for selecting global bookmarklets
+  - Checks boxes for currently selected bookmarklets
+
+getSelectedGlobalBookmarklets()
+  - Returns array of checked bookmarklet IDs from global bookmarklet checklist
+  - Called by saveSettings() to persist selections
 
 parseBookmarksByDomain(value)
   - Parses JSON object mapping domains to bookmark arrays from hidden input
@@ -1217,6 +1451,9 @@ DEFAULT_SETTINGS (settings-utils.js)
     - Per-domain notification times, format: { "youtube.com": 671, "twitter.com": 300 }
     - Time is stored in seconds (e.g., 671 = 11 minutes 11 seconds)
     - Falls back to stopwatchNotificationMinutes * 60 if not set for domain
+  - Includes stopwatchGlobalBookmarklets (array of bookmarklet IDs)
+    - Custom bookmarklets that run on ALL domains when timer expires
+    - Format: ["bm_1234_abc", "bm_5678_def"]
 
 VALIDATION_RULES (settings-utils.js)
   - Type and constraint validation for all settings

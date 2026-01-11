@@ -481,6 +481,175 @@ body {
   display: block;
 }
 
+/* Bookmarklet Runner - Sidebar */
+.bookmarklet-runner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  padding: 0.75rem;
+  background: linear-gradient(135deg, var(--secondary-bg) 0%, var(--primary-bg) 100%);
+  border-radius: 0.75rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.bookmarklet-runner:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.bookmarklet-runner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.bookmarklet-runner-label {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+.bookmarklet-runner-label::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background-color: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 0 6px var(--accent-glow-strong);
+}
+
+.bookmarklet-edit-btn {
+  padding: 0.25rem 0.625rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background-color: transparent;
+  color: var(--accent);
+  border: 1px solid transparent;
+  border-radius: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.bookmarklet-edit-btn:hover {
+  background-color: var(--accent-glow);
+  border-color: var(--accent);
+}
+
+.bookmarklet-runner-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.bookmarklet-dropdown {
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background-color: var(--primary-bg);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all 0.2s ease;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.5rem center;
+  padding-right: 1.75rem;
+}
+
+.bookmarklet-dropdown:hover {
+  border-color: var(--accent);
+}
+
+.bookmarklet-dropdown:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.bookmarklet-dropdown option {
+  background-color: var(--primary-bg);
+  color: var(--text-primary);
+  padding: 0.5rem;
+}
+
+.run-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  box-shadow: 0 2px 4px var(--accent-glow);
+}
+
+.run-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px var(--accent-glow-strong);
+}
+
+.run-btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 1px 2px var(--accent-glow);
+}
+
+.run-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  background: var(--border);
+  box-shadow: none;
+}
+
+.run-btn.success {
+  background: linear-gradient(135deg, var(--success) 0%, var(--success-hover) 100%);
+  box-shadow: 0 2px 4px var(--success-bg);
+}
+
+.run-btn.error {
+  background: linear-gradient(135deg, var(--danger) 0%, var(--danger-hover) 100%);
+  box-shadow: 0 2px 4px var(--danger-bg);
+}
+
+.bookmarklet-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 0.5rem;
+  color: var(--text-primary);
+  opacity: 0.5;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
 /* Links Tab */
 #custom-sidebar .sidebar-content {
   display: grid;

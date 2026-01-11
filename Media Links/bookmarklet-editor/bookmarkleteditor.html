@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bookmarklet Editor - Media Links</title>
+  <link rel="stylesheet" href="../settings.css">
+  <link rel="stylesheet" href="bookmarkleteditor.css">
+</head>
+<body>
+  <div class="container">
+    <header class="settings-header">
+      <div class="header-content">
+        <h1>Bookmarklet Editor</h1>
+        <div class="header-actions">
+          <button id="new-bookmarklet-btn" class="action-btn primary-btn" title="Create new bookmarklet">
+            <span class="btn-icon">+</span>
+            <span class="btn-text">New</span>
+          </button>
+          <button id="import-btn" class="action-btn" title="Import from browser bookmarks">
+            <span class="btn-icon">&#8595;</span>
+            <span class="btn-text">Import</span>
+          </button>
+          <button id="back-btn" class="icon-btn" title="Back to Settings">&#8592;</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="editor-body">
+      <!-- Bookmarklet List Sidebar -->
+      <aside class="editor-sidebar">
+        <div class="sidebar-search">
+          <input type="text" id="search-bookmarklets" placeholder="Search bookmarklets...">
+        </div>
+        <div class="bookmarklet-list" id="bookmarklet-list">
+          <!-- Populated dynamically -->
+        </div>
+        <div class="sidebar-empty" id="sidebar-empty">
+          <p>No bookmarklets yet</p>
+          <p class="hint">Click "New" to create one</p>
+        </div>
+      </aside>
+
+      <!-- Editor Pane -->
+      <main class="editor-main">
+        <!-- Empty State -->
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon">&#128221;</div>
+          <h2>No Bookmarklet Selected</h2>
+          <p>Select a bookmarklet from the list or create a new one</p>
+          <button id="empty-new-btn" class="action-btn primary-btn">
+            <span class="btn-icon">+</span>
+            <span class="btn-text">Create New Bookmarklet</span>
+          </button>
+        </div>
+
+        <!-- Editor Form -->
+        <div class="editor-form" id="editor-form" style="display: none;">
+          <!-- Basic Info -->
+          <section class="form-section">
+            <h3 class="section-title">Basic Info</h3>
+
+            <div class="form-group">
+              <label for="bm-name">Name <span class="required">*</span></label>
+              <input type="text" id="bm-name" placeholder="My Bookmarklet" maxlength="100">
+            </div>
+
+            <div class="form-group">
+              <label for="bm-description">Description</label>
+              <textarea id="bm-description" placeholder="What does this bookmarklet do?" rows="2" maxlength="500"></textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="toggle-label">
+                  <span>Enabled</span>
+                  <label class="toggle">
+                    <input type="checkbox" id="bm-enabled" checked>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </label>
+              </div>
+              <div class="form-group flex-1">
+                <label class="toggle-label">
+                  <span>Auto-Run</span>
+                  <label class="toggle">
+                    <input type="checkbox" id="bm-autorun">
+                    <span class="toggle-slider"></span>
+                  </label>
+                </label>
+                <p class="hint">Skip confirmation dialog when triggered</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Code Editor -->
+          <section class="form-section">
+            <h3 class="section-title">JavaScript Code</h3>
+
+            <div class="code-editor-container">
+              <div class="code-toolbar">
+                <button type="button" id="format-code-btn" class="toolbar-btn" title="Format code">Format</button>
+                <button type="button" id="wrap-iife-btn" class="toolbar-btn" title="Wrap in IIFE">Wrap IIFE</button>
+                <button type="button" id="test-code-btn" class="toolbar-btn" title="Test syntax">Test</button>
+                <span class="toolbar-spacer"></span>
+                <span id="code-status" class="code-status"></span>
+              </div>
+              <textarea id="bm-code" class="code-editor" placeholder="// Enter your JavaScript code here&#10;document.querySelector('button').click();" spellcheck="false"></textarea>
+              <div class="code-footer">
+                <span id="char-count">0 characters</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Schedule Configuration -->
+          <section class="form-section">
+            <h3 class="section-title">Schedule</h3>
+
+            <div class="form-group">
+              <label for="schedule-type">Trigger Type</label>
+              <select id="schedule-type" class="setting-input">
+                <option value="none">Manual Only</option>
+                <option value="one-time">One-Time</option>
+                <option value="recurring">Recurring (Daily/Weekly)</option>
+                <option value="domain">Per-Domain Trigger</option>
+                <option value="interval">Interval-Based</option>
+              </select>
+            </div>
+
+            <!-- One-Time Config -->
+            <div id="schedule-one-time" class="schedule-config" style="display: none;">
+              <div class="form-group">
+                <label for="one-time-datetime">Execute At</label>
+                <input type="datetime-local" id="one-time-datetime" class="setting-input">
+              </div>
+            </div>
+
+            <!-- Recurring Config -->
+            <div id="schedule-recurring" class="schedule-config" style="display: none;">
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="recurring-frequency">Frequency</label>
+                  <select id="recurring-frequency" class="setting-input">
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                  </select>
+                </div>
+                <div class="form-group flex-1">
+                  <label for="recurring-time">Time</label>
+                  <input type="time" id="recurring-time" class="setting-input" value="09:00">
+                </div>
+              </div>
+
+              <div id="weekly-days-container" class="form-group" style="display: none;">
+                <label>Days</label>
+                <div class="day-checkboxes">
+                  <label class="day-checkbox"><input type="checkbox" value="0"><span>Sun</span></label>
+                  <label class="day-checkbox"><input type="checkbox" value="1" checked><span>Mon</span></label>
+                  <label class="day-checkbox"><input type="checkbox" value="2" checked><span>Tue</span></label>
+                  <label class="day-checkbox"><input type="checkbox" value="3" checked><span>Wed</span></label>
+                  <label class="day-checkbox"><input type="checkbox" value="4" checked><span>Thu</span></label>
+                  <label class="day-checkbox"><input type="checkbox" value="5" checked><span>Fri</span></label>
+                  <label class="day-checkbox"><input type="checkbox" value="6"><span>Sat</span></label>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="recurring-domains">Domain Filter (Optional)</label>
+                <input type="text" id="recurring-domains" class="setting-input" placeholder="youtube.com, twitter.com">
+                <p class="hint">Only run when on these domains. Leave empty to run on any page.</p>
+              </div>
+            </div>
+
+            <!-- Domain Trigger Config -->
+            <div id="schedule-domain" class="schedule-config" style="display: none;">
+              <div class="form-group">
+                <label for="domain-patterns">Domain Patterns <span class="required">*</span></label>
+                <input type="text" id="domain-patterns" class="setting-input" placeholder="*.youtube.com, twitter.com/*">
+                <p class="hint">Supports wildcards: *.example.com, example.*, *keyword*</p>
+              </div>
+
+              <div class="form-group">
+                <label for="domain-trigger">Trigger On</label>
+                <select id="domain-trigger" class="setting-input">
+                  <option value="pageload">Page Load</option>
+                  <option value="urlchange">URL Change (SPA)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Interval Config -->
+            <div id="schedule-interval" class="schedule-config" style="display: none;">
+              <div class="form-row">
+                <div class="form-group flex-1">
+                  <label for="interval-minutes">Interval</label>
+                  <div class="input-with-suffix">
+                    <input type="number" id="interval-minutes" class="setting-input" min="1" max="1440" value="30">
+                    <span class="input-suffix">minutes</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="interval-domains">Domain Filter (Optional)</label>
+                <input type="text" id="interval-domains" class="setting-input" placeholder="youtube.com, twitter.com">
+                <p class="hint">Only run when on these domains. Leave empty to run on any page.</p>
+              </div>
+
+              <div class="form-group">
+                <label class="toggle-label">
+                  <span>Only When Tab is Active</span>
+                  <label class="toggle">
+                    <input type="checkbox" id="interval-only-active" checked>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <!-- Stats -->
+          <section class="form-section stats-section" id="stats-section" style="display: none;">
+            <h3 class="section-title">Statistics</h3>
+            <div class="stats-grid">
+              <div class="stat-item">
+                <span class="stat-label">Created</span>
+                <span class="stat-value" id="stat-created">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Last Modified</span>
+                <span class="stat-value" id="stat-modified">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Last Executed</span>
+                <span class="stat-value" id="stat-executed">-</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Execution Count</span>
+                <span class="stat-value" id="stat-count">0</span>
+              </div>
+            </div>
+          </section>
+
+          <!-- Actions -->
+          <div class="form-actions">
+            <button type="button" id="save-btn" class="action-btn primary-btn">
+              <span class="btn-text">Save</span>
+            </button>
+            <button type="button" id="run-now-btn" class="action-btn">
+              <span class="btn-icon">&#9654;</span>
+              <span class="btn-text">Run Now</span>
+            </button>
+            <button type="button" id="duplicate-btn" class="action-btn">
+              <span class="btn-text">Duplicate</span>
+            </button>
+            <button type="button" id="delete-btn" class="action-btn danger-btn">
+              <span class="btn-text">Delete</span>
+            </button>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Status Toast -->
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <!-- Import Modal -->
+  <div id="import-modal" class="modal" style="display: none;">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>Import from Browser Bookmarks</h2>
+        <button class="modal-close" id="import-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-hint">Select bookmarklets (javascript: URLs) to import:</p>
+        <div class="import-search">
+          <input type="text" id="import-search" placeholder="Search bookmarks...">
+        </div>
+        <div class="bookmark-tree" id="bookmark-tree">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="import-cancel-btn" class="action-btn">Cancel</button>
+        <button id="import-confirm-btn" class="action-btn primary-btn">Import Selected</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Delete Modal -->
+  <div id="delete-modal" class="modal" style="display: none;">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content modal-small">
+      <div class="modal-header">
+        <h2>Delete Bookmarklet?</h2>
+      </div>
+      <div class="modal-body">
+        <p>Are you sure you want to delete "<span id="delete-name"></span>"?</p>
+        <p class="modal-hint">This action cannot be undone.</p>
+      </div>
+      <div class="modal-footer">
+        <button id="delete-cancel-btn" class="action-btn">Cancel</button>
+        <button id="delete-confirm-btn" class="action-btn danger-btn">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="../theme-manager.js"></script>
+  <script src="../settings-utils.js"></script>
+  <script src="scheduler-storage.js"></script>
+  <script src="bookmarkleteditor.js"></script>
+</body>
+</html>

@@ -16,6 +16,22 @@
       <button id="search-button" class="tab-button search-button">Search</button>
       <button id="settings-button" class="tab-button">⚙️ Settings</button>
     </div>
+    <div class="bookmarklet-runner" id="bookmarklet-runner" style="display: none;">
+      <div class="bookmarklet-runner-header">
+        <span class="bookmarklet-runner-label">Bookmarklets</span>
+        <button id="edit-bookmarklets-btn" class="bookmarklet-edit-btn" title="Open Bookmarklet Editor">Edit</button>
+      </div>
+      <div class="bookmarklet-runner-controls">
+        <select id="bookmarklet-select" class="bookmarklet-dropdown">
+          <option value="">Select a bookmarklet...</option>
+        </select>
+        <button id="run-bookmarklet-btn" class="run-btn" title="Run selected bookmarklet" disabled>Run</button>
+      </div>
+      <div id="bookmarklet-empty-state" class="bookmarklet-empty-state" style="display: none;">
+        <span>No bookmarklets yet</span>
+        <span style="font-size: 0.65rem;">Click Edit to create one</span>
+      </div>
+    </div>
     <div class="tab-content">
       <div id="links-tab" class="tab-panel active">
         <div class="sidebar-content"></div>

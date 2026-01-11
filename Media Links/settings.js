@@ -148,6 +148,7 @@ function applySettingsToUI() {
 
   // Basic settings
   safeSetValue('theme-select', currentSettings.theme);
+  safeSetChecked('show-sidebar-bookmarklet-runner', currentSettings.showSidebarBookmarkletRunner === true);
   safeSetValue('default-search-engine', currentSettings.defaultSearchEngine);
   safeSetValue('default-profile', currentSettings.defaultProfile || '');
   safeSetChecked('auto-open-results', currentSettings.autoOpenResults);
@@ -258,6 +259,9 @@ function applySettingsToUI() {
   toggleBookmarkSettings(currentSettings.stopwatchNotificationEnabled === true);
   toggleBookmarkSelector(currentSettings.stopwatchOpenBookmarksOnNotification === true);
 
+  // Load global bookmarklets list for stopwatch
+  loadGlobalBookmarkletsList();
+
   // Note: bookmarksByDomain hidden input is now populated earlier (before renderDomainTags)
 
   // Set default view columns
@@ -338,6 +342,7 @@ function attachEventListeners() {
   safeAddListener('stopwatch-notification-enabled', 'change', (e) => {
     toggleNotificationMinutes(e.target.checked);
     toggleBookmarkSettings(e.target.checked);
+    toggleCustomBookmarkletsContainer();
     markUnsaved();
   });
 
@@ -357,6 +362,12 @@ function attachEventListeners() {
         showStatus('Stopwatch position reset to default (bottom-right)', 'success');
       }
     });
+  });
+
+  // Bookmarklet Editor button
+  safeAddListener('open-bookmarklet-editor', 'click', () => {
+    const editorUrl = chrome.runtime.getURL('bookmarklet-editor/bookmarkleteditor.html');
+    chrome.tabs.create({ url: editorUrl });
   });
 
   // Use event delegation for all input changes (single listener instead of many)
@@ -550,6 +561,92 @@ function toggleBookmarkSelector(enabled) {
       if (btn) btn.disabled = true;
     }
   }
+
+  // Also toggle custom bookmarklets container
+  toggleCustomBookmarkletsContainer();
+}
+
+// Toggle custom bookmarklets container visibility (only depends on notification being enabled)
+function toggleCustomBookmarkletsContainer() {
+  const container = document.getElementById('custom-bookmarklets-container');
+  if (container) {
+    const notifEnabled = document.getElementById('stopwatch-notification-enabled');
+    const isEnabled = notifEnabled && notifEnabled.checked;
+
+    if (isEnabled) {
+      container.style.opacity = '1';
+      container.style.pointerEvents = 'auto';
+    } else {
+      container.style.opacity = '0.5';
+      container.style.pointerEvents = 'none';
+    }
+  }
+}
+
+/**
+ * Load and render global bookmarklets checklist
+ */
+async function loadGlobalBookmarkletsList() {
+  const container = document.getElementById('global-bookmarklets-list');
+  if (!container) return;
+
+  try {
+    // Get custom bookmarklets from chrome.storage.local
+    const data = await new Promise(resolve => {
+      chrome.storage.local.get(['customBookmarklets'], resolve);
+    });
+
+    const bookmarklets = data.customBookmarklets || {};
+    const sortedBookmarklets = Object.values(bookmarklets)
+      .filter(bm => bm.enabled !== false)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    // Get currently selected global bookmarklets
+    const selectedGlobal = currentSettings.stopwatchGlobalBookmarklets || [];
+    const selectedIds = new Set(selectedGlobal);
+
+    // Clear container
+    container.innerHTML = '';
+
+    if (sortedBookmarklets.length === 0) {
+      container.innerHTML = '<p style="margin: 0; font-size: 12px; color: var(--text-muted); font-style: italic;">No bookmarklets saved. Create some in the Editor.</p>';
+      return;
+    }
+
+    // Create checkboxes for each bookmarklet
+    sortedBookmarklets.forEach(bm => {
+      const label = document.createElement('label');
+      label.style.cssText = 'display: flex; align-items: center; padding: 6px 8px; cursor: pointer; border-radius: 4px; margin: 2px 0;';
+      label.addEventListener('mouseenter', () => label.style.background = 'var(--hover-color)');
+      label.addEventListener('mouseleave', () => label.style.background = 'transparent');
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = selectedIds.has(bm.id);
+      checkbox.dataset.bookmarkletId = bm.id;
+      checkbox.className = 'global-bookmarklet-checkbox';
+      checkbox.style.cssText = 'margin-right: 8px; cursor: pointer; accent-color: var(--accent);';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = bm.name || 'Untitled';
+      nameSpan.style.cssText = 'font-size: 13px; color: var(--text-primary);';
+
+      label.appendChild(checkbox);
+      label.appendChild(nameSpan);
+      container.appendChild(label);
+    });
+  } catch (error) {
+    console.error('Error loading bookmarklets:', error);
+    container.innerHTML = '<p style="margin: 0; font-size: 12px; color: var(--danger);">Error loading bookmarklets</p>';
+  }
+}
+
+/**
+ * Get selected global bookmarklet IDs from checkboxes
+ */
+function getSelectedGlobalBookmarklets() {
+  const checkboxes = document.querySelectorAll('.global-bookmarklet-checkbox:checked');
+  return Array.from(checkboxes).map(cb => cb.dataset.bookmarkletId).filter(Boolean);
 }
 
 // Save settings
@@ -567,6 +664,7 @@ function saveSettings() {
   // Collect all settings with safe DOM access
   const newSettings = {
     theme: getSafeValue('theme-select'),
+    showSidebarBookmarkletRunner: getSafeValue('show-sidebar-bookmarklet-runner', 'checked'),
     defaultSearchEngine: getSafeValue('default-search-engine'),
     defaultProfile: getSafeValue('default-profile'),
     autoOpenResults: getSafeValue('auto-open-results', 'checked'),
@@ -633,7 +731,8 @@ function saveSettings() {
     stopwatchIncludedDomains: getSafeValue('stopwatch-included-domains'),
     stopwatchOpenBookmarksOnNotification: getSafeValue('stopwatch-open-bookmarks', 'checked'),
     stopwatchBookmarksByDomain: parseBookmarksByDomain(getSafeValue('stopwatch-bookmarks-by-domain')),
-    stopwatchNotificationTimeByDomain: parseNotificationTimeByDomain(getSafeValue('stopwatch-notification-time-by-domain'))
+    stopwatchNotificationTimeByDomain: parseNotificationTimeByDomain(getSafeValue('stopwatch-notification-time-by-domain')),
+    stopwatchGlobalBookmarklets: getSelectedGlobalBookmarklets()
   };
 
   // Save to storage using SettingsUtils with validation
@@ -1383,11 +1482,17 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
       selectedBookmarks.forEach((bm, idx) => {
         const chip = document.createElement('span');
         const isCode = bm.isCustomCode || (bm.url && bm.url.startsWith('javascript:'));
-        chip.textContent = `${idx + 1}. ${isCode ? '< / > ' : ''}${bm.title || 'Untitled'}`;
-        // Custom code uses surface bg with accent border, regular bookmarks use accent glow
+        const isEditorBookmarklet = bm.isEditorBookmarklet;
+        let prefix = '';
+        if (isEditorBookmarklet) prefix = '📜 ';
+        else if (isCode) prefix = '</> ';
+        chip.textContent = `${idx + 1}. ${prefix}${bm.title || 'Untitled'}`;
+        // Custom code uses surface bg with accent border, editor bookmarklets use success color, regular bookmarks use accent glow
         const codeStyle = 'background: var(--surface-bg); border: 1px solid var(--accent); color: var(--accent);';
+        const editorStyle = 'background: var(--success-bg); border: 1px solid var(--success); color: var(--success);';
         const bookmarkStyle = 'background: var(--accent-glow); border: 1px solid transparent; color: var(--text-primary);';
-        chip.style.cssText = `display: inline-block; ${isCode ? codeStyle : bookmarkStyle} padding: 4px 8px; border-radius: 4px; font-size: 11px; margin: 2px 4px 2px 0;`;
+        const style = isEditorBookmarklet ? editorStyle : (isCode ? codeStyle : bookmarkStyle);
+        chip.style.cssText = `display: inline-block; ${style} padding: 4px 8px; border-radius: 4px; font-size: 11px; margin: 2px 4px 2px 0;`;
         selectedPreview.appendChild(chip);
       });
     }
@@ -1489,6 +1594,80 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
 
   customCodeSection.appendChild(addCodeBtn);
   customCodeSection.appendChild(codeInputContainer);
+
+  // Saved Bookmarklets Section (from bookmarklet editor)
+  const savedBookmarkletsSection = document.createElement('div');
+  savedBookmarkletsSection.style.cssText = 'padding: 10px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0;';
+
+  const savedBookmarkletsLabel = document.createElement('div');
+  savedBookmarkletsLabel.style.cssText = 'font-size: 13px; font-weight: 500; color: var(--text-primary); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;';
+  savedBookmarkletsLabel.innerHTML = '<span style="font-size: 14px;">📜</span> Saved Bookmarklets';
+
+  const savedBookmarkletsList = document.createElement('div');
+  savedBookmarkletsList.style.cssText = 'max-height: 120px; overflow-y: auto; background: var(--surface-bg); border-radius: 6px; padding: 6px; border: 1px solid var(--border);';
+  savedBookmarkletsList.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px; padding: 8px; text-align: center;">Loading...</div>';
+
+  savedBookmarkletsSection.appendChild(savedBookmarkletsLabel);
+  savedBookmarkletsSection.appendChild(savedBookmarkletsList);
+
+  // Load saved bookmarklets from storage
+  chrome.storage.local.get(['customBookmarklets'], (data) => {
+    const bookmarklets = data.customBookmarklets || {};
+    const sortedBookmarklets = Object.values(bookmarklets)
+      .filter(bm => bm.enabled !== false && bm.code)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+
+    savedBookmarkletsList.innerHTML = '';
+
+    if (sortedBookmarklets.length === 0) {
+      savedBookmarkletsList.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px; padding: 8px; text-align: center; font-style: italic;">No saved bookmarklets. Create some in the Editor.</div>';
+      return;
+    }
+
+    sortedBookmarklets.forEach(bm => {
+      const isAlreadySelected = selectedBookmarks.some(sb => sb.editorBookmarkletId === bm.id);
+
+      const item = document.createElement('label');
+      item.style.cssText = 'display: flex; align-items: center; padding: 6px 8px; cursor: pointer; border-radius: 4px; margin: 2px 0; gap: 8px;';
+      item.addEventListener('mouseenter', () => item.style.background = 'var(--hover-color)');
+      item.addEventListener('mouseleave', () => item.style.background = 'transparent');
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = isAlreadySelected;
+      checkbox.style.cssText = 'cursor: pointer; accent-color: var(--accent); flex-shrink: 0;';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = bm.name || 'Untitled';
+      nameSpan.style.cssText = 'font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) {
+          // Add to selected bookmarks
+          const editorBookmark = {
+            id: 'editor_' + bm.id,
+            editorBookmarkletId: bm.id,
+            title: bm.name || 'Untitled Bookmarklet',
+            isEditorBookmarklet: true
+          };
+          selectedBookmarks.push(editorBookmark);
+          selectedIds.add(editorBookmark.id);
+        } else {
+          // Remove from selected bookmarks
+          const idx = selectedBookmarks.findIndex(sb => sb.editorBookmarkletId === bm.id);
+          if (idx !== -1) {
+            selectedIds.delete(selectedBookmarks[idx].id);
+            selectedBookmarks.splice(idx, 1);
+          }
+        }
+        updateSelectedPreview();
+      });
+
+      item.appendChild(checkbox);
+      item.appendChild(nameSpan);
+      savedBookmarkletsList.appendChild(item);
+    });
+  });
 
   // Search section for bookmarks
   const searchSection = document.createElement('div');
@@ -1625,6 +1804,7 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
   modalContent.appendChild(instructions);
   modalContent.appendChild(selectedPreview);
   modalContent.appendChild(customCodeSection);
+  modalContent.appendChild(savedBookmarkletsSection);
   modalContent.appendChild(searchSection);
   modalContent.appendChild(treeContainer);
   modalContent.appendChild(footer);

@@ -10,6 +10,7 @@ window.SettingsUtils = (() => {
   const DEFAULT_SETTINGS = {
     // Appearance
     theme: 'light',
+    showSidebarBookmarkletRunner: false,
 
     // Search & Query
     defaultSearchEngine: 'google',
@@ -99,7 +100,9 @@ window.SettingsUtils = (() => {
     stopwatchBookmarksByDomain: {},
     // Per-domain notification times in seconds (e.g., 671 = 11:11)
     // Format: { "youtube.com": 671, "twitter.com": 300 }
-    stopwatchNotificationTimeByDomain: {}
+    stopwatchNotificationTimeByDomain: {},
+    // Global bookmarklet IDs to run on stopwatch notification
+    stopwatchGlobalBookmarklets: []
   };
 
   // Validation rules
@@ -108,6 +111,10 @@ window.SettingsUtils = (() => {
       type: 'string',
       enum: ['light', 'dark', 'catppuccin-mocha', 'cats', 'cat-night'],
       default: 'light'
+    },
+    showSidebarBookmarkletRunner: {
+      type: 'boolean',
+      default: false
     },
     defaultSearchEngine: {
       type: 'string',
@@ -360,6 +367,10 @@ window.SettingsUtils = (() => {
     stopwatchNotificationTimeByDomain: {
       type: 'object',
       default: {}
+    },
+    stopwatchGlobalBookmarklets: {
+      type: 'array',
+      default: []
     }
   };
 

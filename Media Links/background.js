@@ -1,3 +1,11 @@
+// Import bookmarklet scheduler
+try {
+  importScripts('bookmarklet-editor/scheduler.js');
+  console.log('Background: BookmarkletScheduler imported');
+} catch (e) {
+  console.warn('Background: Failed to import scheduler.js:', e);
+}
+
 // Helper function to generate unique IDs (UUID v4)
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -1969,6 +1977,96 @@ chrome.runtime.onInstalled.addListener(() => {
       // Return true to indicate we'll send response asynchronously
       return true;
     }
+
+    // Handle updateBookmarkletSchedule - called from editor when saving
+    if (message.type === 'updateBookmarkletSchedule') {
+      (async () => {
+        try {
+          if (typeof BookmarkletScheduler !== 'undefined') {
+            await BookmarkletScheduler.scheduleBookmarklet(message.bookmarklet);
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false, error: 'Scheduler not available' });
+          }
+        } catch (error) {
+          console.error('Background: Error updating schedule:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    // Handle cancelBookmarkletSchedule - called when deleting bookmarklet
+    if (message.type === 'cancelBookmarkletSchedule') {
+      (async () => {
+        try {
+          if (typeof BookmarkletScheduler !== 'undefined') {
+            await BookmarkletScheduler.cancelSchedule(message.bookmarkletId);
+            sendResponse({ success: true });
+          } else {
+            sendResponse({ success: false, error: 'Scheduler not available' });
+          }
+        } catch (error) {
+          console.error('Background: Error cancelling schedule:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    // Handle runBookmarkletInActiveTab - run bookmarklet in current active tab
+    if (message.type === 'runBookmarkletInActiveTab') {
+      (async () => {
+        try {
+          const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+          if (!activeTab) {
+            sendResponse({ success: false, error: 'No active tab found' });
+            return;
+          }
+
+          // Skip chrome:// and extension pages
+          if (activeTab.url?.startsWith('chrome://') ||
+              activeTab.url?.startsWith('chrome-extension://')) {
+            sendResponse({ success: false, error: 'Cannot run on browser internal pages' });
+            return;
+          }
+
+          const result = await executeBookmarkletInTab(activeTab.id, message.code, message.title);
+          sendResponse(result);
+        } catch (error) {
+          console.error('Background: Error running bookmarklet:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    // Handle executeConfirmedBookmarklet - run after user confirms in dialog
+    if (message.type === 'executeConfirmedBookmarklet') {
+      (async () => {
+        try {
+          const result = await executeBookmarkletInTab(sender.tab.id, message.code, message.title);
+
+          // Update stats
+          if (result.success && message.bookmarkletId) {
+            const data = await chrome.storage.local.get(['customBookmarklets']);
+            const bookmarklets = data.customBookmarklets || {};
+            const bookmarklet = bookmarklets[message.bookmarkletId];
+            if (bookmarklet) {
+              bookmarklet.lastExecuted = Date.now();
+              bookmarklet.executionCount = (bookmarklet.executionCount || 0) + 1;
+              await chrome.storage.local.set({ customBookmarklets: bookmarklets });
+            }
+          }
+
+          sendResponse(result);
+        } catch (error) {
+          console.error('Background: Error executing confirmed bookmarklet:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
   });
 
   // Handle context menu click
@@ -2039,4 +2137,21 @@ chrome.runtime.onInstalled.addListener(() => {
 
     messageListenerRegistered = true;
     console.log('Background: Message listener registered');
+  }
+
+  // Listen for chrome.alarms for scheduled bookmarklets
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    console.log('Background: Alarm fired:', alarm.name);
+    if (typeof BookmarkletScheduler !== 'undefined') {
+      BookmarkletScheduler.handleAlarm(alarm).catch(error => {
+        console.error('Background: Error handling bookmarklet alarm:', error);
+      });
+    }
+  });
+
+  // Initialize bookmarklet schedules when extension starts
+  if (typeof BookmarkletScheduler !== 'undefined') {
+    BookmarkletScheduler.initializeSchedules().catch(error => {
+      console.error('Background: Error initializing bookmarklet schedules:', error);
+    });
   }
