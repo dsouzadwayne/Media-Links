@@ -101,21 +101,15 @@ const updateLinks = () => {
         let hasLinks = false;
 
         if (currentUrl.hostname === 'www.imdb.com') {
-          // Check array bounds before accessing
-          const pathParts = currentUrl.pathname.split('/');
-          if (pathParts.length <= 2 || !pathParts[2]) {
-            // Homepage or non-title page - no links to show (this is normal)
-            hasLinks = false;
+          // Extract IMDb ID from URL - handles language prefixes like /de/title/tt123/
+          const imdbMatch = currentUrl.pathname.match(/\/title\/(tt\d+)/);
+          if (imdbMatch && imdbMatch[1]) {
+            const imdbId = imdbMatch[1];
+            links = getLinksForIMDb(imdbId);
+            hasLinks = true;
           } else {
-            const imdbId = pathParts[2];
-            // Additional validation: IMDb IDs should start with 'tt'
-            if (!imdbId.match(/^tt\d+$/)) {
-              // Not a title page (could be /name/, /list/, etc.)
-              hasLinks = false;
-            } else {
-              links = getLinksForIMDb(imdbId);
-              hasLinks = true;
-            }
+            // Not a title page (could be /name/, /list/, homepage, etc.)
+            hasLinks = false;
           }
         } else if (currentUrl.hostname === 'letterboxd.com') {
           // Check array bounds before accessing
@@ -143,13 +137,9 @@ const updateLinks = () => {
             setActiveLink();
           } else {
             linksTab.style.display = 'none';
-            // If Links tab was active, switch to Search button visually but don't click it
+            // If Links tab was active, just remove the active class (Search/Settings open new tabs)
             if (linksTab.classList.contains('active')) {
               linksTab.classList.remove('active');
-              const searchButton = document.getElementById('search-button');
-              if (searchButton) {
-                searchButton.classList.add('active');
-              }
             }
           }
         }

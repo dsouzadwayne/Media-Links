@@ -897,10 +897,33 @@
       }
 
       // Convert to bookmark format for MediaLinksBookmarklets
-      const bookmarkletsWithUrl = toExecute.map(bm => ({
-        title: bm.name || 'Custom Bookmarklet',
-        url: 'javascript:' + encodeURIComponent(bm.code)
-      }));
+      // Use BookmarkletParser if available for validation and proper URL generation
+      const bookmarkletsWithUrl = toExecute.map(bm => {
+        if (typeof BookmarkletParser !== 'undefined') {
+          try {
+            const parsed = BookmarkletParser.parseAndGenerate(bm.code);
+            if (parsed.errors && parsed.errors.length > 0) {
+              console.warn(`Stopwatch: Bookmarklet "${bm.name}" has parsing errors:`, parsed.errors);
+            }
+            return {
+              title: parsed.options.name || bm.name || 'Custom Bookmarklet',
+              url: parsed.url
+            };
+          } catch (e) {
+            console.error(`Stopwatch: Failed to parse bookmarklet "${bm.name}":`, e);
+            // Fallback to basic encoding
+            return {
+              title: bm.name || 'Custom Bookmarklet',
+              url: 'javascript:' + encodeURIComponent(bm.code)
+            };
+          }
+        } else {
+          return {
+            title: bm.name || 'Custom Bookmarklet',
+            url: 'javascript:' + encodeURIComponent(bm.code)
+          };
+        }
+      });
 
       if (window.MediaLinksBookmarklets) {
         const results = await window.MediaLinksBookmarklets.executeMultiple(bookmarkletsWithUrl);

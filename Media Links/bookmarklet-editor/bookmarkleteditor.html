@@ -99,6 +99,10 @@
 
             <div class="code-editor-container">
               <div class="code-toolbar">
+                <select id="template-select" class="toolbar-select" title="Load template">
+                  <option value="">Templates...</option>
+                </select>
+                <button type="button" id="parse-metadata-btn" class="toolbar-btn" title="Parse metadata block from code">Parse Metadata</button>
                 <button type="button" id="format-code-btn" class="toolbar-btn" title="Format code">Format</button>
                 <button type="button" id="wrap-iife-btn" class="toolbar-btn" title="Wrap in IIFE">Wrap IIFE</button>
                 <button type="button" id="test-code-btn" class="toolbar-btn" title="Test syntax">Test</button>
@@ -309,6 +313,7 @@
 
   <script src="../theme-manager.js"></script>
   <script src="../settings-utils.js"></script>
+  <script src="../lib/bookmarklet-parser.js"></script>
   <script src="scheduler-storage.js"></script>
   <script src="bookmarkleteditor.js"></script>
 </body>

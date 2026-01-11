@@ -1,6 +1,6 @@
 ================================================================================
 MEDIA LINKS EXTENSION - FUNCTION REFERENCE
-Version: 0.855
+Version: 0.856
 ================================================================================
 
 This file documents all JavaScript functions in the Media Links extension.
@@ -32,6 +32,23 @@ POTENTIAL ISSUES FOUND:
    Impact: Low (currently handled correctly in usage)
 
 RECENT CHANGES:
+- Sidebar UI Redesign (January 11, 2026):
+  - Modernized sidebar layout for less cluttered appearance on IMDb pages
+  - Links now use a 2-column grid layout instead of single column
+  - More compact design: smaller padding, fonts, and spacing
+  - Removed circle bullet points in favor of cleaner centered text
+  - Active links now use gradient background with glow effect
+  - Added subtle border highlight on hover
+  - Reduced header size (1.5rem vs 2.5rem) for better space efficiency
+  - Compact tabs with smaller font (0.7rem) and tighter spacing
+  - Updated cat themes to work with new compact grid layout
+  - Cat paw icons repositioned as small absolute elements
+  - Fixed Search/Settings buttons: removed permanent purple background
+  - Search and Settings now only highlight on hover (text turns accent color)
+  - Removed JS code that was adding active class to Search button
+  - Fixed IMDb URL detection to handle language prefixes (e.g., /de/title/tt123/)
+  - Now uses regex `/\/title\/(tt\d+)/` instead of fixed path position
+
 - Sidebar Bookmarklet Runner (January 11, 2026):
   - Added quick dropdown in sidebar to run bookmarklets on any page
   - Select from saved custom bookmarklets and run with one click

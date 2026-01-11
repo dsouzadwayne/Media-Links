@@ -6,6 +6,14 @@ try {
   console.warn('Background: Failed to import scheduler.js:', e);
 }
 
+// Import CDP input module
+try {
+  importScripts('lib/cdp-input.js');
+  console.log('Background: CDPInput module imported');
+} catch (e) {
+  console.warn('Background: Failed to import cdp-input.js:', e);
+}
+
 // Helper function to generate unique IDs (UUID v4)
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -2062,6 +2070,238 @@ chrome.runtime.onInstalled.addListener(() => {
           sendResponse(result);
         } catch (error) {
           console.error('Background: Error executing confirmed bookmarklet:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    // ============ CDP Input Handlers ============
+
+    // Handle CDP pressKey request
+    if (message.type === 'cdpPressKey') {
+      (async () => {
+        try {
+          if (typeof CDPInput === 'undefined') {
+            sendResponse({ success: false, error: 'CDP module not available' });
+            return;
+          }
+
+          const tabId = message.tabId || sender.tab?.id;
+          if (!tabId) {
+            sendResponse({ success: false, error: 'No tab ID provided' });
+            return;
+          }
+
+          const result = await CDPInput.pressKey(tabId, message.key);
+          sendResponse(result);
+        } catch (error) {
+          console.error('Background: CDP pressKey error:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    // Handle CDP typeText request
+    if (message.type === 'cdpTypeText') {
+      (async () => {
+        try {
+          if (typeof CDPInput === 'undefined') {
+            sendResponse({ success: false, error: 'CDP module not available' });
+            return;
+          }
+
+          const tabId = message.tabId || sender.tab?.id;
+          if (!tabId) {
+            sendResponse({ success: false, error: 'No tab ID provided' });
+            return;
+          }
+
+          const result = await CDPInput.typeText(tabId, message.text, message.delay);
+          sendResponse(result);
+        } catch (error) {
+          console.error('Background: CDP typeText error:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    // Handle CDP click request
+    if (message.type === 'cdpClick') {
+      (async () => {
+        try {
+          if (typeof CDPInput === 'undefined') {
+            sendResponse({ success: false, error: 'CDP module not available' });
+            return;
+          }
+
+          const tabId = message.tabId || sender.tab?.id;
+          if (!tabId) {
+            sendResponse({ success: false, error: 'No tab ID provided' });
+            return;
+          }
+
+          const result = await CDPInput.click(tabId, message.x, message.y, {
+            button: message.button,
+            clickCount: message.clickCount
+          });
+          sendResponse(result);
+        } catch (error) {
+          console.error('Background: CDP click error:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    // Handle CDP scroll request
+    if (message.type === 'cdpScroll') {
+      (async () => {
+        try {
+          if (typeof CDPInput === 'undefined') {
+            sendResponse({ success: false, error: 'CDP module not available' });
+            return;
+          }
+
+          const tabId = message.tabId || sender.tab?.id;
+          if (!tabId) {
+            sendResponse({ success: false, error: 'No tab ID provided' });
+            return;
+          }
+
+          const result = await CDPInput.scroll(tabId, {
+            deltaX: message.deltaX,
+            deltaY: message.deltaY,
+            x: message.x,
+            y: message.y
+          });
+          sendResponse(result);
+        } catch (error) {
+          console.error('Background: CDP scroll error:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    // Handle CDP scrollPageDown request
+    if (message.type === 'cdpScrollPageDown') {
+      (async () => {
+        try {
+          if (typeof CDPInput === 'undefined') {
+            sendResponse({ success: false, error: 'CDP module not available' });
+            return;
+          }
+
+          const tabId = message.tabId || sender.tab?.id;
+          if (!tabId) {
+            sendResponse({ success: false, error: 'No tab ID provided' });
+            return;
+          }
+
+          const result = await CDPInput.scrollPageDown(tabId);
+          sendResponse(result);
+        } catch (error) {
+          console.error('Background: CDP scrollPageDown error:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    // Handle CDP scrollPageUp request
+    if (message.type === 'cdpScrollPageUp') {
+      (async () => {
+        try {
+          if (typeof CDPInput === 'undefined') {
+            sendResponse({ success: false, error: 'CDP module not available' });
+            return;
+          }
+
+          const tabId = message.tabId || sender.tab?.id;
+          if (!tabId) {
+            sendResponse({ success: false, error: 'No tab ID provided' });
+            return;
+          }
+
+          const result = await CDPInput.scrollPageUp(tabId);
+          sendResponse(result);
+        } catch (error) {
+          console.error('Background: CDP scrollPageUp error:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    // Handle CDP scrollToTop request
+    if (message.type === 'cdpScrollToTop') {
+      (async () => {
+        try {
+          if (typeof CDPInput === 'undefined') {
+            sendResponse({ success: false, error: 'CDP module not available' });
+            return;
+          }
+
+          const tabId = message.tabId || sender.tab?.id;
+          if (!tabId) {
+            sendResponse({ success: false, error: 'No tab ID provided' });
+            return;
+          }
+
+          const result = await CDPInput.scrollToTop(tabId);
+          sendResponse(result);
+        } catch (error) {
+          console.error('Background: CDP scrollToTop error:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    // Handle CDP scrollToBottom request
+    if (message.type === 'cdpScrollToBottom') {
+      (async () => {
+        try {
+          if (typeof CDPInput === 'undefined') {
+            sendResponse({ success: false, error: 'CDP module not available' });
+            return;
+          }
+
+          const tabId = message.tabId || sender.tab?.id;
+          if (!tabId) {
+            sendResponse({ success: false, error: 'No tab ID provided' });
+            return;
+          }
+
+          const result = await CDPInput.scrollToBottom(tabId);
+          sendResponse(result);
+        } catch (error) {
+          console.error('Background: CDP scrollToBottom error:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      })();
+      return true;
+    }
+
+    // Handle CDP session close request
+    if (message.type === 'cdpCloseSession') {
+      (async () => {
+        try {
+          if (typeof CDPInput === 'undefined') {
+            sendResponse({ success: false, error: 'CDP module not available' });
+            return;
+          }
+
+          const tabId = message.tabId || sender.tab?.id;
+          if (tabId) {
+            await CDPInput.closeSession(tabId);
+          }
+          sendResponse({ success: true });
+        } catch (error) {
+          console.error('Background: CDP closeSession error:', error);
           sendResponse({ success: false, error: error.message });
         }
       })();

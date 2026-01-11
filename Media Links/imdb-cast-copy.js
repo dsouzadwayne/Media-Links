@@ -291,11 +291,13 @@ function injectDialogAnimations() {
 }
 
 async function addCastCopyButtons() {
-  if (!isIMDbCreditsPage()) return;
+  if (!isIMDbCreditsPage()) return 0;
 
   // Prevent concurrent executions
-  if (isProcessingIMDbButtons) return;
+  if (isProcessingIMDbButtons) return 0;
   isProcessingIMDbButtons = true;
+
+  let buttonsAdded = 0;
 
   try {
     const colors = await getThemeColors();
@@ -369,10 +371,15 @@ async function addCastCopyButtons() {
 
   // Also add buttons for cast on main title page
   addMainPageCastButtons(colors);
+
+  // Count all buttons that were added
+  buttonsAdded = document.querySelectorAll('.media-links-copy-btn, .media-links-name-copy-btn, .media-links-role-copy-btn').length;
   } finally {
     // Reset flag when done
     isProcessingIMDbButtons = false;
   }
+
+  return buttonsAdded;
 }
 
 // Helper function to extract role from item (consolidated role extraction logic)
@@ -1370,8 +1377,25 @@ if (isIMDbCreditsPage()) {
       return;
     }
 
-    // Initial load
-    setTimeout(addCastCopyButtons, 1000);
+    // Initial load with retry logic for slow page loads
+    let retryCount = 0;
+    const MAX_RETRIES = 5;
+
+    const attemptAddCastButtons = async () => {
+      const buttonsAdded = await addCastCopyButtons();
+
+      // If no buttons were added and we haven't exhausted retries, try again
+      if (buttonsAdded === 0 && retryCount < MAX_RETRIES) {
+        retryCount++;
+        const delay = Math.round(1000 * Math.pow(1.5, retryCount)); // Exponential backoff
+        console.log(`IMDb: No buttons added, retrying in ${delay}ms (attempt ${retryCount}/${MAX_RETRIES})`);
+        setTimeout(attemptAddCastButtons, delay);
+      } else if (buttonsAdded > 0) {
+        console.log(`IMDb: Successfully added ${buttonsAdded} copy button(s)`);
+      }
+    };
+
+    setTimeout(attemptAddCastButtons, 1000);
 
   // Debounce mechanism to prevent excessive calls
   let debounceTimer = null;

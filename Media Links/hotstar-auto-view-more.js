@@ -30,6 +30,8 @@
     // Track intervals for cleanup on page unload
     let checkIntervalId = null;
     let updateEpisodeIntervalId = null;
+    let lastEpisodeListUpdate = 0;
+    const MIN_UPDATE_INTERVAL = 2000; // Minimum 2s between updates
 
     // Track event listeners attached to episode buttons to prevent memory leaks
     let episodeButtonListeners = new Map();
@@ -46,7 +48,7 @@
     function findViewMoreButtons() {
         const buttons = [];
 
-        // Look for the exact button structure: button[data-testid="pill-View More"]
+        // Primary: Look for the exact button structure
         const viewMoreButtons = document.querySelectorAll('button[data-testid="pill-View More"]');
         viewMoreButtons.forEach(element => {
             if (!processedButtons.has(element)) {
@@ -55,6 +57,22 @@
             }
         });
 
+        // Fallback: Use ElementDetection if primary found nothing (handles edge cases)
+        if (buttons.length === 0 && typeof ElementDetection !== 'undefined') {
+            log('Primary selector found nothing, trying ElementDetection fallback...');
+            const results = ElementDetection.findByText('View More', {
+                selectors: ['button'],
+                visibilityThreshold: 0.3
+            });
+
+            results.forEach(({ element }) => {
+                if (!processedButtons.has(element)) {
+                    log('Found View More button via ElementDetection fallback');
+                    buttons.push(element);
+                }
+            });
+        }
+
         if (buttons.length > 0) {
             log(`Found ${buttons.length} View More button(s)`);
         }
@@ -62,10 +80,10 @@
         return buttons;
     }
 
-    // Click a button with a delay
+    // Click a button with a delay, with CDP fallback if standard click fails
     function clickButton(button) {
         return new Promise((resolve) => {
-            setTimeout(() => {
+            setTimeout(async () => {
                 try {
                     // Mark as processed before clicking to avoid double-clicking
                     processedButtons.add(button);
@@ -75,6 +93,33 @@
                         button.click();
                         clickCount++;
                         log(`Clicked button #${clickCount}`);
+
+                        // Check if click worked after a short delay (button should disappear or change)
+                        await new Promise(r => setTimeout(r, 100));
+
+                        // If button is still connected and looks unchanged, try CDP fallback
+                        if (button.isConnected && !button.disabled && button.offsetParent !== null) {
+                            log('Standard click may have failed, trying CDP fallback...');
+                            try {
+                                const rect = button.getBoundingClientRect();
+                                const x = Math.round(rect.left + rect.width / 2);
+                                const y = Math.round(rect.top + rect.height / 2);
+
+                                const result = await chrome.runtime.sendMessage({
+                                    type: 'cdpClick',
+                                    x: x,
+                                    y: y
+                                });
+
+                                if (result && result.success) {
+                                    log('CDP click fallback succeeded');
+                                } else {
+                                    log('CDP click fallback returned:', result);
+                                }
+                            } catch (cdpError) {
+                                log('CDP click fallback error:', cdpError);
+                            }
+                        }
                     } else {
                         log('Error: button.click is not available');
                     }
@@ -152,6 +197,9 @@
 
     // Set up MutationObserver to watch for new content
     function setupObserver() {
+        // Adaptive debouncing: track mutation timing to adjust delay
+        let lastMutationTime = 0;
+
         const observer = new MutationObserver((mutations) => {
             // Check if new episode cards were added
             let hasNewEpisodes = false;
@@ -167,7 +215,15 @@
                 }
             });
 
-            // Debounce: only process after mutations stop for a bit
+            // Adaptive debounce: increase delay if mutations are very frequent
+            const now = Date.now();
+            const timeSinceLast = now - lastMutationTime;
+            lastMutationTime = now;
+
+            // If mutations are coming faster than 50ms, increase debounce to 500ms
+            // Otherwise use default 200ms
+            const debounceDelay = timeSinceLast < 50 ? 500 : 200;
+
             clearTimeout(observerTimeout);
             observerTimeout = setTimeout(() => {
                 // Process even in background if configured
@@ -179,7 +235,7 @@
                 if (hasNewEpisodes) {
                     updateEpisodeList();
                 }
-            }, 200);
+            }, debounceDelay);
         });
 
         observer.observe(document.body, {
@@ -624,6 +680,16 @@
             log('Error saving pause state:', error);
         }
 
+        // If paused, close CDP session to release debugger
+        if (isPaused) {
+            try {
+                chrome.runtime.sendMessage({ type: 'cdpCloseSession' });
+                log('CDP session closed (debugger detached)');
+            } catch (e) {
+                // Ignore errors - session may not exist
+            }
+        }
+
         // If resumed, immediately check for buttons
         if (!isPaused) {
             processViewMoreButtons();
@@ -1047,6 +1113,9 @@
 
     // Update episode list in the panel
     function updateEpisodeList() {
+        // Track when updates happen to avoid redundant calls
+        lastEpisodeListUpdate = Date.now();
+
         if (!episodePanel) {
             log('ERROR: Episode panel not initialized');
             return;
@@ -1508,11 +1577,15 @@
             }
         }, CONFIG.checkInterval);
 
-        // Update episode list every 1000ms to catch newly loaded episodes
-        // Note: MutationObserver also updates on DOM changes, so this is a fallback
+        // Update episode list every 5000ms as a fallback safety net
+        // Note: MutationObserver handles real-time updates, so this just catches edge cases
         updateEpisodeIntervalId = setInterval(() => {
-            updateEpisodeList();
-        }, 1000);
+            const now = Date.now();
+            if (now - lastEpisodeListUpdate >= MIN_UPDATE_INTERVAL) {
+                updateEpisodeList();
+                lastEpisodeListUpdate = now;
+            }
+        }, 5000);
 
         // Set up observer for dynamic content
         if (document.body) {

@@ -66,6 +66,8 @@
     formatCodeBtn: null,
     wrapIifeBtn: null,
     testCodeBtn: null,
+    templateSelect: null,
+    parseMetadataBtn: null,
 
     // Modals
     importModal: null,
@@ -85,6 +87,7 @@
     attachEventListeners();
     await loadBookmarklets();
     renderBookmarkletList();
+    populateTemplates();
 
     // Apply theme
     if (typeof ThemeManager !== 'undefined') {
@@ -150,6 +153,8 @@
     elements.formatCodeBtn = document.getElementById('format-code-btn');
     elements.wrapIifeBtn = document.getElementById('wrap-iife-btn');
     elements.testCodeBtn = document.getElementById('test-code-btn');
+    elements.templateSelect = document.getElementById('template-select');
+    elements.parseMetadataBtn = document.getElementById('parse-metadata-btn');
 
     elements.importModal = document.getElementById('import-modal');
     elements.deleteModal = document.getElementById('delete-modal');
@@ -179,6 +184,8 @@
     elements.formatCodeBtn?.addEventListener('click', formatCode);
     elements.wrapIifeBtn?.addEventListener('click', wrapInIife);
     elements.testCodeBtn?.addEventListener('click', testCodeSyntax);
+    elements.templateSelect?.addEventListener('change', loadTemplate);
+    elements.parseMetadataBtn?.addEventListener('click', parseMetadataFromCode);
 
     // Code editor events
     elements.codeEditor?.addEventListener('input', handleCodeInput);
@@ -831,6 +838,126 @@
       elements.codeStatus.textContent = error.message;
       elements.codeStatus.className = 'code-status error';
     }
+  }
+
+  /**
+   * Load template from dropdown
+   */
+  function loadTemplate() {
+    const selectedIndex = parseInt(elements.templateSelect.value);
+    if (isNaN(selectedIndex) || selectedIndex < 0) return;
+
+    if (typeof BookmarkletParser === 'undefined') {
+      showToast('Template system not available', 'error');
+      return;
+    }
+
+    const templates = BookmarkletParser.getTemplates();
+    if (selectedIndex >= templates.length) return;
+
+    const template = templates[selectedIndex];
+
+    if (isDirty) {
+      const confirmed = confirm('Loading a template will replace your current code. Continue?');
+      if (!confirmed) {
+        elements.templateSelect.value = '';
+        return;
+      }
+    }
+
+    // Parse the template to extract metadata and code
+    const { code, options } = BookmarkletParser.parseMetadataBlock(template.code);
+
+    // Populate form fields
+    if (options.name && !elements.nameInput.value) {
+      elements.nameInput.value = options.name;
+    }
+    if (options.description && !elements.descriptionInput.value) {
+      elements.descriptionInput.value = options.description;
+    }
+
+    // Set code (keep the full template with metadata for reference)
+    elements.codeEditor.value = template.code;
+    updateCharCount();
+    markDirty();
+
+    // Reset dropdown
+    elements.templateSelect.value = '';
+
+    showToast(`Loaded "${template.name}" template`, 'success');
+  }
+
+  /**
+   * Parse metadata block from code and populate form fields
+   */
+  function parseMetadataFromCode() {
+    if (typeof BookmarkletParser === 'undefined') {
+      showToast('Parser not available', 'error');
+      return;
+    }
+
+    const code = elements.codeEditor.value;
+    if (!code.includes('==Bookmarklet==')) {
+      showToast('No metadata block found in code', 'info');
+      return;
+    }
+
+    const { code: cleanCode, options, errors } = BookmarkletParser.parseMetadataBlock(code);
+
+    if (errors && errors.length > 0) {
+      showToast(`Parsing errors: ${errors.join(', ')}`, 'error');
+      return;
+    }
+
+    // Populate form fields from metadata
+    if (options.name) {
+      elements.nameInput.value = options.name;
+    }
+    if (options.description) {
+      elements.descriptionInput.value = options.description;
+    }
+
+    // Replace code with clean version (metadata stripped)
+    elements.codeEditor.value = cleanCode;
+    updateCharCount();
+    markDirty();
+
+    // Show what was extracted
+    const extractedFields = [];
+    if (options.name) extractedFields.push('name');
+    if (options.description) extractedFields.push('description');
+    if (options.script) extractedFields.push(`${options.script.length} script(s)`);
+    if (options.style) extractedFields.push(`${options.style.length} style(s)`);
+
+    if (extractedFields.length > 0) {
+      showToast(`Extracted: ${extractedFields.join(', ')}`, 'success');
+    } else {
+      showToast('No metadata fields found', 'info');
+    }
+  }
+
+  /**
+   * Populate template dropdown with available templates
+   */
+  function populateTemplates() {
+    if (!elements.templateSelect) return;
+    if (typeof BookmarkletParser === 'undefined') return;
+
+    const templates = BookmarkletParser.getTemplates();
+
+    // Clear existing options (except first placeholder)
+    while (elements.templateSelect.options.length > 1) {
+      elements.templateSelect.remove(1);
+    }
+
+    // Add templates
+    templates.forEach((template, index) => {
+      const option = document.createElement('option');
+      option.value = index;
+      option.textContent = template.name;
+      option.title = template.description;
+      elements.templateSelect.appendChild(option);
+    });
   }
 
   /**
