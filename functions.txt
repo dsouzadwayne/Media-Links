@@ -1,6 +1,6 @@
 ================================================================================
 MEDIA LINKS EXTENSION - FUNCTION REFERENCE
-Version: 0.852
+Version: 0.855
 ================================================================================
 
 This file documents all JavaScript functions in the Media Links extension.
@@ -464,23 +464,42 @@ monkey.js - Script Injection Engine (CSP/Trusted Types Bypass)
 
 Exposes: window.MonkeyEngine API
 
-A dedicated script injection engine inspired by Tampermonkey and Violentmonkey.
-Provides multiple methods to execute JavaScript code in web pages, bypassing
-Content Security Policy (CSP) and Trusted Types restrictions.
+A dedicated script injection engine inspired by Tampermonkey, Violentmonkey,
+and ScriptCat. Provides multiple methods to execute JavaScript code in web
+pages, bypassing Content Security Policy (CSP) and Trusted Types restrictions.
 
 WHY THIS EXISTS:
 Modern websites like YouTube enforce strict CSP and Trusted Types policies that
-block traditional script execution methods. MonkeyEngine provides 7 different
+block traditional script execution methods. MonkeyEngine provides 9 different
 execution strategies, trying each in order until one succeeds.
+
+SCRIPTCAT-STYLE FEATURES:
+- Context injection via `with()` statement - inject custom APIs/variables
+- Top-level await support via async IIFE wrapper
+- SourceURL for debugging in DevTools
+- GM-style API injection (GM_setValue, GM_getValue, etc.)
+- Better error handling with script name in stack traces
+- Timer isolation for script cleanup
+- Property listener for script detection
+- Performance API messaging (CSP bypass)
+- Event handler interception for sandbox compatibility
+
+TAMPERMONKEY-STYLE FEATURES:
+- Vault pattern - preserve native APIs before page can override them
+- Shadow DOM + iframe isolation for maximum isolation
+- ACK-based reliable messaging with timeout handling
+- Nonce detection and reuse
 
 EXECUTION METHODS (in order of preference):
 1. Script tag injection - MAIN world, full page JS access
 2. Blob URL injection - Creates external script source, bypasses inline CSP
 3. Trusted Types policy - Creates policy for sites enforcing Trusted Types
-4. eval/Function - Isolated world, DOM access only
-5. Shadow DOM - Isolated container for script execution
-6. Sandboxed iframe - Iframe with minimal permissions
-7. Background execution - chrome.scripting.executeScript with MAIN world
+4. Compiled Context (ScriptCat-style) - with() context, async support, sourceURL
+5. eval/Function - Isolated world, uses ScriptCat compilation
+6. Shadow DOM - Isolated container for script execution
+7. Shadow DOM + iframe - Maximum isolation (Tampermonkey-style)
+8. Sandboxed iframe - Iframe with minimal permissions
+9. Background execution - chrome.scripting.executeScript with MAIN world
 
 MAIN EXECUTION API:
 
@@ -492,6 +511,9 @@ MonkeyEngine.execute(code, options)
     - options.nonce: CSP nonce to use
     - options.preferredMethod: Try this method first
     - options.skipMethods: Array of methods to skip
+    - options.context: Custom context object for variable injection
+    - options.apis: Custom APIs to inject (e.g., { myFunc: () => {} })
+    - options.variables: Custom variables to inject
   - Returns: Promise<{success: boolean, method: string, error?: string}>
 
 MonkeyEngine.executeMultiple(scripts, options)
@@ -500,6 +522,66 @@ MonkeyEngine.executeMultiple(scripts, options)
     - scripts: Array of {code, title} objects
     - options: Same as execute()
   - Returns: Promise<{total, executed, failed, errors, results}>
+
+SCRIPTCAT-STYLE EXECUTION:
+
+MonkeyEngine.executeWithContext(code, options)
+  - Executes script with context injection (ScriptCat-style)
+  - Supports top-level await and custom API injection
+  - Parameters:
+    - code: JavaScript code to execute
+    - options.title: Script title for debugging
+    - options.context: Custom context object (or one will be created)
+    - options.apis: Custom APIs to inject into context
+    - options.variables: Custom variables to inject into context
+    - options.useGMContext: Create a GM-style context (default: false)
+    - options.requireCode: Pre-loaded dependencies code
+  - Returns: Promise<{success: boolean, method: string, result?: any, error?: string}>
+  - Example:
+      MonkeyEngine.executeWithContext(`
+        const data = await fetch('/api/data').then(r => r.json());
+        myCustomAPI(data);
+      `, {
+        title: 'My Script',
+        apis: { myCustomAPI: (d) => console.log(d) }
+      });
+
+MonkeyEngine.compileScript(code, title, requireCode)
+  - Compiles script code into an executable function (ScriptCat-style)
+  - Wraps code with: with() block, async IIFE, try-catch, sourceURL
+  - Parameters:
+    - code: JavaScript code to compile
+    - title: Script title for debugging (default: 'Script')
+    - requireCode: Optional pre-loaded dependencies
+  - Returns: Function ready for execution with .call(context, context, title)
+
+MonkeyEngine.createContext(options)
+  - Creates a sandbox context with custom APIs
+  - Parameters:
+    - options.apis: Custom APIs to inject (e.g., GM_setValue, GM_getValue)
+    - options.variables: Custom variables to inject
+    - options.exposeWindow: Whether to expose unsafeWindow (default: true)
+    - options.exposeDocument: Whether to expose document reference (default: true)
+  - Returns: Context object for script execution
+
+MonkeyEngine.createGMContext(scriptName, storage)
+  - Creates a GM-style API context with Tampermonkey-like APIs
+  - Parameters:
+    - scriptName: Name of the script for GM_info
+    - storage: Optional storage object for GM_setValue/getValue (default: in-memory)
+  - Returns: Context with GM-style APIs
+  - Included APIs:
+    - GM_info / GM.info - Script information
+    - GM_setValue / GM.setValue - Store value
+    - GM_getValue / GM.getValue - Retrieve value
+    - GM_deleteValue / GM.deleteValue - Delete value
+    - GM_listValues / GM.listValues - List all keys
+    - GM_log / GM.log - Console logging with script name prefix
+    - GM_setClipboard / GM.setClipboard - Copy to clipboard
+    - GM_notification / GM.notification - Show notification (basic alert)
+    - GM_openInTab / GM.openInTab - Open URL in new tab
+    - GM_addStyle / GM.addStyle - Add CSS to page
+    - GM_xmlhttpRequest / GM.xmlHttpRequest - XHR wrapper (same-origin only)
 
 INDIVIDUAL EXECUTION METHODS:
 
@@ -519,13 +601,27 @@ MonkeyEngine.executeViaTrustedTypes(code, options)
   - Returns: {success: boolean, method: 'trustedTypes', error?: string}
 
 MonkeyEngine.executeViaEval(code, options)
-  - Executes via eval/Function constructor
+  - Executes via eval/Function constructor (uses ScriptCat-style compilation)
+  - Supports context injection and async scripts
+  - Options: { title, context, apis, variables }
   - Returns: {success: boolean, method: 'eval', error?: string}
+
+MonkeyEngine.executeViaEvalSimple(code, options)
+  - Legacy eval execution without ScriptCat features
+  - Use this if you need simple execution without async wrapper
+  - Returns: {success: boolean, method: 'evalSimple', error?: string}
 
 MonkeyEngine.executeViaShadowDom(code, options)
   - Executes via Shadow DOM isolation
   - Options: { nonce: string }
   - Returns: {success: boolean, method: 'shadowDom', error?: string}
+
+MonkeyEngine.executeViaShadowIframe(code, options)
+  - Executes via Shadow DOM + iframe isolation (Tampermonkey-style)
+  - Creates closed shadow DOM with sandboxed iframe for maximum isolation
+  - Uses vault for DOM operations to prevent page tampering
+  - Options: { nonce: string, title: string }
+  - Returns: Promise<{success: boolean, method: 'shadowIframe', error?: string}>
 
 MonkeyEngine.executeViaIframe(code, options)
   - Executes via sandboxed iframe
@@ -540,6 +636,113 @@ MonkeyEngine.executeMultipleViaBackground(scripts)
   - Batch executes multiple scripts via background
   - Parameters: Array of {code, title} objects
   - Returns: Promise with results object
+
+VAULT - PRESERVED NATIVE APIS (Tampermonkey-style):
+
+MonkeyEngine.vault
+  - Object containing preserved native APIs captured before page scripts run
+  - Protects against prototype pollution and function hijacking
+  - Contains:
+    - Constructors: Function, Object, Array, Promise, Error, Proxy, Blob
+    - Evaluation: eval
+    - Timers: setTimeout, clearTimeout, setInterval, clearInterval (bound)
+    - Events: CustomEvent, MouseEvent, Event
+    - DOM creation: createElement, createElementNS (bound to document)
+    - DOM manipulation: appendChild, removeChild, remove, setAttribute, etc.
+    - Events: addEventListener, removeEventListener, dispatchEvent
+    - URL: createObjectURL, revokeObjectURL (bound)
+    - Selectors: querySelector, querySelectorAll, getElementById
+    - Performance API: perfAddEventListener, perfDispatchEvent (bound)
+    - JSON: JSONparse, JSONstringify
+    - Encoding: btoa, atob, encodeURIComponent, decodeURIComponent
+
+TIMER ISOLATION (ScriptCat-style):
+
+MonkeyEngine.createTimerIsolation()
+  - Creates isolated timer manager for a script
+  - Tracks all setTimeout/setInterval calls for cleanup
+  - Returns: {
+      setTimeout(fn, ms, ...args): number,
+      setInterval(fn, ms, ...args): number,
+      clearTimeout(id): void,
+      clearInterval(id): void,
+      cleanup(): void,           // Clears all active timers
+      getStats(): { timeouts: number, intervals: number }
+    }
+  - Example:
+      const timers = MonkeyEngine.createTimerIsolation();
+      timers.setTimeout(() => console.log('Hello'), 1000);
+      // Later, cleanup all timers:
+      timers.cleanup();
+
+PROPERTY LISTENER (ScriptCat-style):
+
+MonkeyEngine.definePropertyListener(obj, prop, callback)
+  - Listen for a property to be set on an object
+  - Self-destructs after the property is set
+  - Parameters:
+    - obj: Object to watch
+    - prop: Property name to watch
+    - callback: Function called with the value when property is set
+  - Example:
+      // Detect when a script function is mounted on window
+      MonkeyEngine.definePropertyListener(window, '__myScript', (fn) => {
+        fn(); // Execute the script
+      });
+
+PERFORMANCE API MESSAGING (ScriptCat-style CSP bypass):
+
+MonkeyEngine.perfMessaging
+  - Messaging via performance API instead of document (bypasses some CSP)
+  - Methods:
+    - send(channel, data): void - Send message on channel
+    - listen(channel, handler): unsubscribe - Listen for messages, returns unsubscribe fn
+    - request(channel, data, timeout?): Promise - Send and wait for response
+    - cleanup(): void - Remove all listeners
+  - Example:
+      // Listen for messages
+      const unsub = MonkeyEngine.perfMessaging.listen('myChannel', (data) => {
+        console.log('Received:', data);
+      });
+      // Send message
+      MonkeyEngine.perfMessaging.send('myChannel', { hello: 'world' });
+      // Cleanup
+      unsub();
+
+RELIABLE MESSAGING WITH ACK (Tampermonkey-style):
+
+MonkeyEngine.createReliableMessaging()
+  - Creates reliable messaging channel with acknowledgment support
+  - Handles timeouts and extension context validation
+  - Returns: {
+      send(type, data, timeout?): Promise - Send message and wait for response
+      handleAck(ackId, response): boolean - Handle ACK response
+      getPendingCount(): number - Get pending message count
+      cancelAll(): void - Cancel all pending messages
+    }
+  - Example:
+      const messaging = MonkeyEngine.createReliableMessaging();
+      try {
+        const response = await messaging.send('getData', { id: 123 });
+        console.log('Response:', response);
+      } catch (e) {
+        console.error('Message failed:', e.message);
+      }
+
+EVENT HANDLER INTERCEPTION (ScriptCat-style):
+
+MonkeyEngine.createEventInterceptors(context, eventNames?)
+  - Create event property descriptors for sandbox context
+  - Allows scripts to use window.onload = fn style handlers in sandbox
+  - Parameters:
+    - context: Sandbox context object
+    - eventNames: Array of event names (default: common events)
+  - Returns: Property descriptors for Object.defineProperties
+  - Example:
+      const context = MonkeyEngine.createContext();
+      const interceptors = MonkeyEngine.createEventInterceptors(context);
+      Object.defineProperties(context, interceptors);
+      // Now scripts can use: context.onload = () => { ... }
 
 DETECTION UTILITIES:
 
