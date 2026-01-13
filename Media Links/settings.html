@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -49,7 +49,7 @@
           </label>
           <select id="theme-select" class="setting-input">
             <option value="light">Light</option>
-            <option value="dark">Dark</option>
+            <option value="dark" selected>Dark</option>
             <option value="catppuccin-mocha">Catppuccin Mocha</option>
             <option value="cats">Cats</option>
             <option value="cat-night">Cat Night</option>
@@ -776,6 +776,25 @@
             <input type="number" id="stopwatch-notification-minutes" class="setting-input" min="1" max="1440" value="30" style="max-width: 150px;">
           </div>
 
+          <div class="setting-item" id="silent-mode-container" style="opacity: 0.5; pointer-events: none;">
+            <label class="setting-label">
+              <span class="label-text">Silent Mode (No Popup)</span>
+              <span class="label-description">Run bookmarklets without showing notification popup (runs in background)</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="stopwatch-notification-silent">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item" id="bookmarklet-delay-container" style="opacity: 0.5; pointer-events: none;">
+            <label for="stopwatch-bookmarklet-delay" class="setting-label">
+              <span class="label-text">Delay Between Bookmarklets (ms)</span>
+              <span class="label-description">Default time to wait between sequential bookmarklet executions</span>
+            </label>
+            <input type="number" id="stopwatch-bookmarklet-delay" class="setting-input" min="0" max="60000" value="0" style="max-width: 150px;">
+          </div>
+
           <div class="setting-item" id="open-bookmarks-container" style="opacity: 0.5; pointer-events: none;">
             <label class="setting-label">
               <span class="label-text">Open Bookmarks on Notification</span>
@@ -820,6 +839,8 @@
               <input type="hidden" id="stopwatch-included-domains">
               <input type="hidden" id="stopwatch-bookmarks-by-domain">
               <input type="hidden" id="stopwatch-notification-time-by-domain">
+              <input type="hidden" id="stopwatch-silent-mode-by-domain">
+              <input type="hidden" id="stopwatch-delay-by-domain">
             </div>
           </div>
         </div>

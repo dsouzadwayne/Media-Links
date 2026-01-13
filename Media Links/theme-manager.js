@@ -7,7 +7,7 @@ window.ThemeManager = (() => {
   'use strict';
 
   // Private variables
-  let currentTheme = 'light';
+  let currentTheme = 'dark';
   const subscribers = new Set();
   let isInitialized = false;
   let initializationPromise = null;
@@ -97,24 +97,31 @@ window.ThemeManager = (() => {
     return new Promise((resolve) => {
       try {
         if (!isExtensionContextValid()) {
-          currentTheme = 'light';
-          resolve('light');
+          currentTheme = 'dark';
+          resolve('dark');
           return;
         }
 
         if (chrome.storage && chrome.storage.sync) {
           chrome.storage.sync.get(['theme'], (result) => {
-            currentTheme = result.theme || 'light';
+            const storedTheme = result.theme || 'dark';
+            // Validate that the theme exists in themeColors
+            if (themeColors[storedTheme]) {
+              currentTheme = storedTheme;
+            } else {
+              console.warn(`ThemeManager: Invalid stored theme "${storedTheme}", falling back to "dark"`);
+              currentTheme = 'dark';
+            }
             resolve(currentTheme);
           });
         } else {
-          currentTheme = 'light';
-          resolve('light');
+          currentTheme = 'dark';
+          resolve('dark');
         }
       } catch (error) {
         console.warn('ThemeManager: Error loading theme:', error);
-        currentTheme = 'light';
-        resolve('light');
+        currentTheme = 'dark';
+        resolve('dark');
       }
     });
   };
@@ -193,8 +200,8 @@ window.ThemeManager = (() => {
    */
   const setTheme = (theme) => {
     if (!themeColors[theme]) {
-      console.warn(`ThemeManager: Invalid theme "${theme}", using "light"`);
-      theme = 'light';
+      console.warn(`ThemeManager: Invalid theme "${theme}", using "dark"`);
+      theme = 'dark';
     }
 
     currentTheme = theme;
@@ -211,7 +218,7 @@ window.ThemeManager = (() => {
    * Get theme colors for a specific theme
    */
   const getThemeColors = (theme = currentTheme) => {
-    return themeColors[theme] || themeColors.light;
+    return themeColors[theme] || themeColors.dark;
   };
 
   /**

@@ -80,7 +80,7 @@
       "pages": ["sandbox.html"]
    },
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "0.856",
+   "version": "0.857",
    "web_accessible_resources": [
       {
          "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html", "offscreen.html", "consolidated-view-page.html", "consolidated-view-page.js", "comparison-view-page.html", "comparison-view-page.js", "customized-views.js", "theme-manager.js", "settings-utils.js", "hotstar-episode-copy.js", "hotstar-show-title-copy.js", "airtelxstream-episode-copy.js", "airtelxstream-cast-copy.js", "appletv-view-page.html", "appletv-view-page.js", "appletv-customized-views.js", "filters/role-filters.js", "youtube-transcript-view.html", "youtube-transcript-view.js", "bookmarklet-editor/bookmarkleteditor.html", "bookmarklet-editor/bookmarkleteditor.js", "bookmarklet-editor/bookmarkleteditor.css", "bookmarklet-editor/scheduler-storage.js", "lib/element-detection.js", "lib/bookmarklet-parser.js"],

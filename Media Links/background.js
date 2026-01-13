@@ -1909,9 +1909,9 @@ chrome.runtime.onInstalled.addListener(() => {
 
     // Handle executeMultipleBookmarklets request (batch execution)
     if (message.type === 'executeMultipleBookmarklets') {
-      const { bookmarklets } = message;
+      const { bookmarklets, defaultDelay = 0 } = message;
 
-      console.log(`Background: Received executeMultipleBookmarklets request for ${bookmarklets?.length || 0} bookmarklet(s)`);
+      console.log(`Background: Received executeMultipleBookmarklets request for ${bookmarklets?.length || 0} bookmarklet(s), defaultDelay: ${defaultDelay}ms`);
 
       if (!bookmarklets || !Array.isArray(bookmarklets) || bookmarklets.length === 0) {
         console.warn('Background: No bookmarklets provided');
@@ -1933,7 +1933,8 @@ chrome.runtime.onInstalled.addListener(() => {
           errors: []
         };
 
-        for (const bookmarklet of bookmarklets) {
+        for (let i = 0; i < bookmarklets.length; i++) {
+          const bookmarklet = bookmarklets[i];
           if (!bookmarklet.code) {
             results.failed++;
             results.errors.push(`${bookmarklet.title || 'Untitled'}: No code`);
@@ -1951,6 +1952,15 @@ chrome.runtime.onInstalled.addListener(() => {
           } else {
             results.failed++;
             results.errors.push(`${bookmarklet.title || 'Untitled'}: ${result.error}`);
+          }
+
+          // Apply delay after execution (except for the last bookmarklet)
+          if (i < bookmarklets.length - 1) {
+            const delay = typeof bookmarklet.delayAfter === 'number' ? bookmarklet.delayAfter : defaultDelay;
+            if (delay > 0) {
+              console.log(`Background: Waiting ${delay}ms before next bookmarklet...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
           }
         }
 

@@ -1484,8 +1484,10 @@ ${sourceURL}`;
 
   /**
    * Execute multiple scripts via background (batch execution)
+   * @param {array} scripts - Array of {code, title, delayAfter?} objects
+   * @param {object} options - Execution options including defaultDelay
    */
-  async function executeMultipleViaBackground(scripts) {
+  async function executeMultipleViaBackground(scripts, options = {}) {
     if (!isExtensionContextValid()) {
       return {
         success: false,
@@ -1498,7 +1500,8 @@ ${sourceURL}`;
       return new Promise((resolve) => {
         chrome.runtime.sendMessage({
           type: 'executeMultipleBookmarklets',
-          bookmarklets: scripts
+          bookmarklets: scripts,
+          defaultDelay: options.defaultDelay || 0
         }, (response) => {
           if (chrome.runtime.lastError) {
             resolve({
@@ -1627,10 +1630,11 @@ ${sourceURL}`;
   }
 
   /**
-   * Execute multiple scripts sequentially with auto-fallback
+   * Execute multiple scripts sequentially with auto-fallback and optional delays
    *
-   * @param {array} scripts - Array of {code, title} objects
+   * @param {array} scripts - Array of {code, title, delayAfter?} objects
    * @param {object} options - Execution options
+   * @param {number} options.defaultDelay - Default delay in ms between scripts (default: 0)
    * @returns {Promise<{total, executed, failed, errors, results}>}
    */
   async function executeMultiple(scripts, options = {}) {
@@ -1642,18 +1646,21 @@ ${sourceURL}`;
       results: []
     };
 
+    const defaultDelay = options.defaultDelay || 0;
+
     // Check if local execution is possible
     const canExecuteLocally = isScriptInjectionAvailable() || isEvalAvailable();
 
     if (!canExecuteLocally && isExtensionContextValid()) {
       // Use batch background execution for efficiency
       console.log('Monkey: Local execution blocked, using background batch execution');
-      const bgResult = await executeMultipleViaBackground(scripts);
+      const bgResult = await executeMultipleViaBackground(scripts, { defaultDelay });
       return bgResult.results || results;
     }
 
-    // Execute each script
-    for (const script of scripts) {
+    // Execute each script with optional delays
+    for (let i = 0; i < scripts.length; i++) {
+      const script = scripts[i];
       const result = await execute(script.code, {
         ...options,
         title: script.title
@@ -1666,6 +1673,15 @@ ${sourceURL}`;
       } else {
         results.failed++;
         results.errors.push(`${script.title}: ${result.error}`);
+      }
+
+      // Apply delay after execution (except for the last script)
+      if (i < scripts.length - 1) {
+        const delay = typeof script.delayAfter === 'number' ? script.delayAfter : defaultDelay;
+        if (delay > 0) {
+          console.log(`Monkey: Waiting ${delay}ms before next script...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
       }
     }
 

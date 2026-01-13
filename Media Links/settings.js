@@ -7,7 +7,7 @@ const getDefaultSettings = () => {
   // Fallback defaults if SettingsUtils not loaded yet (shouldn't happen in normal flow)
   console.warn('SettingsUtils not available, using minimal fallback defaults');
   return {
-    theme: 'light',
+    theme: 'dark',
     defaultSearchEngine: 'google',
     autoOpenResults: false,
     tabDelay: 150
@@ -246,6 +246,24 @@ function applySettingsToUI() {
   if (notificationTimeHiddenInput) {
     notificationTimeHiddenInput.value = JSON.stringify(notificationTimeByDomain);
   }
+
+  // Load silent mode by domain
+  const silentModeByDomain = currentSettings.stopwatchSilentModeByDomain || {};
+  const silentModeHiddenInput = document.getElementById('stopwatch-silent-mode-by-domain');
+  if (silentModeHiddenInput) {
+    silentModeHiddenInput.value = JSON.stringify(silentModeByDomain);
+  }
+
+  // Load delay by domain
+  const delayByDomainSettings = currentSettings.stopwatchDelayByDomain || {};
+  const delayByDomainHiddenInput = document.getElementById('stopwatch-delay-by-domain');
+  if (delayByDomainHiddenInput) {
+    delayByDomainHiddenInput.value = JSON.stringify(delayByDomainSettings);
+  }
+
+  // Load global silent mode and bookmarklet delay settings
+  safeSetChecked('stopwatch-notification-silent', currentSettings.stopwatchNotificationSilent === true);
+  safeSetValue('stopwatch-bookmarklet-delay', currentSettings.stopwatchBookmarkletDelay || 0);
 
   // Render domain tags from the hidden input value (now has bookmark data)
   renderDomainTags();
@@ -505,6 +523,7 @@ function toggleStopwatchSettings(enabled) {
 
 // Toggle notification minutes input visibility
 function toggleNotificationMinutes(enabled) {
+  // Toggle notification minutes container
   const container = document.getElementById('notification-minutes-container');
   if (container) {
     if (enabled) {
@@ -516,6 +535,38 @@ function toggleNotificationMinutes(enabled) {
       container.style.opacity = '0.5';
       container.style.pointerEvents = 'none';
       const input = container.querySelector('input');
+      if (input) input.disabled = true;
+    }
+  }
+
+  // Toggle silent mode container
+  const silentContainer = document.getElementById('silent-mode-container');
+  if (silentContainer) {
+    if (enabled) {
+      silentContainer.style.opacity = '1';
+      silentContainer.style.pointerEvents = 'auto';
+      const input = silentContainer.querySelector('input');
+      if (input) input.disabled = false;
+    } else {
+      silentContainer.style.opacity = '0.5';
+      silentContainer.style.pointerEvents = 'none';
+      const input = silentContainer.querySelector('input');
+      if (input) input.disabled = true;
+    }
+  }
+
+  // Toggle bookmarklet delay container
+  const delayContainer = document.getElementById('bookmarklet-delay-container');
+  if (delayContainer) {
+    if (enabled) {
+      delayContainer.style.opacity = '1';
+      delayContainer.style.pointerEvents = 'auto';
+      const input = delayContainer.querySelector('input');
+      if (input) input.disabled = false;
+    } else {
+      delayContainer.style.opacity = '0.5';
+      delayContainer.style.pointerEvents = 'none';
+      const input = delayContainer.querySelector('input');
       if (input) input.disabled = true;
     }
   }
@@ -732,7 +783,11 @@ function saveSettings() {
     stopwatchOpenBookmarksOnNotification: getSafeValue('stopwatch-open-bookmarks', 'checked'),
     stopwatchBookmarksByDomain: parseBookmarksByDomain(getSafeValue('stopwatch-bookmarks-by-domain')),
     stopwatchNotificationTimeByDomain: parseNotificationTimeByDomain(getSafeValue('stopwatch-notification-time-by-domain')),
-    stopwatchGlobalBookmarklets: getSelectedGlobalBookmarklets()
+    stopwatchGlobalBookmarklets: getSelectedGlobalBookmarklets(),
+    stopwatchNotificationSilent: getSafeValue('stopwatch-notification-silent', 'checked'),
+    stopwatchSilentModeByDomain: parseSilentModeByDomain(getSafeValue('stopwatch-silent-mode-by-domain')),
+    stopwatchDelayByDomain: parseDelayByDomain(getSafeValue('stopwatch-delay-by-domain')),
+    stopwatchBookmarkletDelay: validateNumericInput(getSafeValue('stopwatch-bookmarklet-delay'), 0, 60000, 0)
   };
 
   // Save to storage using SettingsUtils with validation
@@ -872,6 +927,8 @@ function renderDomainList() {
   const hiddenInput = document.getElementById('stopwatch-included-domains');
   const bookmarksInput = document.getElementById('stopwatch-bookmarks-by-domain');
   const notificationTimeInput = document.getElementById('stopwatch-notification-time-by-domain');
+  const silentModeInput = document.getElementById('stopwatch-silent-mode-by-domain');
+  const delayInput = document.getElementById('stopwatch-delay-by-domain');
 
   if (!listContainer || !hiddenInput) return;
 
@@ -888,6 +945,12 @@ function renderDomainList() {
   // Get notification times by domain
   const notificationTimeByDomain = parseNotificationTimeByDomain(notificationTimeInput ? notificationTimeInput.value : '');
 
+  // Get silent mode by domain
+  const silentModeByDomain = parseSilentModeByDomain(silentModeInput ? silentModeInput.value : '');
+
+  // Get delay by domain
+  const delayByDomain = parseDelayByDomain(delayInput ? delayInput.value : '');
+
   if (domains.length === 0) {
     const emptyMsg = document.createElement('div');
     emptyMsg.style.cssText = 'color: var(--text-secondary); font-size: 12px; padding: 8px 0;';
@@ -900,12 +963,14 @@ function renderDomainList() {
   domains.forEach(domain => {
     const bookmarks = bookmarksByDomain[domain] || [];
     const notificationTime = notificationTimeByDomain[domain]; // in seconds, may be undefined
-    const item = createDomainListItem(domain, bookmarks, notificationTime);
+    const silentMode = silentModeByDomain[domain]; // boolean, may be undefined
+    const domainDelay = delayByDomain[domain]; // in ms, may be undefined
+    const item = createDomainListItem(domain, bookmarks, notificationTime, silentMode, domainDelay);
     listContainer.appendChild(item);
   });
 }
 
-function createDomainListItem(domain, bookmarks, notificationTimeSeconds) {
+function createDomainListItem(domain, bookmarks, notificationTimeSeconds, silentMode, domainDelay) {
   const item = document.createElement('div');
   item.className = 'domain-list-item';
   item.style.cssText = 'display: flex; flex-direction: column; padding: 12px; margin: 6px 0; background: var(--surface-bg); border-radius: 8px; gap: 8px;';
@@ -927,7 +992,7 @@ function createDomainListItem(domain, bookmarks, notificationTimeSeconds) {
   configBtn.className = 'secondary-button';
   configBtn.style.cssText = 'padding: 4px 10px; font-size: 12px;';
   configBtn.textContent = 'Configure';
-  configBtn.addEventListener('click', () => openEditSiteModal(domain, bookmarks, notificationTimeSeconds));
+  configBtn.addEventListener('click', () => openEditSiteModal(domain, bookmarks, notificationTimeSeconds, silentMode, domainDelay));
 
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';
@@ -947,7 +1012,7 @@ function createDomainListItem(domain, bookmarks, notificationTimeSeconds) {
 
   item.appendChild(topRow);
 
-  // Info row: notification time and bookmarks
+  // Info row: notification time, silent mode, and bookmarks
   const infoRow = document.createElement('div');
   infoRow.style.cssText = 'font-size: 12px; color: var(--text-secondary); padding-left: 4px; display: flex; flex-wrap: wrap; gap: 12px;';
 
@@ -957,6 +1022,14 @@ function createDomainListItem(domain, bookmarks, notificationTimeSeconds) {
     timeInfo.textContent = `⏰ ${formatSecondsToMMSS(notificationTimeSeconds)}`;
     timeInfo.title = 'Notification time (MM:SS)';
     infoRow.appendChild(timeInfo);
+  }
+
+  // Silent mode info
+  if (silentMode === true) {
+    const silentInfo = document.createElement('span');
+    silentInfo.textContent = '🔇 Silent';
+    silentInfo.title = 'Silent mode enabled - no popup notification';
+    infoRow.appendChild(silentInfo);
   }
 
   // Bookmark info
@@ -1340,6 +1413,38 @@ function parseNotificationTimeByDomain(value) {
 }
 
 /**
+ * Parse silent mode by domain hidden input value
+ * @param {string} value - JSON string of silent mode by domain
+ * @returns {object} - Object with domain keys and boolean values
+ */
+function parseSilentModeByDomain(value) {
+  if (!value || value === '') return {};
+  try {
+    const parsed = JSON.parse(value);
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    console.warn('Failed to parse silent mode by domain:', e);
+    return {};
+  }
+}
+
+/**
+ * Parse delay by domain from hidden input value
+ * @param {string} value - JSON string of delay by domain object
+ * @returns {object} Object mapping domain names to delay values in ms
+ */
+function parseDelayByDomain(value) {
+  if (!value || value === '') return {};
+  try {
+    const parsed = JSON.parse(value);
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    console.warn('Failed to parse delay by domain:', e);
+    return {};
+  }
+}
+
+/**
  * Format seconds to MM:SS display
  * @param {number} totalSeconds - Time in seconds
  * @returns {string} Formatted time like "11:11" or "5:00"
@@ -1387,8 +1492,8 @@ function parseMMSSToSeconds(timeStr) {
 /**
  * Open modal to edit bookmarks and notification time for a domain (called from domain list)
  */
-function openEditSiteModal(domain, bookmarks, notificationTimeSeconds) {
-  openSiteBookmarkModal(domain, bookmarks, notificationTimeSeconds);
+function openEditSiteModal(domain, bookmarks, notificationTimeSeconds, silentMode, domainDelay) {
+  openSiteBookmarkModal(domain, bookmarks, notificationTimeSeconds, silentMode, domainDelay);
 }
 
 /**
@@ -1396,17 +1501,31 @@ function openEditSiteModal(domain, bookmarks, notificationTimeSeconds) {
  * @param {string} domain - Domain to configure bookmarks for
  * @param {Array} existingBookmarks - Current bookmarks for this domain
  * @param {number} existingNotificationTime - Current notification time in seconds for this domain
+ * @param {boolean} existingSilentMode - Current silent mode setting for this domain
+ * @param {number} existingDomainDelay - Current default delay for this domain in ms
  */
-function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTime) {
+function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTime, existingSilentMode, existingDomainDelay) {
   const existingModal = document.getElementById('bookmark-selector-modal');
   if (existingModal) existingModal.remove();
 
-  // Track selected bookmarks for this modal session
-  let selectedBookmarks = [...existingBookmarks];
+  // Track selected bookmarks for this modal session (with delayAfter property)
+  let selectedBookmarks = [...existingBookmarks].map(bm => ({
+    ...bm,
+    delayAfter: typeof bm.delayAfter === 'number' ? bm.delayAfter : 0
+  }));
   let selectedIds = new Set(selectedBookmarks.map(b => b.id));
 
   // Track notification time for this modal session
   let currentNotificationTime = existingNotificationTime || 0;
+
+  // Track silent mode for this modal session
+  let currentSilentMode = existingSilentMode === true;
+
+  // Track domain delay for this modal session (in ms)
+  let currentDomainDelay = typeof existingDomainDelay === 'number' ? existingDomainDelay : 0;
+
+  // Drag-and-drop state
+  let draggedItem = null;
 
   const modal = document.createElement('div');
   modal.id = 'bookmark-selector-modal';
@@ -1459,45 +1578,241 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
   notificationSection.appendChild(notificationLabel);
   notificationSection.appendChild(notificationInputRow);
 
+  // Silent Mode Section
+  const silentSection = document.createElement('div');
+  silentSection.style.cssText = 'padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface-bg); flex-shrink: 0;';
+
+  const silentRow = document.createElement('div');
+  silentRow.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+
+  const silentCheckbox = document.createElement('input');
+  silentCheckbox.type = 'checkbox';
+  silentCheckbox.id = 'modal-silent-mode';
+  silentCheckbox.checked = currentSilentMode;
+  silentCheckbox.style.cssText = 'width: 18px; height: 18px; cursor: pointer;';
+  silentCheckbox.addEventListener('change', () => {
+    currentSilentMode = silentCheckbox.checked;
+  });
+
+  const silentLabel = document.createElement('label');
+  silentLabel.htmlFor = 'modal-silent-mode';
+  silentLabel.style.cssText = 'font-size: 13px; color: var(--text-primary); cursor: pointer;';
+  silentLabel.textContent = 'Silent Mode - run bookmarklets without popup notification';
+
+  silentRow.appendChild(silentCheckbox);
+  silentRow.appendChild(silentLabel);
+  silentSection.appendChild(silentRow);
+
+  // Domain Delay Section
+  const delaySection = document.createElement('div');
+  delaySection.className = 'domain-delay-section';
+  delaySection.style.cssText = 'padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface-bg); flex-shrink: 0; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;';
+
+  const delayLabel = document.createElement('label');
+  delayLabel.htmlFor = 'modal-domain-delay';
+  delayLabel.style.cssText = 'font-size: 13px; color: var(--text-primary);';
+  delayLabel.textContent = 'Default Delay:';
+
+  const delayInput = document.createElement('input');
+  delayInput.type = 'number';
+  delayInput.id = 'modal-domain-delay';
+  delayInput.min = '0';
+  delayInput.max = '60000';
+  delayInput.value = currentDomainDelay;
+  delayInput.style.cssText = 'width: 80px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--input-bg); color: var(--text-primary); font-size: 13px; text-align: right;';
+  delayInput.addEventListener('change', () => {
+    currentDomainDelay = parseInt(delayInput.value, 10) || 0;
+  });
+
+  const delayUnit = document.createElement('span');
+  delayUnit.style.cssText = 'font-size: 12px; color: var(--text-secondary);';
+  delayUnit.textContent = 'ms';
+
+  const delayHint = document.createElement('span');
+  delayHint.style.cssText = 'font-size: 11px; color: var(--text-secondary); margin-left: auto;';
+  delayHint.textContent = '0 = use global default';
+
+  delaySection.appendChild(delayLabel);
+  delaySection.appendChild(delayInput);
+  delaySection.appendChild(delayUnit);
+  delaySection.appendChild(delayHint);
+
+  // Sortable Bookmarklet List Section (replaces chip preview)
+  const sortableSection = document.createElement('div');
+  sortableSection.style.cssText = 'padding: 12px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; max-height: 250px; overflow-y: auto;';
+
+  const sortableHeader = document.createElement('div');
+  sortableHeader.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;';
+
+  const sortableLabel = document.createElement('div');
+  sortableLabel.style.cssText = 'font-size: 13px; font-weight: 500; color: var(--text-primary);';
+  sortableLabel.textContent = 'Bookmarklets to Run';
+
+  const sortableHint = document.createElement('div');
+  sortableHint.style.cssText = 'font-size: 11px; color: var(--text-secondary);';
+  sortableHint.innerHTML = 'Drag ☰ to reorder';
+
+  sortableHeader.appendChild(sortableLabel);
+  sortableHeader.appendChild(sortableHint);
+
+  const sortableList = document.createElement('div');
+  sortableList.className = 'sortable-bookmark-list';
+  sortableList.id = 'modal-sortable-list';
+
+  // Function to render the sortable list
+  function renderSortableList() {
+    sortableList.innerHTML = '';
+
+    if (selectedBookmarks.length === 0) {
+      const emptyMsg = document.createElement('div');
+      emptyMsg.className = 'sortable-list-empty';
+      emptyMsg.textContent = 'No bookmarklets selected. Add some from below.';
+      sortableList.appendChild(emptyMsg);
+      return;
+    }
+
+    selectedBookmarks.forEach((bm, index) => {
+      const item = document.createElement('div');
+      item.className = 'sortable-bookmark-item';
+      item.draggable = true;
+      item.dataset.index = index;
+
+      // Drag handle
+      const handle = document.createElement('span');
+      handle.className = 'drag-handle';
+      handle.textContent = '☰';
+
+      // Order number
+      const order = document.createElement('span');
+      order.className = 'bookmark-order';
+      order.textContent = `${index + 1}.`;
+
+      // Title
+      const title = document.createElement('span');
+      title.className = 'bookmark-title';
+      const isCode = bm.isCustomCode || (bm.url && bm.url.startsWith('javascript:'));
+      const isEditorBookmarklet = bm.isEditorBookmarklet;
+      let prefix = '';
+      if (isEditorBookmarklet) prefix = '📜 ';
+      else if (isCode) prefix = '</> ';
+      title.textContent = `${prefix}${bm.title || 'Untitled'}`;
+      title.title = bm.title || bm.url || 'Untitled';
+
+      // Delay input
+      const delayInputItem = document.createElement('input');
+      delayInputItem.type = 'number';
+      delayInputItem.className = 'delay-input';
+      delayInputItem.min = '0';
+      delayInputItem.max = '60000';
+      delayInputItem.value = bm.delayAfter || 0;
+      delayInputItem.placeholder = '0';
+      delayInputItem.title = 'Delay after this bookmarklet (ms)';
+      delayInputItem.addEventListener('change', () => {
+        selectedBookmarks[index].delayAfter = parseInt(delayInputItem.value, 10) || 0;
+      });
+
+      // Delay unit
+      const delayUnitItem = document.createElement('span');
+      delayUnitItem.className = 'delay-unit';
+      delayUnitItem.textContent = 'ms';
+
+      // Remove button
+      const removeBtn = document.createElement('button');
+      removeBtn.className = 'remove-bookmark-btn';
+      removeBtn.textContent = '🗑';
+      removeBtn.title = 'Remove';
+      removeBtn.addEventListener('click', () => {
+        selectedIds.delete(bm.id);
+        selectedBookmarks.splice(index, 1);
+        renderSortableList();
+        // Update checkboxes in other sections
+        updateBookmarkCheckboxes();
+      });
+
+      // Drag events
+      item.addEventListener('dragstart', (e) => {
+        draggedItem = item;
+        item.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+      });
+
+      item.addEventListener('dragend', () => {
+        item.classList.remove('dragging');
+        document.querySelectorAll('.sortable-bookmark-item.drag-over').forEach(el => el.classList.remove('drag-over'));
+        draggedItem = null;
+      });
+
+      item.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (draggedItem && draggedItem !== item) {
+          item.classList.add('drag-over');
+        }
+      });
+
+      item.addEventListener('dragleave', () => {
+        item.classList.remove('drag-over');
+      });
+
+      item.addEventListener('drop', (e) => {
+        e.preventDefault();
+        item.classList.remove('drag-over');
+
+        if (draggedItem && draggedItem !== item) {
+          const fromIndex = parseInt(draggedItem.dataset.index, 10);
+          const toIndex = parseInt(item.dataset.index, 10);
+
+          // Reorder the array
+          const [movedItem] = selectedBookmarks.splice(fromIndex, 1);
+          selectedBookmarks.splice(toIndex, 0, movedItem);
+
+          renderSortableList();
+        }
+      });
+
+      item.appendChild(handle);
+      item.appendChild(order);
+      item.appendChild(title);
+      item.appendChild(delayInputItem);
+      item.appendChild(delayUnitItem);
+      item.appendChild(removeBtn);
+
+      sortableList.appendChild(item);
+    });
+  }
+
+  // Function to update checkboxes in bookmark tree and editor bookmarklets
+  function updateBookmarkCheckboxes() {
+    // Update bookmark tree checkboxes
+    const treeCheckboxes = treeContainer.querySelectorAll('input[type="checkbox"]');
+    treeCheckboxes.forEach(cb => {
+      const bookmarkItem = cb.closest('[data-bookmark-title]');
+      if (bookmarkItem) {
+        const bookmarkId = bookmarkItem.getAttribute('data-bookmark-id');
+        cb.checked = selectedIds.has(bookmarkId);
+      }
+    });
+
+    // Update editor bookmarklets checkboxes
+    const editorCheckboxes = savedBookmarkletsList.querySelectorAll('input[type="checkbox"]');
+    editorCheckboxes.forEach(cb => {
+      const editorId = cb.getAttribute('data-editor-id');
+      if (editorId) {
+        const isSelected = selectedBookmarks.some(sb => sb.editorBookmarkletId === editorId);
+        cb.checked = isSelected;
+      }
+    });
+  }
+
+  // Initial render
+  renderSortableList();
+
+  sortableSection.appendChild(sortableHeader);
+  sortableSection.appendChild(sortableList);
+
   // Instructions
   const instructions = document.createElement('div');
   instructions.style.cssText = 'padding: 10px 16px; background: var(--surface-bg); font-size: 12px; color: var(--text-secondary); border-bottom: 1px solid var(--border); flex-shrink: 0;';
-  instructions.innerHTML = 'Select bookmarks or <strong>add custom code</strong> to run when notification is dismissed.';
-
-  // Selected bookmarks preview
-  const selectedPreview = document.createElement('div');
-  selectedPreview.id = 'modal-selected-preview';
-  selectedPreview.style.cssText = 'padding: 10px 16px; border-bottom: 1px solid var(--border); max-height: 80px; overflow-y: auto; flex-shrink: 0;';
-
-  function updateSelectedPreview() {
-    selectedPreview.innerHTML = '';
-    if (selectedBookmarks.length === 0) {
-      selectedPreview.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px;">No bookmarks selected</div>';
-    } else {
-      const label = document.createElement('div');
-      label.textContent = `Selected (${selectedBookmarks.length}):`;
-      label.style.cssText = 'font-size: 12px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px;';
-      selectedPreview.appendChild(label);
-
-      selectedBookmarks.forEach((bm, idx) => {
-        const chip = document.createElement('span');
-        const isCode = bm.isCustomCode || (bm.url && bm.url.startsWith('javascript:'));
-        const isEditorBookmarklet = bm.isEditorBookmarklet;
-        let prefix = '';
-        if (isEditorBookmarklet) prefix = '📜 ';
-        else if (isCode) prefix = '</> ';
-        chip.textContent = `${idx + 1}. ${prefix}${bm.title || 'Untitled'}`;
-        // Custom code uses surface bg with accent border, editor bookmarklets use success color, regular bookmarks use accent glow
-        const codeStyle = 'background: var(--surface-bg); border: 1px solid var(--accent); color: var(--accent);';
-        const editorStyle = 'background: var(--success-bg); border: 1px solid var(--success); color: var(--success);';
-        const bookmarkStyle = 'background: var(--accent-glow); border: 1px solid transparent; color: var(--text-primary);';
-        const style = isEditorBookmarklet ? editorStyle : (isCode ? codeStyle : bookmarkStyle);
-        chip.style.cssText = `display: inline-block; ${style} padding: 4px 8px; border-radius: 4px; font-size: 11px; margin: 2px 4px 2px 0;`;
-        selectedPreview.appendChild(chip);
-      });
-    }
-  }
-  updateSelectedPreview();
+  instructions.innerHTML = 'Add bookmarks or <strong>custom code</strong> to run when notification is dismissed.';
 
   // Add Custom Code section
   const customCodeSection = document.createElement('div');
@@ -1570,12 +1885,13 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
       id: 'custom_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9),
       title: name,
       url: code,
-      isCustomCode: true
+      isCustomCode: true,
+      delayAfter: 0
     };
 
     selectedBookmarks.push(customBookmark);
     selectedIds.add(customBookmark.id);
-    updateSelectedPreview();
+    renderSortableList();
 
     // Reset form
     codeInputContainer.style.display = 'none';
@@ -1648,7 +1964,8 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
             id: 'editor_' + bm.id,
             editorBookmarkletId: bm.id,
             title: bm.name || 'Untitled Bookmarklet',
-            isEditorBookmarklet: true
+            isEditorBookmarklet: true,
+            delayAfter: 0
           };
           selectedBookmarks.push(editorBookmark);
           selectedIds.add(editorBookmark.id);
@@ -1660,7 +1977,7 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
             selectedBookmarks.splice(idx, 1);
           }
         }
-        updateSelectedPreview();
+        renderSortableList();
       });
 
       item.appendChild(checkbox);
@@ -1757,6 +2074,7 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
   saveBtn.addEventListener('click', () => {
     const bookmarksHiddenInput = document.getElementById('stopwatch-bookmarks-by-domain');
     const notificationTimeHiddenInput = document.getElementById('stopwatch-notification-time-by-domain');
+    const silentModeHiddenInput = document.getElementById('stopwatch-silent-mode-by-domain');
 
     if (!bookmarksHiddenInput) return;
 
@@ -1791,6 +2109,31 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
       notificationTimeHiddenInput.value = JSON.stringify(notificationTimeByDomain);
     }
 
+    // Save silent mode
+    if (silentModeHiddenInput) {
+      let silentModeByDomain = parseSilentModeByDomain(silentModeHiddenInput.value);
+      if (currentSilentMode) {
+        silentModeByDomain[domain] = true;
+      } else {
+        // Remove if not silent (use default)
+        delete silentModeByDomain[domain];
+      }
+      silentModeHiddenInput.value = JSON.stringify(silentModeByDomain);
+    }
+
+    // Save domain delay
+    const delayHiddenInput = document.getElementById('stopwatch-delay-by-domain');
+    if (delayHiddenInput) {
+      let delayByDomain = parseDelayByDomain(delayHiddenInput.value);
+      if (currentDomainDelay > 0) {
+        delayByDomain[domain] = currentDomainDelay;
+      } else {
+        // Remove if 0 (use global default)
+        delete delayByDomain[domain];
+      }
+      delayHiddenInput.value = JSON.stringify(delayByDomain);
+    }
+
     renderDomainList();
     markUnsaved();
     modal.remove();
@@ -1801,8 +2144,10 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
 
   modalContent.appendChild(header);
   modalContent.appendChild(notificationSection);
+  modalContent.appendChild(silentSection);
+  modalContent.appendChild(delaySection);
+  modalContent.appendChild(sortableSection);
   modalContent.appendChild(instructions);
-  modalContent.appendChild(selectedPreview);
   modalContent.appendChild(customCodeSection);
   modalContent.appendChild(savedBookmarkletsSection);
   modalContent.appendChild(searchSection);
@@ -1826,7 +2171,7 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
     }
 
     bookmarkTreeNodes.forEach(node => {
-      renderBookmarkNodeForSite(treeContainer, node, selectedIds, selectedBookmarks, 0, updateSelectedPreview);
+      renderBookmarkNodeForSite(treeContainer, node, selectedIds, selectedBookmarks, 0, renderSortableList);
     });
   });
 }
@@ -1899,7 +2244,7 @@ function renderBookmarkNodeForSite(container, node, selectedIds, selectedBookmar
         bookmarkItem.style.border = '2px solid transparent';
         bookmarkItem.style.background = 'transparent';
       } else {
-        selectedBookmarks.push({ id: node.id, title: node.title, url: node.url });
+        selectedBookmarks.push({ id: node.id, title: node.title, url: node.url, delayAfter: 0 });
         selectedIds.add(node.id);
         checkbox.checked = true;
         bookmarkItem.style.border = '2px solid var(--accent)';

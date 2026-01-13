@@ -1018,6 +1018,164 @@ html, body {
   transform: translateY(0);
 }
 
+/* Sortable Bookmarklet List Styles */
+.sortable-bookmark-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 15px 0;
+  min-height: 50px;
+}
+
+.sortable-bookmark-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--primary-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 8px;
+  cursor: default;
+  transition: all 0.2s ease;
+}
+
+.sortable-bookmark-item:last-child {
+  margin-bottom: 0;
+}
+
+.sortable-bookmark-item:hover {
+  background: var(--hover-bg);
+  border-color: var(--accent);
+}
+
+.sortable-bookmark-item.dragging {
+  opacity: 0.5;
+  border: 2px dashed var(--accent);
+  background: var(--accent-bg);
+}
+
+.sortable-bookmark-item.drag-over {
+  border-top: 3px solid var(--accent);
+  margin-top: -3px;
+}
+
+.drag-handle {
+  cursor: grab;
+  opacity: 0.5;
+  font-size: 16px;
+  user-select: none;
+  padding: 4px;
+}
+
+.drag-handle:hover {
+  opacity: 1;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.bookmark-order {
+  font-weight: 600;
+  color: var(--accent);
+  min-width: 25px;
+  font-size: 13px;
+}
+
+.bookmark-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.delay-input {
+  width: 70px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--secondary-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: right;
+}
+
+.delay-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.delay-unit {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 20px;
+}
+
+.remove-bookmark-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0.5;
+  font-size: 16px;
+  padding: 4px;
+  transition: all 0.2s ease;
+}
+
+.remove-bookmark-btn:hover {
+  opacity: 1;
+  color: var(--danger, #ef4444);
+}
+
+.sortable-list-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-style: italic;
+  border: 2px dashed var(--border);
+  border-radius: 6px;
+}
+
+.domain-delay-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+  padding: 12px;
+  background: var(--secondary-bg);
+  border-radius: 6px;
+}
+
+.domain-delay-section label {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.domain-delay-section input {
+  width: 80px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--primary-bg);
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: right;
+}
+
+.domain-delay-section input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.domain-delay-section .hint {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+
 /* Responsive adjustments for domain list */
 @media (max-width: 768px) {
   .domain-list-container {

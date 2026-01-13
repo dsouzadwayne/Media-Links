@@ -9,7 +9,7 @@ window.SettingsUtils = (() => {
   // Default settings
   const DEFAULT_SETTINGS = {
     // Appearance
-    theme: 'light',
+    theme: 'dark',
     showSidebarBookmarkletRunner: false,
 
     // Search & Query

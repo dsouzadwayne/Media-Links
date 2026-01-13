@@ -57,10 +57,10 @@
    * Execute multiple bookmarklets via background script
    * Delegates to MonkeyEngine
    */
-  async function executeMultipleViaBackground(bookmarklets) {
+  async function executeMultipleViaBackground(bookmarklets, options = {}) {
     const engine = getMonkeyEngine();
     if (engine) {
-      const result = await engine.executeMultipleViaBackground(bookmarklets);
+      const result = await engine.executeMultipleViaBackground(bookmarklets, options);
       console.log(`Bookmarklets: Background batch execution complete:`, result.results);
       return result.results;
     }
@@ -612,19 +612,23 @@
   }
 
   /**
-   * Execute multiple bookmarklets sequentially
+   * Execute multiple bookmarklets sequentially with optional delays
    * Uses MonkeyEngine for efficient multi-method execution
    *
-   * @param {array} bookmarks - Array of bookmark objects with url and title
+   * @param {array} bookmarks - Array of bookmark objects with url, title, and optional delayAfter
+   * @param {object} options - Execution options
+   * @param {number} options.defaultDelay - Default delay in ms between bookmarklets (default: 0)
    * @returns {Promise<object>} - Results object with executed count and errors
    */
-  async function executeMultipleBookmarklets(bookmarks) {
+  async function executeMultipleBookmarklets(bookmarks, options = {}) {
     const results = {
       total: 0,
       executed: 0,
       failed: 0,
       errors: []
     };
+
+    const defaultDelay = options.defaultDelay || 0;
 
     if (!bookmarks || !Array.isArray(bookmarks)) {
       console.log('Bookmarklets: Invalid bookmarks array provided');
@@ -635,12 +639,13 @@
     const bookmarklets = bookmarks.filter(b => b.url && b.url.startsWith('javascript:'));
     results.total = bookmarklets.length;
 
-    console.log(`Bookmarklets: Processing ${bookmarklets.length} bookmarklet(s)`);
+    console.log(`Bookmarklets: Processing ${bookmarklets.length} bookmarklet(s), defaultDelay: ${defaultDelay}ms`);
 
-    // Parse all bookmarklet URLs first
+    // Parse all bookmarklet URLs first, preserving delayAfter
     const parsedBookmarklets = bookmarklets.map(b => ({
       code: parseBookmarkletUrl(b.url),
-      title: b.title || 'Untitled'
+      title: b.title || 'Untitled',
+      delayAfter: b.delayAfter // Preserve per-bookmarklet delay
     })).filter(b => b.code !== null);
 
     if (parsedBookmarklets.length === 0) {
@@ -652,7 +657,7 @@
     // Use MonkeyEngine if available
     const engine = getMonkeyEngine();
     if (engine) {
-      const engineResults = await engine.executeMultiple(parsedBookmarklets);
+      const engineResults = await engine.executeMultiple(parsedBookmarklets, { defaultDelay });
       results.executed = engineResults.executed;
       results.failed = engineResults.failed;
       results.errors = engineResults.errors || [];
@@ -661,8 +666,9 @@
       const canExecuteLocally = isScriptInjectionAvailable() || isEvalAvailable();
 
       if (canExecuteLocally) {
-        // Try local execution for each bookmarklet
-        for (const bookmarklet of bookmarklets) {
+        // Try local execution for each bookmarklet with delays
+        for (let i = 0; i < bookmarklets.length; i++) {
+          const bookmarklet = bookmarklets[i];
           try {
             if (await executeBookmarkletFromUrl(bookmarklet)) {
               results.executed++;
@@ -674,11 +680,20 @@
             results.failed++;
             results.errors.push(`Error in "${bookmarklet.title || 'Untitled'}": ${e.message}`);
           }
+
+          // Apply delay after execution (except for the last bookmarklet)
+          if (i < bookmarklets.length - 1) {
+            const delay = typeof bookmarklet.delayAfter === 'number' ? bookmarklet.delayAfter : defaultDelay;
+            if (delay > 0) {
+              console.log(`Bookmarklets: Waiting ${delay}ms before next bookmarklet...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+          }
         }
       } else {
         // Use background batch execution
         console.log('Bookmarklets: Local execution blocked, using background batch execution');
-        const bgResults = await executeMultipleViaBackground(parsedBookmarklets);
+        const bgResults = await executeMultipleViaBackground(parsedBookmarklets, { defaultDelay });
         results.executed = bgResults.executed;
         results.failed = bgResults.failed;
         results.errors = bgResults.errors || [];

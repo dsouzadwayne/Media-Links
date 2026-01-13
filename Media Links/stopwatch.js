@@ -33,7 +33,11 @@
     openBookmarksOnNotification: false,
     bookmarksByDomain: {},
     notificationTimeByDomain: {}, // Per-domain notification times in seconds
-    globalBookmarklets: [] // Global custom bookmarklet IDs (from editor)
+    globalBookmarklets: [], // Global custom bookmarklet IDs (from editor)
+    notificationSilent: false, // Global silent mode: skip alert, run bookmarklets in background
+    silentModeByDomain: {}, // Per-domain silent mode override: { "example.com": true }
+    bookmarkletDelay: 0, // Default delay in ms between bookmarklet executions
+    delayByDomain: {} // Per-domain delay override: { "example.com": 500 }
   };
 
   // Edge snapping threshold in pixels
@@ -328,7 +332,7 @@
   };
 
   // Current theme cache
-  let currentThemeCache = 'light';
+  let currentThemeCache = 'dark';
 
   /**
    * Get theme colors with additional computed colors for the stopwatch
@@ -339,7 +343,7 @@
 
     if (typeof ThemeManager !== 'undefined') {
       try {
-        themeName = ThemeManager.getTheme() || 'light';
+        themeName = ThemeManager.getTheme() || 'dark';
       } catch (e) {
         // Use cached or default
         themeName = currentThemeCache;
@@ -381,7 +385,7 @@
             resolve();
             return;
           }
-          currentThemeCache = result.theme || 'light';
+          currentThemeCache = result.theme || 'dark';
           resolve();
         });
       } catch (e) {
@@ -471,7 +475,7 @@
         try {
           chrome.runtime.onMessage.addListener((message) => {
             if (message.type === 'themeChanged') {
-              currentThemeCache = message.theme || 'light';
+              currentThemeCache = message.theme || 'dark';
               if (stopwatchElement) {
                 updateStopwatchUI();
               }
@@ -660,26 +664,24 @@
   }
 
   /**
-   * Show browser alert notification and focus the tab
-   * After user dismisses the alert, open selected bookmarks if enabled
+   * Show browser alert notification and focus the tab (unless silent mode is enabled)
+   * After user dismisses the alert (or immediately in silent mode), execute bookmarks if enabled
    */
   function showToastNotification(elapsed) {
     const hostname = window.location.hostname;
     const timeStr = formatTime(elapsed);
+    const isSilent = isSilentModeForCurrentDomain();
 
     console.log('Stopwatch: showToastNotification called', {
       hostname,
       timeStr,
+      isSilent,
       openBookmarksOnNotification: settings.openBookmarksOnNotification,
       bookmarksByDomain: settings.bookmarksByDomain
     });
 
-    const showAlert = async () => {
-      console.log('Stopwatch: Showing alert');
-      alert(`Time Alert!\n\nYou've been on ${hostname} for ${timeStr}`);
-      console.log('Stopwatch: Alert dismissed by user');
-
-      // After alert is dismissed, open bookmarks if enabled and configured for this domain
+    // Execute bookmarks/bookmarklets (called after alert or immediately in silent mode)
+    const executeBookmarks = async () => {
       if (settings.openBookmarksOnNotification) {
         console.log('Stopwatch: openBookmarksOnNotification is enabled, checking for domain bookmarks');
         const domainBookmarks = getBookmarksForCurrentDomain();
@@ -701,6 +703,21 @@
         // Execute custom bookmarklets even when browser bookmarks feature is disabled
         await executeCustomBookmarklets();
       }
+    };
+
+    // Silent mode: skip alert and execute bookmarks directly in background
+    if (isSilent) {
+      console.log('Stopwatch: Silent mode enabled, executing bookmarks without alert');
+      executeBookmarks();
+      return;
+    }
+
+    // Normal mode: show alert first
+    const showAlert = async () => {
+      console.log('Stopwatch: Showing alert');
+      alert(`Time Alert!\n\nYou've been on ${hostname} for ${timeStr}`);
+      console.log('Stopwatch: Alert dismissed by user');
+      await executeBookmarks();
     };
 
     // First, request to focus this tab (brings user to this tab)
@@ -791,6 +808,127 @@
 
     // Fall back to default (convert minutes to seconds)
     return settings.notificationMinutes * 60;
+  }
+
+  /**
+   * Check if silent mode is enabled for the current domain
+   * Checks for exact match first, then partial matches, then wildcards
+   * Falls back to global notificationSilent setting if no per-domain setting
+   * @returns {boolean} True if silent mode is enabled
+   */
+  function isSilentModeForCurrentDomain() {
+    const currentHostname = window.location.hostname.toLowerCase();
+    const currentUrl = window.location.href.toLowerCase();
+
+    if (!settings.silentModeByDomain || Object.keys(settings.silentModeByDomain).length === 0) {
+      // No per-domain settings, use global setting
+      return settings.notificationSilent;
+    }
+
+    // Check for exact match first
+    if (settings.silentModeByDomain[currentHostname] !== undefined) {
+      return settings.silentModeByDomain[currentHostname];
+    }
+
+    // Check for partial matches and wildcard patterns
+    for (const domain of Object.keys(settings.silentModeByDomain)) {
+      if (domain === '*') continue; // Handle global wildcard separately
+
+      // Check if pattern contains path - if so, match against full URL
+      const isUrlPattern = domain.includes('/') && !domain.startsWith('*://');
+      const matchTarget = isUrlPattern ? currentUrl : currentHostname;
+
+      let matches = false;
+
+      // Handle wildcard patterns (same logic as isDomainIncluded)
+      if (domain.startsWith('*') && domain.endsWith('*') && domain.length > 2) {
+        const pattern = domain.slice(1, -1);
+        matches = matchTarget.includes(pattern);
+      } else if (domain.startsWith('*')) {
+        const pattern = domain.slice(1);
+        matches = matchTarget.endsWith(pattern);
+      } else if (domain.endsWith('*')) {
+        const pattern = domain.slice(0, -1);
+        matches = matchTarget.startsWith(pattern);
+      } else {
+        // Exact match or current hostname is a subdomain of the pattern
+        matches = currentHostname === domain ||
+                  currentHostname.endsWith('.' + domain);
+      }
+
+      if (matches) {
+        return settings.silentModeByDomain[domain];
+      }
+    }
+
+    // Check for global wildcard (*)
+    if (settings.silentModeByDomain['*'] !== undefined) {
+      return settings.silentModeByDomain['*'];
+    }
+
+    // Fall back to global setting
+    return settings.notificationSilent;
+  }
+
+  /**
+   * Get the default delay between bookmarklets for the current domain
+   * Checks domain-specific delay first, falls back to global bookmarkletDelay setting
+   * Supports same wildcard patterns as isDomainIncluded()
+   * @returns {number} Delay in milliseconds
+   */
+  function getBookmarkletDelayForCurrentDomain() {
+    const currentHostname = window.location.hostname.toLowerCase();
+
+    // Check if we have any domain-specific delay settings
+    if (!settings.delayByDomain || Object.keys(settings.delayByDomain).length === 0) {
+      return settings.bookmarkletDelay || 0;
+    }
+
+    // First check for exact domain match
+    if (settings.delayByDomain[currentHostname] !== undefined) {
+      return settings.delayByDomain[currentHostname];
+    }
+
+    // Check for wildcard/pattern matches (same logic as isDomainIncluded)
+    for (const domain of Object.keys(settings.delayByDomain)) {
+      // Skip exact match (already checked)
+      if (domain === currentHostname) continue;
+
+      // Handle wildcards
+      if (domain.includes('*')) {
+        // Pattern: *.domain.com - matches any subdomain
+        if (domain.startsWith('*.')) {
+          const baseDomain = domain.slice(2);
+          if (currentHostname === baseDomain || currentHostname.endsWith('.' + baseDomain)) {
+            return settings.delayByDomain[domain];
+          }
+        }
+        // Pattern: domain.* - matches domain with any TLD
+        else if (domain.endsWith('.*')) {
+          const domainBase = domain.slice(0, -2);
+          const parts = currentHostname.split('.');
+          const hostnameBase = parts.slice(0, -1).join('.');
+          if (hostnameBase === domainBase || currentHostname.startsWith(domainBase + '.')) {
+            return settings.delayByDomain[domain];
+          }
+        }
+        // Pattern: *keyword* - matches if hostname contains keyword
+        else if (domain.startsWith('*') && domain.endsWith('*')) {
+          const keyword = domain.slice(1, -1).toLowerCase();
+          if (currentHostname.includes(keyword)) {
+            return settings.delayByDomain[domain];
+          }
+        }
+      }
+    }
+
+    // Check for catch-all wildcard
+    if (settings.delayByDomain['*'] !== undefined) {
+      return settings.delayByDomain['*'];
+    }
+
+    // Fall back to global setting
+    return settings.bookmarkletDelay || 0;
   }
 
   /**
@@ -955,12 +1093,12 @@
     // Separate bookmarklets from regular URLs and editor bookmarklets
     const bookmarklets = [];
     const regularBookmarks = [];
-    const editorBookmarkletIds = [];
+    const editorBookmarkletEntries = []; // Store full bookmark entry to preserve delayAfter
 
     for (const bookmark of bookmarks) {
       // Check if it's an editor bookmarklet (from bookmarklet editor)
       if (bookmark.isEditorBookmarklet && bookmark.editorBookmarkletId) {
-        editorBookmarkletIds.push(bookmark.editorBookmarkletId);
+        editorBookmarkletEntries.push(bookmark); // Keep full entry with delayAfter
         continue;
       }
 
@@ -977,19 +1115,20 @@
     }
 
     // Fetch and add editor bookmarklets to the bookmarklets array
-    if (editorBookmarkletIds.length > 0) {
+    if (editorBookmarkletEntries.length > 0) {
       try {
         const data = await new Promise((resolve) => {
           chrome.storage.local.get(['customBookmarklets'], resolve);
         });
         const allBookmarklets = data.customBookmarklets || {};
 
-        for (const id of editorBookmarkletIds) {
-          const bm = allBookmarklets[id];
+        for (const entry of editorBookmarkletEntries) {
+          const bm = allBookmarklets[entry.editorBookmarkletId];
           if (bm && bm.enabled !== false && bm.code) {
             bookmarklets.push({
               title: bm.name || 'Editor Bookmarklet',
-              url: 'javascript:' + encodeURIComponent(bm.code)
+              url: 'javascript:' + encodeURIComponent(bm.code),
+              delayAfter: typeof entry.delayAfter === 'number' ? entry.delayAfter : 0
             });
           }
         }
@@ -998,14 +1137,18 @@
       }
     }
 
-    console.log(`Stopwatch: Found ${bookmarklets.length} bookmarklet(s) (including ${editorBookmarkletIds.length} from editor) and ${regularBookmarks.length} regular bookmark(s)`);
+    console.log(`Stopwatch: Found ${bookmarklets.length} bookmarklet(s) (including ${editorBookmarkletEntries.length} from editor) and ${regularBookmarks.length} regular bookmark(s)`);
 
     // Execute bookmarklets using the bookmarklets.js handler
     if (bookmarklets.length > 0) {
       if (window.MediaLinksBookmarklets) {
         try {
+          // Get default delay for this domain
+          const defaultDelay = getBookmarkletDelayForCurrentDomain();
+          console.log(`Stopwatch: Executing bookmarklets with defaultDelay: ${defaultDelay}ms`);
+
           // executeMultiple is async - must await it
-          const results = await window.MediaLinksBookmarklets.executeMultiple(bookmarklets);
+          const results = await window.MediaLinksBookmarklets.executeMultiple(bookmarklets, { defaultDelay });
           console.log(`Stopwatch: Bookmarklet execution results:`, results);
         } catch (e) {
           console.error('Stopwatch: Bookmarklet execution error:', e);
@@ -1104,7 +1247,10 @@
           'stopwatchOpenBookmarksOnNotification',
           'stopwatchBookmarksByDomain',
           'stopwatchNotificationTimeByDomain',
-          'stopwatchGlobalBookmarklets'
+          'stopwatchGlobalBookmarklets',
+          'stopwatchNotificationSilent',
+          'stopwatchSilentModeByDomain',
+          'stopwatchBookmarkletDelay'
         ], (result) => {
           if (chrome.runtime.lastError) {
             console.warn('Error loading stopwatch settings:', chrome.runtime.lastError);
@@ -1123,6 +1269,10 @@
           settings.bookmarksByDomain = (result.stopwatchBookmarksByDomain && typeof result.stopwatchBookmarksByDomain === 'object') ? result.stopwatchBookmarksByDomain : {};
           settings.notificationTimeByDomain = (result.stopwatchNotificationTimeByDomain && typeof result.stopwatchNotificationTimeByDomain === 'object') ? result.stopwatchNotificationTimeByDomain : {};
           settings.globalBookmarklets = Array.isArray(result.stopwatchGlobalBookmarklets) ? result.stopwatchGlobalBookmarklets : [];
+          settings.notificationSilent = result.stopwatchNotificationSilent === true;
+          settings.silentModeByDomain = (result.stopwatchSilentModeByDomain && typeof result.stopwatchSilentModeByDomain === 'object') ? result.stopwatchSilentModeByDomain : {};
+          settings.bookmarkletDelay = typeof result.stopwatchBookmarkletDelay === 'number' ? result.stopwatchBookmarkletDelay : 0;
+          settings.delayByDomain = (result.stopwatchDelayByDomain && typeof result.stopwatchDelayByDomain === 'object') ? result.stopwatchDelayByDomain : {};
 
           resolve();
         });
@@ -1235,10 +1385,24 @@
         if (changes.stopwatchGlobalBookmarklets !== undefined) {
           settings.globalBookmarklets = Array.isArray(changes.stopwatchGlobalBookmarklets.newValue) ? changes.stopwatchGlobalBookmarklets.newValue : [];
         }
+        if (changes.stopwatchNotificationSilent !== undefined) {
+          settings.notificationSilent = changes.stopwatchNotificationSilent.newValue === true;
+        }
+        if (changes.stopwatchSilentModeByDomain !== undefined) {
+          const newValue = changes.stopwatchSilentModeByDomain.newValue;
+          settings.silentModeByDomain = (newValue && typeof newValue === 'object') ? newValue : {};
+        }
+        if (changes.stopwatchBookmarkletDelay !== undefined) {
+          settings.bookmarkletDelay = typeof changes.stopwatchBookmarkletDelay.newValue === 'number' ? changes.stopwatchBookmarkletDelay.newValue : 0;
+        }
+        if (changes.stopwatchDelayByDomain !== undefined) {
+          const newValue = changes.stopwatchDelayByDomain.newValue;
+          settings.delayByDomain = (newValue && typeof newValue === 'object') ? newValue : {};
+        }
 
         // Handle theme changes
         if (changes.theme !== undefined) {
-          currentThemeCache = changes.theme.newValue || 'light';
+          currentThemeCache = changes.theme.newValue || 'dark';
           if (stopwatchElement) {
             updateStopwatchUI();
           }

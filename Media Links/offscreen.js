@@ -39,9 +39,9 @@ const initializeOffscreen = async () => {
     console.log('Offscreen: Initialization complete');
   } catch (error) {
     console.error('Offscreen: Initialization error:', error);
-    // Fallback to light theme if initialization fails
-    document.body.setAttribute('data-theme', 'light');
-    document.documentElement.setAttribute('data-theme', 'light');
+    // Fallback to dark theme if initialization fails
+    document.body.setAttribute('data-theme', 'dark');
+    document.documentElement.setAttribute('data-theme', 'dark');
   }
 };
 
