@@ -37,8 +37,16 @@
     notificationSilent: false, // Global silent mode: skip alert, run bookmarklets in background
     silentModeByDomain: {}, // Per-domain silent mode override: { "example.com": true }
     bookmarkletDelay: 0, // Default delay in ms between bookmarklet executions
-    delayByDomain: {} // Per-domain delay override: { "example.com": 500 }
+    delayByDomain: {}, // Per-domain delay override: { "example.com": 500 }
+    useRandomTime: false, // Global random time toggle
+    randomTimeMinMinutes: 10, // Global min minutes for random range
+    randomTimeMaxMinutes: 30, // Global max minutes for random range
+    randomTimeRangeByDomain: {} // Per-domain random ranges: { "domain": { minSeconds, maxSeconds, enabled } }
   };
+
+  // Generated random notification time for this page load (in seconds)
+  // This is NOT stored - regenerated each page refresh
+  let generatedRandomTimeSeconds = null;
 
   // Edge snapping threshold in pixels
   const SNAP_THRESHOLD = 20;
@@ -751,12 +759,111 @@
   }
 
   /**
+   * Generate a random notification time for the current page load
+   * Called once during initialization and stored for the session
+   * @returns {number|null} Time in seconds, or null if random time not enabled
+   */
+  function generateRandomNotificationTime() {
+    const currentHostname = window.location.hostname.toLowerCase();
+    const currentUrl = window.location.href.toLowerCase();
+
+    // Check for per-domain random range first
+    let rangeConfig = null;
+
+    if (settings.randomTimeRangeByDomain && Object.keys(settings.randomTimeRangeByDomain).length > 0) {
+      // Check exact match
+      if (settings.randomTimeRangeByDomain[currentHostname]?.enabled) {
+        rangeConfig = settings.randomTimeRangeByDomain[currentHostname];
+      }
+
+      // Check wildcard patterns (same logic as getNotificationTimeForCurrentDomain)
+      if (!rangeConfig) {
+        for (const domain of Object.keys(settings.randomTimeRangeByDomain)) {
+          if (domain === '*') continue;
+
+          const config = settings.randomTimeRangeByDomain[domain];
+          if (!config?.enabled) continue;
+
+          const isUrlPattern = domain.includes('/') && !domain.startsWith('*://');
+          const matchTarget = isUrlPattern ? currentUrl : currentHostname;
+
+          let matches = false;
+          if (domain.startsWith('*') && domain.endsWith('*') && domain.length > 2) {
+            matches = matchTarget.includes(domain.slice(1, -1));
+          } else if (domain.startsWith('*')) {
+            matches = matchTarget.endsWith(domain.slice(1));
+          } else if (domain.endsWith('*')) {
+            matches = matchTarget.startsWith(domain.slice(0, -1));
+          } else {
+            matches = currentHostname === domain || currentHostname.endsWith('.' + domain);
+          }
+
+          if (matches) {
+            rangeConfig = config;
+            break;
+          }
+        }
+      }
+
+      // Check global wildcard
+      if (!rangeConfig && settings.randomTimeRangeByDomain['*']?.enabled) {
+        rangeConfig = settings.randomTimeRangeByDomain['*'];
+      }
+    }
+
+    // Determine min/max seconds
+    let minSeconds, maxSeconds;
+
+    if (rangeConfig) {
+      // Use per-domain range
+      minSeconds = rangeConfig.minSeconds || 0;
+      maxSeconds = rangeConfig.maxSeconds || 0;
+
+      // If per-domain has incomplete values (either is 0), use global defaults
+      // This prevents unexpected behavior when user only sets one value
+      if (minSeconds === 0 || maxSeconds === 0) {
+        minSeconds = settings.randomTimeMinMinutes * 60;
+        maxSeconds = settings.randomTimeMaxMinutes * 60;
+      }
+    } else if (settings.useRandomTime) {
+      // Use global random range
+      minSeconds = settings.randomTimeMinMinutes * 60;
+      maxSeconds = settings.randomTimeMaxMinutes * 60;
+    } else {
+      // Random time not enabled - return null (use fixed time)
+      return null;
+    }
+
+    // Ensure min <= max
+    if (minSeconds > maxSeconds) {
+      [minSeconds, maxSeconds] = [maxSeconds, minSeconds];
+    }
+
+    // Handle edge case where both are 0
+    if (minSeconds === 0 && maxSeconds === 0) {
+      return null;
+    }
+
+    // Generate random time within range
+    const randomSeconds = Math.floor(Math.random() * (maxSeconds - minSeconds + 1)) + minSeconds;
+
+    console.log(`Stopwatch: Generated random notification time: ${randomSeconds}s (range: ${minSeconds}-${maxSeconds}s)`);
+
+    return randomSeconds;
+  }
+
+  /**
    * Get notification time in seconds for the current domain
    * Checks for exact match first, then partial matches, then wildcards
    * Falls back to default (notificationMinutes * 60) if no per-domain time set
    * @returns {number} Time in seconds
    */
   function getNotificationTimeForCurrentDomain() {
+    // If we have a generated random time for this session, use it
+    if (generatedRandomTimeSeconds !== null) {
+      return generatedRandomTimeSeconds;
+    }
+
     const currentHostname = window.location.hostname.toLowerCase();
     const currentUrl = window.location.href.toLowerCase();
 
@@ -1250,7 +1357,12 @@
           'stopwatchGlobalBookmarklets',
           'stopwatchNotificationSilent',
           'stopwatchSilentModeByDomain',
-          'stopwatchBookmarkletDelay'
+          'stopwatchBookmarkletDelay',
+          'stopwatchDelayByDomain',
+          'stopwatchUseRandomTime',
+          'stopwatchRandomTimeMinMinutes',
+          'stopwatchRandomTimeMaxMinutes',
+          'stopwatchRandomTimeRangeByDomain'
         ], (result) => {
           if (chrome.runtime.lastError) {
             console.warn('Error loading stopwatch settings:', chrome.runtime.lastError);
@@ -1273,6 +1385,10 @@
           settings.silentModeByDomain = (result.stopwatchSilentModeByDomain && typeof result.stopwatchSilentModeByDomain === 'object') ? result.stopwatchSilentModeByDomain : {};
           settings.bookmarkletDelay = typeof result.stopwatchBookmarkletDelay === 'number' ? result.stopwatchBookmarkletDelay : 0;
           settings.delayByDomain = (result.stopwatchDelayByDomain && typeof result.stopwatchDelayByDomain === 'object') ? result.stopwatchDelayByDomain : {};
+          settings.useRandomTime = result.stopwatchUseRandomTime === true;
+          settings.randomTimeMinMinutes = typeof result.stopwatchRandomTimeMinMinutes === 'number' ? result.stopwatchRandomTimeMinMinutes : 10;
+          settings.randomTimeMaxMinutes = typeof result.stopwatchRandomTimeMaxMinutes === 'number' ? result.stopwatchRandomTimeMaxMinutes : 30;
+          settings.randomTimeRangeByDomain = (result.stopwatchRandomTimeRangeByDomain && typeof result.stopwatchRandomTimeRangeByDomain === 'object') ? result.stopwatchRandomTimeRangeByDomain : {};
 
           resolve();
         });
@@ -1293,6 +1409,9 @@
 
     await loadSettings();
     await loadCurrentTheme();
+
+    // Generate random notification time for this page load (if enabled)
+    generatedRandomTimeSeconds = generateRandomNotificationTime();
 
     if (!settings.enabled) {
       return;
@@ -1398,6 +1517,20 @@
         if (changes.stopwatchDelayByDomain !== undefined) {
           const newValue = changes.stopwatchDelayByDomain.newValue;
           settings.delayByDomain = (newValue && typeof newValue === 'object') ? newValue : {};
+        }
+        // Random time settings (note: don't regenerate random time on settings change - only on page load)
+        if (changes.stopwatchUseRandomTime !== undefined) {
+          settings.useRandomTime = changes.stopwatchUseRandomTime.newValue === true;
+        }
+        if (changes.stopwatchRandomTimeMinMinutes !== undefined) {
+          settings.randomTimeMinMinutes = typeof changes.stopwatchRandomTimeMinMinutes.newValue === 'number' ? changes.stopwatchRandomTimeMinMinutes.newValue : 10;
+        }
+        if (changes.stopwatchRandomTimeMaxMinutes !== undefined) {
+          settings.randomTimeMaxMinutes = typeof changes.stopwatchRandomTimeMaxMinutes.newValue === 'number' ? changes.stopwatchRandomTimeMaxMinutes.newValue : 30;
+        }
+        if (changes.stopwatchRandomTimeRangeByDomain !== undefined) {
+          const newValue = changes.stopwatchRandomTimeRangeByDomain.newValue;
+          settings.randomTimeRangeByDomain = (newValue && typeof newValue === 'object') ? newValue : {};
         }
 
         // Handle theme changes

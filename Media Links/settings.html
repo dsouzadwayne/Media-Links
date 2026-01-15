@@ -776,6 +776,31 @@
             <input type="number" id="stopwatch-notification-minutes" class="setting-input" min="1" max="1440" value="30" style="max-width: 150px;">
           </div>
 
+          <div class="setting-item" id="random-time-toggle-container" style="opacity: 0.5; pointer-events: none;">
+            <label class="setting-label">
+              <span class="label-text">Use Random Time Range</span>
+              <span class="label-description">Notification triggers at a random time within a range (hidden from user)</span>
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="stopwatch-use-random-time">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item" id="random-time-range-container" style="opacity: 0.5; pointer-events: none; display: none;">
+            <label class="setting-label">
+              <span class="label-text">Random Time Range (minutes)</span>
+              <span class="label-description">Notification will trigger at a random time between min and max</span>
+            </label>
+            <div style="display: flex; gap: 10px; align-items: center; margin-top: 8px;">
+              <input type="number" id="stopwatch-random-min-minutes" class="setting-input" min="1" max="1440" value="10" style="max-width: 80px;">
+              <span>to</span>
+              <input type="number" id="stopwatch-random-max-minutes" class="setting-input" min="1" max="1440" value="30" style="max-width: 80px;">
+              <span style="font-size: 12px; color: var(--text-secondary);">minutes</span>
+            </div>
+          </div>
+          <input type="hidden" id="stopwatch-random-time-range-by-domain">
+
           <div class="setting-item" id="silent-mode-container" style="opacity: 0.5; pointer-events: none;">
             <label class="setting-label">
               <span class="label-text">Silent Mode (No Popup)</span>

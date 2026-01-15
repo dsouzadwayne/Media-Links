@@ -513,6 +513,9 @@ body {
 .settings-footer {
   position: sticky;
   bottom: 0;
+  left: 0;
+  width: 100%;
+  z-index: 100;
   background: var(--secondary-bg);
   border-top: 2px solid var(--border);
   padding: 0;
@@ -862,6 +865,8 @@ html, body {
 
   .footer-content {
     flex-direction: column;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .primary-button,

@@ -102,7 +102,13 @@ window.SettingsUtils = (() => {
     // Format: { "youtube.com": 671, "twitter.com": 300 }
     stopwatchNotificationTimeByDomain: {},
     // Global bookmarklet IDs to run on stopwatch notification
-    stopwatchGlobalBookmarklets: []
+    stopwatchGlobalBookmarklets: [],
+    // Random notification time settings
+    stopwatchUseRandomTime: false,
+    stopwatchRandomTimeMinMinutes: 10,
+    stopwatchRandomTimeMaxMinutes: 30,
+    // Per-domain random time ranges: { "domain": { minSeconds, maxSeconds, enabled } }
+    stopwatchRandomTimeRangeByDomain: {}
   };
 
   // Validation rules
@@ -371,6 +377,26 @@ window.SettingsUtils = (() => {
     stopwatchGlobalBookmarklets: {
       type: 'array',
       default: []
+    },
+    stopwatchUseRandomTime: {
+      type: 'boolean',
+      default: false
+    },
+    stopwatchRandomTimeMinMinutes: {
+      type: 'number',
+      min: 1,
+      max: 1440,
+      default: 10
+    },
+    stopwatchRandomTimeMaxMinutes: {
+      type: 'number',
+      min: 1,
+      max: 1440,
+      default: 30
+    },
+    stopwatchRandomTimeRangeByDomain: {
+      type: 'object',
+      default: {}
     }
   };
 

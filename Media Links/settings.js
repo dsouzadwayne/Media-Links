@@ -265,12 +265,25 @@ function applySettingsToUI() {
   safeSetChecked('stopwatch-notification-silent', currentSettings.stopwatchNotificationSilent === true);
   safeSetValue('stopwatch-bookmarklet-delay', currentSettings.stopwatchBookmarkletDelay || 0);
 
+  // Load random time settings
+  safeSetChecked('stopwatch-use-random-time', currentSettings.stopwatchUseRandomTime === true);
+  safeSetValue('stopwatch-random-min-minutes', currentSettings.stopwatchRandomTimeMinMinutes || 10);
+  safeSetValue('stopwatch-random-max-minutes', currentSettings.stopwatchRandomTimeMaxMinutes || 30);
+
+  // Load random time range by domain
+  const randomTimeRangeByDomain = currentSettings.stopwatchRandomTimeRangeByDomain || {};
+  const randomTimeRangeHiddenInput = document.getElementById('stopwatch-random-time-range-by-domain');
+  if (randomTimeRangeHiddenInput) {
+    randomTimeRangeHiddenInput.value = JSON.stringify(randomTimeRangeByDomain);
+  }
+
   // Render domain tags from the hidden input value (now has bookmark data)
   renderDomainTags();
 
   // Toggle stopwatch options subsection based on enable state
   toggleStopwatchSettings(currentSettings.stopwatchEnabled === true);
   toggleNotificationMinutes(currentSettings.stopwatchNotificationEnabled === true);
+  toggleRandomTimeRange(currentSettings.stopwatchUseRandomTime === true);
 
   // Bookmark settings
   safeSetChecked('stopwatch-open-bookmarks', currentSettings.stopwatchOpenBookmarksOnNotification === true);
@@ -361,12 +374,21 @@ function attachEventListeners() {
     toggleNotificationMinutes(e.target.checked);
     toggleBookmarkSettings(e.target.checked);
     toggleCustomBookmarkletsContainer();
+    // Also update random time range visibility based on current toggle state
+    const useRandomTime = document.getElementById('stopwatch-use-random-time');
+    toggleRandomTimeRange(useRandomTime && useRandomTime.checked);
     markUnsaved();
   });
 
   // Stopwatch open bookmarks toggle
   safeAddListener('stopwatch-open-bookmarks', 'change', (e) => {
     toggleBookmarkSelector(e.target.checked);
+    markUnsaved();
+  });
+
+  // Stopwatch random time toggle
+  safeAddListener('stopwatch-use-random-time', 'change', (e) => {
+    toggleRandomTimeRange(e.target.checked);
     markUnsaved();
   });
 
@@ -568,6 +590,59 @@ function toggleNotificationMinutes(enabled) {
       delayContainer.style.pointerEvents = 'none';
       const input = delayContainer.querySelector('input');
       if (input) input.disabled = true;
+    }
+  }
+
+  // Toggle random time toggle container
+  const randomToggleContainer = document.getElementById('random-time-toggle-container');
+  if (randomToggleContainer) {
+    if (enabled) {
+      randomToggleContainer.style.opacity = '1';
+      randomToggleContainer.style.pointerEvents = 'auto';
+      const input = randomToggleContainer.querySelector('input');
+      if (input) input.disabled = false;
+    } else {
+      randomToggleContainer.style.opacity = '0.5';
+      randomToggleContainer.style.pointerEvents = 'none';
+      const input = randomToggleContainer.querySelector('input');
+      if (input) input.disabled = true;
+    }
+  }
+  // Note: random-time-range-container is handled by toggleRandomTimeRange()
+}
+
+// Toggle random time range inputs visibility (depends on random time toggle)
+function toggleRandomTimeRange(enabled) {
+  const notifEnabled = document.getElementById('stopwatch-notification-enabled');
+  const notificationsOn = notifEnabled && notifEnabled.checked;
+
+  // Show/hide the fixed notification time input
+  const fixedContainer = document.getElementById('notification-minutes-container');
+  if (fixedContainer) {
+    if (enabled && notificationsOn) {
+      // Hide fixed time when random is enabled
+      fixedContainer.style.display = 'none';
+    } else {
+      // Show fixed time when random is disabled
+      fixedContainer.style.display = 'block';
+    }
+  }
+
+  // Show/hide the random time range inputs
+  const randomRangeContainer = document.getElementById('random-time-range-container');
+  if (randomRangeContainer) {
+    if (enabled && notificationsOn) {
+      randomRangeContainer.style.display = 'block';
+      randomRangeContainer.style.opacity = '1';
+      randomRangeContainer.style.pointerEvents = 'auto';
+      const inputs = randomRangeContainer.querySelectorAll('input');
+      inputs.forEach(input => input.disabled = false);
+    } else {
+      randomRangeContainer.style.display = 'none';
+      randomRangeContainer.style.opacity = '0.5';
+      randomRangeContainer.style.pointerEvents = 'none';
+      const inputs = randomRangeContainer.querySelectorAll('input');
+      inputs.forEach(input => input.disabled = true);
     }
   }
 }
@@ -787,7 +862,11 @@ function saveSettings() {
     stopwatchNotificationSilent: getSafeValue('stopwatch-notification-silent', 'checked'),
     stopwatchSilentModeByDomain: parseSilentModeByDomain(getSafeValue('stopwatch-silent-mode-by-domain')),
     stopwatchDelayByDomain: parseDelayByDomain(getSafeValue('stopwatch-delay-by-domain')),
-    stopwatchBookmarkletDelay: validateNumericInput(getSafeValue('stopwatch-bookmarklet-delay'), 0, 60000, 0)
+    stopwatchBookmarkletDelay: validateNumericInput(getSafeValue('stopwatch-bookmarklet-delay'), 0, 60000, 0),
+    stopwatchUseRandomTime: getSafeValue('stopwatch-use-random-time', 'checked'),
+    stopwatchRandomTimeMinMinutes: validateNumericInput(getSafeValue('stopwatch-random-min-minutes'), 1, 1440, 10),
+    stopwatchRandomTimeMaxMinutes: validateNumericInput(getSafeValue('stopwatch-random-max-minutes'), 1, 1440, 30),
+    stopwatchRandomTimeRangeByDomain: parseRandomTimeRangeByDomain(getSafeValue('stopwatch-random-time-range-by-domain'))
   };
 
   // Save to storage using SettingsUtils with validation
@@ -951,6 +1030,10 @@ function renderDomainList() {
   // Get delay by domain
   const delayByDomain = parseDelayByDomain(delayInput ? delayInput.value : '');
 
+  // Get random time range by domain
+  const randomRangeInput = document.getElementById('stopwatch-random-time-range-by-domain');
+  const randomRangeByDomain = parseRandomTimeRangeByDomain(randomRangeInput ? randomRangeInput.value : '');
+
   if (domains.length === 0) {
     const emptyMsg = document.createElement('div');
     emptyMsg.style.cssText = 'color: var(--text-secondary); font-size: 12px; padding: 8px 0;';
@@ -965,12 +1048,13 @@ function renderDomainList() {
     const notificationTime = notificationTimeByDomain[domain]; // in seconds, may be undefined
     const silentMode = silentModeByDomain[domain]; // boolean, may be undefined
     const domainDelay = delayByDomain[domain]; // in ms, may be undefined
-    const item = createDomainListItem(domain, bookmarks, notificationTime, silentMode, domainDelay);
+    const randomRange = randomRangeByDomain[domain]; // { enabled, minSeconds, maxSeconds }, may be undefined
+    const item = createDomainListItem(domain, bookmarks, notificationTime, silentMode, domainDelay, randomRange);
     listContainer.appendChild(item);
   });
 }
 
-function createDomainListItem(domain, bookmarks, notificationTimeSeconds, silentMode, domainDelay) {
+function createDomainListItem(domain, bookmarks, notificationTimeSeconds, silentMode, domainDelay, randomTimeRange) {
   const item = document.createElement('div');
   item.className = 'domain-list-item';
   item.style.cssText = 'display: flex; flex-direction: column; padding: 12px; margin: 6px 0; background: var(--surface-bg); border-radius: 8px; gap: 8px;';
@@ -992,7 +1076,7 @@ function createDomainListItem(domain, bookmarks, notificationTimeSeconds, silent
   configBtn.className = 'secondary-button';
   configBtn.style.cssText = 'padding: 4px 10px; font-size: 12px;';
   configBtn.textContent = 'Configure';
-  configBtn.addEventListener('click', () => openEditSiteModal(domain, bookmarks, notificationTimeSeconds, silentMode, domainDelay));
+  configBtn.addEventListener('click', () => openEditSiteModal(domain, bookmarks, notificationTimeSeconds, silentMode, domainDelay, randomTimeRange));
 
   const removeBtn = document.createElement('button');
   removeBtn.type = 'button';
@@ -1030,6 +1114,16 @@ function createDomainListItem(domain, bookmarks, notificationTimeSeconds, silent
     silentInfo.textContent = '🔇 Silent';
     silentInfo.title = 'Silent mode enabled - no popup notification';
     infoRow.appendChild(silentInfo);
+  }
+
+  // Random time range info
+  if (randomTimeRange && randomTimeRange.enabled) {
+    const randomInfo = document.createElement('span');
+    const minStr = randomTimeRange.minSeconds > 0 ? formatSecondsToMMSS(randomTimeRange.minSeconds) : '0:00';
+    const maxStr = randomTimeRange.maxSeconds > 0 ? formatSecondsToMMSS(randomTimeRange.maxSeconds) : '0:00';
+    randomInfo.textContent = `🎲 ${minStr}-${maxStr}`;
+    randomInfo.title = 'Random notification time range (hidden until triggered)';
+    infoRow.appendChild(randomInfo);
   }
 
   // Bookmark info
@@ -1142,6 +1236,30 @@ function removeDomain(domain) {
     let notificationTimeByDomain = parseNotificationTimeByDomain(notificationTimeInput.value);
     delete notificationTimeByDomain[domain];
     notificationTimeInput.value = JSON.stringify(notificationTimeByDomain);
+  }
+
+  // Also remove silent mode for this domain
+  const silentModeInput = document.getElementById('stopwatch-silent-mode-by-domain');
+  if (silentModeInput) {
+    let silentModeByDomain = parseSilentModeByDomain(silentModeInput.value);
+    delete silentModeByDomain[domain];
+    silentModeInput.value = JSON.stringify(silentModeByDomain);
+  }
+
+  // Also remove delay for this domain
+  const delayInput = document.getElementById('stopwatch-delay-by-domain');
+  if (delayInput) {
+    let delayByDomain = parseDelayByDomain(delayInput.value);
+    delete delayByDomain[domain];
+    delayInput.value = JSON.stringify(delayByDomain);
+  }
+
+  // Also remove random time range for this domain
+  const randomRangeInput = document.getElementById('stopwatch-random-time-range-by-domain');
+  if (randomRangeInput) {
+    let randomRangeByDomain = parseRandomTimeRangeByDomain(randomRangeInput.value);
+    delete randomRangeByDomain[domain];
+    randomRangeInput.value = JSON.stringify(randomRangeByDomain);
   }
 
   // Re-render tags
@@ -1445,6 +1563,22 @@ function parseDelayByDomain(value) {
 }
 
 /**
+ * Parse random time range by domain from hidden input value
+ * @param {string} value - JSON string of random time range by domain object
+ * @returns {object} Object mapping domain names to { minSeconds, maxSeconds, enabled }
+ */
+function parseRandomTimeRangeByDomain(value) {
+  if (!value || value === '') return {};
+  try {
+    const parsed = JSON.parse(value);
+    return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    console.warn('Failed to parse random time range by domain:', e);
+    return {};
+  }
+}
+
+/**
  * Format seconds to MM:SS display
  * @param {number} totalSeconds - Time in seconds
  * @returns {string} Formatted time like "11:11" or "5:00"
@@ -1492,8 +1626,8 @@ function parseMMSSToSeconds(timeStr) {
 /**
  * Open modal to edit bookmarks and notification time for a domain (called from domain list)
  */
-function openEditSiteModal(domain, bookmarks, notificationTimeSeconds, silentMode, domainDelay) {
-  openSiteBookmarkModal(domain, bookmarks, notificationTimeSeconds, silentMode, domainDelay);
+function openEditSiteModal(domain, bookmarks, notificationTimeSeconds, silentMode, domainDelay, randomTimeRange) {
+  openSiteBookmarkModal(domain, bookmarks, notificationTimeSeconds, silentMode, domainDelay, randomTimeRange);
 }
 
 /**
@@ -1504,7 +1638,7 @@ function openEditSiteModal(domain, bookmarks, notificationTimeSeconds, silentMod
  * @param {boolean} existingSilentMode - Current silent mode setting for this domain
  * @param {number} existingDomainDelay - Current default delay for this domain in ms
  */
-function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTime, existingSilentMode, existingDomainDelay) {
+function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTime, existingSilentMode, existingDomainDelay, existingRandomTimeRange) {
   const existingModal = document.getElementById('bookmark-selector-modal');
   if (existingModal) existingModal.remove();
 
@@ -1523,6 +1657,9 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
 
   // Track domain delay for this modal session (in ms)
   let currentDomainDelay = typeof existingDomainDelay === 'number' ? existingDomainDelay : 0;
+
+  // Track random time range for this modal session
+  let currentRandomTimeRange = existingRandomTimeRange || { enabled: false, minSeconds: 0, maxSeconds: 0 };
 
   // Drag-and-drop state
   let draggedItem = null;
@@ -1636,6 +1773,68 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
   delaySection.appendChild(delayInput);
   delaySection.appendChild(delayUnit);
   delaySection.appendChild(delayHint);
+
+  // Random Time Range Section
+  const randomRangeSection = document.createElement('div');
+  randomRangeSection.style.cssText = 'padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface-bg); flex-shrink: 0;';
+
+  const randomToggleRow = document.createElement('div');
+  randomToggleRow.style.cssText = 'display: flex; align-items: center; gap: 10px; margin-bottom: 10px;';
+
+  const randomCheckbox = document.createElement('input');
+  randomCheckbox.type = 'checkbox';
+  randomCheckbox.id = 'modal-random-time-enabled';
+  randomCheckbox.checked = currentRandomTimeRange.enabled === true;
+  randomCheckbox.style.cssText = 'width: 18px; height: 18px; cursor: pointer;';
+
+  const randomToggleLabel = document.createElement('label');
+  randomToggleLabel.htmlFor = 'modal-random-time-enabled';
+  randomToggleLabel.style.cssText = 'font-size: 13px; color: var(--text-primary); cursor: pointer;';
+  randomToggleLabel.textContent = 'Use Random Time Range';
+
+  randomToggleRow.appendChild(randomCheckbox);
+  randomToggleRow.appendChild(randomToggleLabel);
+
+  const randomRangeInputRow = document.createElement('div');
+  randomRangeInputRow.id = 'modal-random-range-inputs';
+  randomRangeInputRow.style.cssText = 'display: none; align-items: center; gap: 10px; flex-wrap: wrap;';
+
+  const randomMinInput = document.createElement('input');
+  randomMinInput.type = 'text';
+  randomMinInput.id = 'modal-random-min';
+  randomMinInput.placeholder = 'MM:SS';
+  randomMinInput.value = currentRandomTimeRange.minSeconds > 0 ? formatSecondsToMMSS(currentRandomTimeRange.minSeconds) : '';
+  randomMinInput.style.cssText = 'width: 80px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text-primary);';
+
+  const toLabel = document.createElement('span');
+  toLabel.textContent = 'to';
+  toLabel.style.cssText = 'font-size: 13px; color: var(--text-secondary);';
+
+  const randomMaxInput = document.createElement('input');
+  randomMaxInput.type = 'text';
+  randomMaxInput.id = 'modal-random-max';
+  randomMaxInput.placeholder = 'MM:SS';
+  randomMaxInput.value = currentRandomTimeRange.maxSeconds > 0 ? formatSecondsToMMSS(currentRandomTimeRange.maxSeconds) : '';
+  randomMaxInput.style.cssText = 'width: 80px; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--input-bg); color: var(--text-primary);';
+
+  const randomHint = document.createElement('span');
+  randomHint.style.cssText = 'font-size: 11px; color: var(--text-secondary); margin-left: auto;';
+  randomHint.textContent = 'Leave empty to use global range';
+
+  randomRangeInputRow.appendChild(randomMinInput);
+  randomRangeInputRow.appendChild(toLabel);
+  randomRangeInputRow.appendChild(randomMaxInput);
+  randomRangeInputRow.appendChild(randomHint);
+
+  // Toggle random range inputs visibility
+  function updateRandomRangeVisibility() {
+    randomRangeInputRow.style.display = randomCheckbox.checked ? 'flex' : 'none';
+  }
+  randomCheckbox.addEventListener('change', updateRandomRangeVisibility);
+  updateRandomRangeVisibility();
+
+  randomRangeSection.appendChild(randomToggleRow);
+  randomRangeSection.appendChild(randomRangeInputRow);
 
   // Sortable Bookmarklet List Section (replaces chip preview)
   const sortableSection = document.createElement('div');
@@ -2134,6 +2333,39 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
       delayHiddenInput.value = JSON.stringify(delayByDomain);
     }
 
+    // Save random time range
+    const randomRangeHiddenInput = document.getElementById('stopwatch-random-time-range-by-domain');
+    if (randomRangeHiddenInput) {
+      let randomRangeByDomain = parseRandomTimeRangeByDomain(randomRangeHiddenInput.value);
+      const randomEnabled = randomCheckbox.checked;
+      const minValue = randomMinInput.value.trim();
+      const maxValue = randomMaxInput.value.trim();
+
+      if (randomEnabled) {
+        const minSeconds = minValue ? parseMMSSToSeconds(minValue) : 0;
+        const maxSeconds = maxValue ? parseMMSSToSeconds(maxValue) : 0;
+
+        if (minValue && minSeconds === null) {
+          alert('Invalid min time format. Use MM:SS (e.g., 11:00 for 11 minutes)');
+          return;
+        }
+        if (maxValue && maxSeconds === null) {
+          alert('Invalid max time format. Use MM:SS (e.g., 15:00 for 15 minutes)');
+          return;
+        }
+
+        randomRangeByDomain[domain] = {
+          enabled: true,
+          minSeconds: minSeconds || 0,
+          maxSeconds: maxSeconds || 0
+        };
+      } else {
+        // Remove if not enabled
+        delete randomRangeByDomain[domain];
+      }
+      randomRangeHiddenInput.value = JSON.stringify(randomRangeByDomain);
+    }
+
     renderDomainList();
     markUnsaved();
     modal.remove();
@@ -2146,6 +2378,7 @@ function openSiteBookmarkModal(domain, existingBookmarks, existingNotificationTi
   modalContent.appendChild(notificationSection);
   modalContent.appendChild(silentSection);
   modalContent.appendChild(delaySection);
+  modalContent.appendChild(randomRangeSection);
   modalContent.appendChild(sortableSection);
   modalContent.appendChild(instructions);
   modalContent.appendChild(customCodeSection);
