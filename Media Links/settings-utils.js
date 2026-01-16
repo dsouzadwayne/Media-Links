@@ -108,7 +108,13 @@ window.SettingsUtils = (() => {
     stopwatchRandomTimeMinMinutes: 10,
     stopwatchRandomTimeMaxMinutes: 30,
     // Per-domain random time ranges: { "domain": { minSeconds, maxSeconds, enabled } }
-    stopwatchRandomTimeRangeByDomain: {}
+    stopwatchRandomTimeRangeByDomain: {},
+    // Silent mode settings
+    stopwatchNotificationSilent: false,
+    stopwatchSilentModeByDomain: {},
+    // Delay settings
+    stopwatchDelayByDomain: {},
+    stopwatchBookmarkletDelay: 0
   };
 
   // Validation rules
@@ -397,6 +403,24 @@ window.SettingsUtils = (() => {
     stopwatchRandomTimeRangeByDomain: {
       type: 'object',
       default: {}
+    },
+    stopwatchNotificationSilent: {
+      type: 'boolean',
+      default: false
+    },
+    stopwatchSilentModeByDomain: {
+      type: 'object',
+      default: {}
+    },
+    stopwatchDelayByDomain: {
+      type: 'object',
+      default: {}
+    },
+    stopwatchBookmarkletDelay: {
+      type: 'number',
+      min: 0,
+      max: 60000,
+      default: 0
     }
   };
 

@@ -989,9 +989,21 @@
     </footer>
   </div>
 
-  <!-- Theme manager and settings utils must load before settings.js -->
+  <!-- Theme manager and settings utils must load before settings modules -->
   <script src="theme-manager.js"></script>
   <script src="settings-utils.js"></script>
-  <script src="settings.js"></script>
+  <!-- Settings modules - core must load first, then individual modules -->
+  <script src="settings/settings-core.js"></script>
+  <script src="settings/settings-appearance.js"></script>
+  <script src="settings/settings-search.js"></script>
+  <script src="settings/settings-patterns.js"></script>
+  <script src="settings/settings-copy.js"></script>
+  <script src="settings/settings-transcripts.js"></script>
+  <script src="settings/settings-customview.js"></script>
+  <script src="settings/settings-comparison.js"></script>
+  <script src="settings/settings-hotstar.js"></script>
+  <script src="settings/settings-stopwatch.js"></script>
+  <script src="settings/settings-bookmarklets.js"></script>
+  <script src="settings/settings-advanced.js"></script>
 </body>
 </html>
