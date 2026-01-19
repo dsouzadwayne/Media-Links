@@ -1,22 +1,11 @@
 // Letterboxd Cast Copy Functionality
+// Uses: StorageUtils, UIUtils from lib/
 
 (function() {
   'use strict';
 
-  // Check if extension context is still valid
-  function isExtensionContextValid() {
-    try {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
-        return false;
-      }
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
   // Early exit if extension context is invalid (e.g., extension was reloaded)
-  if (!isExtensionContextValid()) {
+  if (typeof StorageUtils === 'undefined' || !StorageUtils.isExtensionContextValid()) {
     console.log('Extension context invalidated, skipping Letterboxd cast copy functionality');
     return;
   }
@@ -26,104 +15,15 @@ function isLetterboxdFilmPage() {
          window.location.pathname.match(/\/film\/[^\/]+\/?$/);
 }
 
-function getThemeColors() {
-  // Use ThemeManager if available, fallback to default colors
-  return new Promise((resolve) => {
-    try {
-      if (typeof ThemeManager !== 'undefined') {
-        const colors = ThemeManager.getThemeColors();
-        resolve(colors);
-      } else {
-        // Fallback: return default light theme colors
-        resolve({
-          button: '#6366f1',
-          buttonHover: '#4f46e5',
-          buttonText: '#fff'
-        });
-      }
-    } catch (error) {
-      console.warn('Error getting theme colors:', error);
-      resolve({
-        button: '#6366f1',
-        buttonHover: '#4f46e5',
-        buttonText: '#fff'
-      });
-    }
-  });
-}
+// Use UIUtils for theme colors
+const getThemeColors = () => UIUtils.getThemeColors();
 
-function getDialogColors(buttonColors) {
-  // Use ThemeManager if available for consistent dialog colors
-  try {
-    if (typeof ThemeManager !== 'undefined') {
-      return ThemeManager.getDialogColors(buttonColors.buttonText);
-    }
-  } catch (error) {
-    console.warn('Error getting dialog colors from ThemeManager:', error);
-  }
+// Use UIUtils for dialog colors
+const getDialogColors = (buttonColors) => UIUtils.getDialogColors(buttonColors.buttonText);
 
-  // Fallback: determine if button color is dark or light
-  const isDark = buttonColors.buttonText === '#fff';
-
-  if (isDark) {
-    // Dark theme dialogs
-    return {
-      background: '#1a1a2e',
-      text: '#e0e7ff',
-      border: '#2d2d44',
-      inputBg: '#252540',
-      inputBorder: '#3d3d5c',
-      cancelBg: '#2d2d44',
-      cancelHover: '#3d3d5c',
-      cancelText: '#c7d2fe'
-    };
-  } else {
-    // Light theme dialogs
-    return {
-      background: '#ffffff',
-      text: '#1a1a1a',
-      border: '#e0e0e0',
-      inputBg: '#f8f8f8',
-      inputBorder: '#d0d0d0',
-      cancelBg: '#e5e5e5',
-      cancelHover: '#d5d5d5',
-      cancelText: '#333333'
-    };
-  }
-}
-
-function getCopyButtonSettings() {
-  // Get copy button visibility settings from storage
-  return new Promise((resolve) => {
-    const defaults = {
-      showLetterboxdCast: true
-    };
-
-    try {
-      if (!isExtensionContextValid()) {
-        resolve(defaults);
-        return;
-      }
-
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-        chrome.storage.sync.get(['showLetterboxdCast'], (result) => {
-          if (chrome.runtime.lastError) {
-            console.warn('Error getting copy button settings:', chrome.runtime.lastError);
-            resolve(defaults);
-          } else {
-            resolve({
-              showLetterboxdCast: result.showLetterboxdCast !== undefined ? result.showLetterboxdCast : defaults.showLetterboxdCast
-            });
-          }
-        });
-      } else {
-        resolve(defaults);
-      }
-    } catch (error) {
-      console.warn('Error accessing chrome.storage for copy button settings:', error);
-      resolve(defaults);
-    }
-  });
+// Use StorageUtils for settings
+async function getCopyButtonSettings() {
+  return StorageUtils.getSettings(['showLetterboxdCast'], { showLetterboxdCast: true });
 }
 
 let isProcessingLetterboxdButtons = false;
@@ -416,33 +316,16 @@ async function showCopyDialog(tab, sectionName, contextElement = null) {
   const colors = await getThemeColors();
   const dialogColors = getDialogColors(colors);
 
-  // Get default settings
-  const defaults = await new Promise((resolve) => {
-    try {
-      if (!isExtensionContextValid()) {
-        resolve({ count: 5, content: 'name-role', output: 'newline' });
-        return;
-      }
-
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-        chrome.storage.sync.get(['defaultCastCount', 'defaultContentFormat', 'defaultOutputFormat'], (result) => {
-          if (chrome.runtime.lastError) {
-            resolve({ count: 5, content: 'name-role', output: 'newline' });
-          } else {
-            resolve({
-              count: result.defaultCastCount || 5,
-              content: result.defaultContentFormat || 'name-role',
-              output: result.defaultOutputFormat || 'newline'
-            });
-          }
-        });
-      } else {
-        resolve({ count: 5, content: 'name-role', output: 'newline' });
-      }
-    } catch (error) {
-      resolve({ count: 5, content: 'name-role', output: 'newline' });
-    }
-  });
+  // Get default settings using StorageUtils
+  const settingsResult = await StorageUtils.getSettings(
+    ['defaultCastCount', 'defaultContentFormat', 'defaultOutputFormat'],
+    { defaultCastCount: 5, defaultContentFormat: 'name-role', defaultOutputFormat: 'newline' }
+  );
+  const defaults = {
+    count: settingsResult.defaultCastCount,
+    content: settingsResult.defaultContentFormat,
+    output: settingsResult.defaultOutputFormat
+  };
 
   // Collect all members/items from the section
   const members = [];
@@ -700,29 +583,21 @@ function copyCastData(castMembers, count, content, outputFormat, sectionName) {
   });
 }
 
-function showNotification(message, isError = false) {
-  const notification = document.createElement('div');
-  notification.textContent = message;
-  notification.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: ${isError ? '#f44336' : '#4caf50'};
-    color: white;
-    padding: 15px 20px;
-    border-radius: 4px;
-    z-index: 10001;
-    font-weight: 600;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-  `;
+// Use UIUtils for notifications
+const showNotification = (message, isError = false) => UIUtils.showNotification(message, { isError });
 
-  document.body.appendChild(notification);
-
-  setTimeout(() => {
-    if (document.body.contains(notification)) {
-      document.body.removeChild(notification);
-    }
-  }, 3000);
+// Format date using user's preferred format
+async function formatReleaseDate(dateString) {
+  if (!dateString) return '';
+  if (typeof DateFormattingUtils !== 'undefined') {
+    const format = await DateFormattingUtils.getUserDateFormat({
+      view: 'letterboxd',
+      field: 'Release Dates'
+    });
+    const formatted = DateFormattingUtils.parseAndFormat(dateString, format);
+    return formatted || dateString;
+  }
+  return dateString;
 }
 
 async function showReleaseCopyDialog(releasesTab, sectionName) {
@@ -734,9 +609,11 @@ async function showReleaseCopyDialog(releasesTab, sectionName) {
   const releases = [];
   const releaseItems = releasesTab.querySelectorAll('.release-table .listitem');
 
+  // Collect raw data first
+  const rawReleases = [];
   releaseItems.forEach(item => {
     const dateElement = item.querySelector('.date');
-    const date = dateElement ? dateElement.textContent.trim() : '';
+    const rawDate = dateElement ? dateElement.textContent.trim() : '';
 
     const countryElements = item.querySelectorAll('.release-country');
     countryElements.forEach(countryEl => {
@@ -745,8 +622,8 @@ async function showReleaseCopyDialog(releasesTab, sectionName) {
       const certification = countryEl.querySelector('.release-certification-badge .label')?.textContent.trim() || '';
       const note = countryEl.querySelector('.release-note')?.textContent.trim() || '';
 
-      releases.push({
-        date,
+      rawReleases.push({
+        rawDate,
         country: countryName,
         type,
         certification,
@@ -754,6 +631,18 @@ async function showReleaseCopyDialog(releasesTab, sectionName) {
       });
     });
   });
+
+  // Format all dates using user's preferred format
+  for (const release of rawReleases) {
+    const formattedDate = await formatReleaseDate(release.rawDate);
+    releases.push({
+      date: formattedDate,
+      country: release.country,
+      type: release.type,
+      certification: release.certification,
+      note: release.note
+    });
+  }
 
   if (releases.length === 0) {
     showNotification('No release information found!', true);

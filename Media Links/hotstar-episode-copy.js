@@ -1,4 +1,5 @@
 // Copy buttons for Hotstar episode descriptions
+// Uses: StorageUtils, UIUtils from lib/
 
 (function() {
     'use strict';
@@ -9,7 +10,7 @@
         toastDuration: 2000
     };
 
-    // Theme colors mapping
+    // Theme colors mapping (kept for getThemeColor which needs specific color keys)
     const THEME_COLORS = {
         light: {
             primary: '#6366f1',
@@ -64,59 +65,17 @@
         return !!(navigator.clipboard && navigator.clipboard.writeText);
     }
 
-    // Date formatting utility
+    // Date formatting - uses centralized DateFormattingUtils (lib/date-utils.js)
     function formatDate(dateString, format) {
-        try {
-            // Parse the date string (expects format like "25 Nov 2025")
-            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            const parts = dateString.trim().split(' ');
-
-            if (parts.length !== 3) {
-                log('Invalid date format:', dateString);
-                return dateString;
-            }
-
-            const day = parseInt(parts[0], 10);
-            const monthStr = parts[1];
-            const year = parseInt(parts[2], 10);
-
-            const monthIndex = months.indexOf(monthStr);
-            if (isNaN(day) || monthIndex === -1 || isNaN(year)) {
-                log('Could not parse date components:', { day, monthStr, year });
-                return dateString;
-            }
-
-            // Create date object (month is 0-indexed in JS)
-            const date = new Date(year, monthIndex, day);
-
-            // Format according to user's preference
-            switch (format) {
-                case 'DD MMM YYYY': {
-                    const pad = (n) => String(n).padStart(2, '0');
-                    return `${pad(date.getDate())} ${months[date.getMonth()]} ${date.getFullYear()}`;
-                }
-                case 'YYYY-MM-DD': {
-                    const pad = (n) => String(n).padStart(2, '0');
-                    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-                }
-                case 'MM/DD/YYYY': {
-                    const pad = (n) => String(n).padStart(2, '0');
-                    return `${pad(date.getMonth() + 1)}/${pad(date.getDate())}/${date.getFullYear()}`;
-                }
-                case 'DD/MM/YYYY': {
-                    const pad = (n) => String(n).padStart(2, '0');
-                    return `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()}`;
-                }
-                case 'MMM DD, YYYY': {
-                    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-                }
-                default:
-                    return dateString;
-            }
-        } catch (error) {
-            log('Error formatting date:', error);
+        if (typeof DateFormattingUtils !== 'undefined') {
+            const formatted = DateFormattingUtils.parseAndFormat(dateString, format);
+            if (formatted) return formatted;
+            log('DateFormattingUtils could not parse:', dateString);
             return dateString;
         }
+        // Fallback if DateFormattingUtils not available
+        log('DateFormattingUtils not available, returning original:', dateString);
+        return dateString;
     }
 
     // Get current theme
@@ -173,55 +132,13 @@
         return theme[colorType] || THEME_COLORS.light[colorType] || '#000000';
     }
 
-    // Create and show a toast notification
+    // Use UIUtils for toast notifications
     function showToast(message, type = 'success') {
-        const toast = document.createElement('div');
-        toast.className = 'hotstar-episode-copy-toast';
-        toast.textContent = message;
-
-        const successColor = getThemeColor('success');
-        const errorColor = getThemeColor('error');
-        const primaryColor = getThemeColor('primary');
-
-        // Styling
-        Object.assign(toast.style, {
-            position: 'fixed',
-            bottom: '20px',
-            right: '20px',
-            padding: '12px 20px',
-            borderRadius: '4px',
-            fontSize: '14px',
-            fontWeight: '500',
-            zIndex: '999999',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-            transition: 'opacity 0.3s ease',
-            opacity: '1',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            color: '#ffffff'
+        UIUtils.showNotification(message, {
+            type: type,
+            duration: CONFIG.toastDuration,
+            position: 'bottom-right'
         });
-
-        if (type === 'success') {
-            toast.style.backgroundColor = successColor;
-        } else if (type === 'error') {
-            toast.style.backgroundColor = errorColor;
-        } else {
-            toast.style.backgroundColor = primaryColor;
-        }
-
-        // Safely append toast to body if it exists
-        if (document.body) {
-            document.body.appendChild(toast);
-        } else {
-            // Fallback: append to document element if body doesn't exist yet
-            document.documentElement.appendChild(toast);
-        }
-
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            setTimeout(() => {
-                toast.remove();
-            }, 300);
-        }, CONFIG.toastDuration);
     }
 
     // Create a copy button for an episode card
@@ -455,7 +372,7 @@
     }
 
     // Extract and copy episode date
-    function copyEpisodeDate(episodeCard, button, successColor) {
+    async function copyEpisodeDate(episodeCard, button, successColor) {
         try {
             // Find episode title (for logging)
             const titleElement = episodeCard.querySelector('h3');
@@ -485,48 +402,40 @@
                 return;
             }
 
-            // Load the date format preference from storage
-            chrome.storage.sync.get(['hotstarDateFormat'], (result) => {
-                // Check for storage errors
-                if (chrome.runtime.lastError) {
-                    log('Storage error:', chrome.runtime.lastError);
-                    showToast('Error reading storage', 'error');
-                    return;
-                }
+            // Get the date format using the new priority-based API
+            const dateFormat = await DateFormattingUtils.getUserDateFormat({ view: 'hotstar', field: 'Air Date' });
+            const formattedDate = formatDate(dateText, dateFormat);
 
-                const dateFormat = result.hotstarDateFormat || 'DD MMM YYYY';
-                const formattedDate = formatDate(dateText, dateFormat);
+            // Check if Clipboard API is available
+            if (!isClipboardAPIAvailable()) {
+                showToast('Clipboard API not available in your browser', 'error');
+                log('Clipboard API not available');
+                return;
+            }
 
-                // Check if Clipboard API is available
-                if (!isClipboardAPIAvailable()) {
-                    showToast('Clipboard API not available in your browser', 'error');
-                    log('Clipboard API not available');
-                    return;
-                }
+            // Copy to clipboard
+            try {
+                await navigator.clipboard.writeText(formattedDate);
+                log('Copied date for:', title, '-> ', formattedDate);
+                showToast(`Date copied: ${formattedDate}`, 'success');
 
-                // Copy to clipboard
-                navigator.clipboard.writeText(formattedDate).then(() => {
-                    log('Copied date for:', title, '-> ', formattedDate);
-                    showToast(`Date copied: ${formattedDate}`, 'success');
+                // Visual feedback
+                const originalHTML = button.innerHTML;
+                const originalBorderColor = button.style.borderColor;
 
-                    // Visual feedback - capture current values inside the promise
-                    const originalHTML = button.innerHTML;
-                    const originalBorderColor = button.style.borderColor;
+                button.innerHTML = '<span>✓</span>';
+                button.style.borderColor = successColor;
+                button.style.color = successColor;
 
-                    button.innerHTML = '<span>✓</span>';
-                    button.style.borderColor = successColor;
-                    button.style.color = successColor;
-
-                    setTimeout(() => {
-                        button.innerHTML = originalHTML;
-                        button.style.borderColor = originalBorderColor;
-                        button.style.color = primaryColor;
-                    }, 1500);
-                }).catch((error) => {
-                    log('Error copying to clipboard:', error);
-                    showToast('Failed to copy', 'error');
-                });
-            });
+                setTimeout(() => {
+                    button.innerHTML = originalHTML;
+                    button.style.borderColor = originalBorderColor;
+                    button.style.color = primaryColor;
+                }, 1500);
+            } catch (error) {
+                log('Error copying to clipboard:', error);
+                showToast('Failed to copy', 'error');
+            }
         } catch (error) {
             log('Error in copyEpisodeDate:', error);
             showToast('Error copying date', 'error');

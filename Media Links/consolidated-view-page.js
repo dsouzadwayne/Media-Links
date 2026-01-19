@@ -154,12 +154,27 @@
 
       // Create and render customized view
       if (typeof CustomizedView !== 'undefined') {
+        // Detect viewName from pageSource or URL parameters
+        let viewName = null;
+        const urlParams = new URLSearchParams(window.location.search);
+        const source = urlParams.get('source');
+        if (source === 'wikipedia') {
+          viewName = 'wikipedia';
+        } else if (source === 'comparison') {
+          viewName = 'imdb';
+        } else if (options.pageSource) {
+          if (options.pageSource.includes('imdb.com')) viewName = 'imdb';
+          else if (options.pageSource.includes('wikipedia.org')) viewName = 'wikipedia';
+          else if (options.pageSource.includes('hotstar.com')) viewName = 'hotstar';
+        }
+
         const view = new CustomizedView({
           containerId: 'customized-view-full',
           data: data,
           title: options.title,
           columns: options.columns || ['name', 'role', 'roleType'],
-          pagePath: options.pagePath
+          pagePath: options.pagePath,
+          viewName: viewName
         });
 
         // MEDIUM FIX: Add .catch() handler for promise rejection
@@ -209,17 +224,18 @@
         throw new Error('CustomizedView not available');
       }
 
-      // Export to CSV
+      // Export to CSV using PapaParse
       document.getElementById('export-csv-btn').addEventListener('click', () => {
         const headers = options.columns || ['name', 'role', 'roleType'];
-        const csvContent = [
-          headers.join(','),
-          ...data.map(row =>
-            headers.map(col =>
-              `"${(row[col] || '').toString().replace(/"/g, '""')}"`
-            ).join(',')
-          )
-        ].join('\n');
+        // Filter data to only include specified columns
+        const filteredData = data.map(row => {
+          const obj = {};
+          headers.forEach(col => { obj[col] = row[col] || ''; });
+          return obj;
+        });
+        const csvContent = typeof Papa !== 'undefined'
+          ? Papa.unparse(filteredData, { columns: headers })
+          : headers.join(',') + '\n' + filteredData.map(row => headers.map(col => `"${(row[col] || '').toString().replace(/"/g, '""')}"`).join(',')).join('\n');
 
         const filename = options.title.replace(/[^a-z0-9]/gi, '-').toLowerCase() + '.csv';
         downloadFile(csvContent, filename, 'text/csv');
@@ -324,7 +340,8 @@
           data: items,
           title: title.replace(/^[📋🏢🏆📅⚙️]\s*/, ''), // Remove emoji from title
           columns: columns || ['name', 'role', 'roleType'],
-          pagePath: `/consolidated/${sectionId}`
+          pagePath: `/consolidated/${sectionId}`,
+          viewName: 'consolidated'
         });
 
         // Load preferences and render

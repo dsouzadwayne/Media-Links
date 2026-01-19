@@ -1,22 +1,11 @@
 // BookMyShow Copy Functionality
+// Uses: StorageUtils, UIUtils from lib/
 
 (function() {
   'use strict';
 
-  // Check if extension context is still valid
-  function isExtensionContextValid() {
-    try {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
-        return false;
-      }
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
   // Early exit if extension context is invalid
-  if (!isExtensionContextValid()) {
+  if (typeof StorageUtils === 'undefined' || !StorageUtils.isExtensionContextValid()) {
     console.log('Extension context invalidated, skipping BookMyShow copy functionality');
     return;
   }
@@ -26,89 +15,16 @@
            window.location.pathname.includes('/movies/');
   }
 
-  function getThemeColors() {
-    // Use ThemeManager if available, fallback to default colors
-    return new Promise((resolve) => {
-      try {
-        if (typeof ThemeManager !== 'undefined') {
-          const colors = ThemeManager.getThemeColors();
-          resolve(colors);
-        } else {
-          // Fallback: return default light theme colors
-          resolve({
-            button: '#6366f1',
-            buttonHover: '#4f46e5',
-            buttonText: '#fff'
-          });
-        }
-      } catch (error) {
-        console.warn('Error getting theme colors:', error);
-        resolve({
-          button: '#6366f1',
-          buttonHover: '#4f46e5',
-          buttonText: '#fff'
-        });
-      }
-    });
-  }
+  // Use UIUtils for theme colors
+  const getThemeColors = () => UIUtils.getThemeColors();
 
-  function getDialogColors(buttonColors) {
-    // Use ThemeManager if available for consistent dialog colors
-    try {
-      if (typeof window.ThemeManager !== 'undefined') {
-        return window.ThemeManager.getDialogColors(buttonColors.buttonText);
-      }
-    } catch (error) {
-      console.warn('Error getting dialog colors from ThemeManager:', error);
-    }
+  // Use UIUtils for dialog colors
+  const getDialogColors = (buttonColors) => UIUtils.getDialogColors(buttonColors.buttonText);
 
-    // Fallback: determine if button color is dark or light
-    const isDark = buttonColors.buttonText === '#fff';
-
-    if (isDark) {
-      // Dark theme dialogs
-      return {
-        background: '#1a1a2e',
-        text: '#e0e7ff',
-        border: '#2d2d44',
-        inputBg: '#252540',
-        inputBorder: '#3d3d5c',
-        cancelBg: '#2d2d44',
-        cancelHover: '#3d3d5c',
-        cancelText: '#c7d2fe'
-      };
-    } else {
-      // Light theme dialogs
-      return {
-        background: '#ffffff',
-        text: '#1a1a1a',
-        border: '#e0e0e0',
-        inputBg: '#f8f8f8',
-        inputBorder: '#d0d0d0',
-        cancelBg: '#e5e5e5',
-        cancelHover: '#d5d5d5',
-        cancelText: '#333333'
-      };
-    }
-  }
-
-  function getCopyButtonSettings() {
-    return new Promise((resolve) => {
-      if (!isExtensionContextValid()) {
-        resolve({ showBookMyShowCopy: true });
-        return;
-      }
-
-      try {
-        chrome.storage.sync.get(['showBookMyShowCopy'], (result) => {
-          resolve({
-            showBookMyShowCopy: result.showBookMyShowCopy !== false
-          });
-        });
-      } catch (e) {
-        resolve({ showBookMyShowCopy: true });
-      }
-    });
+  // Use StorageUtils for settings
+  async function getCopyButtonSettings() {
+    const result = await StorageUtils.getSettings(['showBookMyShowCopy'], { showBookMyShowCopy: true });
+    return { showBookMyShowCopy: result.showBookMyShowCopy !== false };
   }
 
   function createCopyButton(text, colors, label = 'Copy') {
@@ -172,33 +88,14 @@
     return button;
   }
 
-  function showNotification(message, isSuccess = true) {
-    const notification = document.createElement('div');
-    notification.className = 'media-links-bms-notification';
-    notification.textContent = message;
-
-    Object.assign(notification.style, {
-      position: 'fixed',
-      top: '20px',
-      right: '20px',
-      backgroundColor: isSuccess ? '#10b981' : '#ef4444',
-      color: '#fff',
-      padding: '12px 20px',
-      borderRadius: '8px',
-      fontSize: '14px',
-      fontWeight: '500',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-      zIndex: '999999',
-      animation: 'slideInRight 0.3s ease'
+  // Use UIUtils for notifications
+  const showNotification = (message, isSuccess = true) => {
+    UIUtils.showNotification(message, {
+      type: isSuccess ? 'success' : 'error',
+      position: 'top-right',
+      duration: 2000
     });
-
-    document.body.appendChild(notification);
-
-    setTimeout(() => {
-      notification.style.animation = 'slideOutRight 0.3s ease';
-      setTimeout(() => notification.remove(), 300);
-    }, 2000);
-  }
+  };
 
   async function processMovieTitle(colors) {
     // Find movie title - BookMyShow typically has it in h1 or with specific classes

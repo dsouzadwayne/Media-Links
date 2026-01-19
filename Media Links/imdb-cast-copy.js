@@ -1,23 +1,12 @@
 // IMDb Cast Copy Functionality
 // Separate file for better organization
+// Uses: StorageUtils, UIUtils, DOMUtils from lib/
 
 (function() {
   'use strict';
 
-  // Check if extension context is still valid
-  function isExtensionContextValid() {
-    try {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
-        return false;
-      }
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
   // Early exit if extension context is invalid (e.g., extension was reloaded)
-  if (!isExtensionContextValid()) {
+  if (!StorageUtils.isExtensionContextValid()) {
     console.log('Extension context invalidated, skipping IMDb cast copy functionality');
     return;
   }
@@ -157,110 +146,24 @@ function validateCastCount(input) {
   return count;
 }
 
-function getThemeColors() {
-  // Use ThemeManager if available, fallback to default colors
-  return new Promise((resolve) => {
-    try {
-      if (typeof ThemeManager !== 'undefined') {
-        const colors = ThemeManager.getThemeColors();
-        resolve(colors);
-      } else {
-        // Fallback: return default light theme colors
-        resolve({
-          button: '#6366f1',
-          buttonHover: '#4f46e5',
-          buttonText: '#fff'
-        });
-      }
-    } catch (error) {
-      console.warn('Error getting theme colors:', error);
-      resolve({
-        button: '#6366f1',
-        buttonHover: '#4f46e5',
-        buttonText: '#fff'
-      });
-    }
-  });
-}
+// Use UIUtils for theme colors
+const getThemeColors = () => UIUtils.getThemeColors();
 
-function getDialogColors(buttonColors) {
-  // Use ThemeManager if available for consistent dialog colors
-  try {
-    if (typeof ThemeManager !== 'undefined') {
-      return ThemeManager.getDialogColors(buttonColors.buttonText);
-    }
-  } catch (error) {
-    console.warn('Error getting dialog colors from ThemeManager:', error);
-  }
+// Use UIUtils for dialog colors
+const getDialogColors = (buttonColors) => UIUtils.getDialogColors(buttonColors.buttonText);
 
-  // Fallback: determine if button color is dark or light
-  const isDark = buttonColors.buttonText === '#fff';
-
-  if (isDark) {
-    // Dark theme dialogs
-    return {
-      background: '#1a1a2e',
-      text: '#e0e7ff',
-      border: '#2d2d44',
-      inputBg: '#252540',
-      inputBorder: '#3d3d5c',
-      cancelBg: '#2d2d44',
-      cancelHover: '#3d3d5c',
-      cancelText: '#c7d2fe'
-    };
-  } else {
-    // Light theme dialogs
-    return {
-      background: '#ffffff',
-      text: '#1a1a1a',
-      border: '#e0e0e0',
-      inputBg: '#f8f8f8',
-      inputBorder: '#d0d0d0',
-      cancelBg: '#e5e5e5',
-      cancelHover: '#d5d5d5',
-      cancelText: '#333333'
-    };
-  }
-}
-
-function getCopyButtonSettings() {
-  // Get copy button visibility settings from storage
-  return new Promise((resolve) => {
-    const defaults = {
-      showImdbCast: true,
-      showImdbCompany: true,
-      showImdbAwards: true,
-      showImdbMain: true
-    };
-
-    try {
-      if (!isExtensionContextValid()) {
-        resolve(defaults);
-        return;
-      }
-
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-        chrome.storage.sync.get(['showImdbCast', 'showImdbCompany', 'showImdbAwards', 'showImdbMain'], (result) => {
-          if (chrome.runtime.lastError) {
-            console.warn('Error getting copy button settings:', chrome.runtime.lastError);
-            resolve(defaults);
-          } else {
-            resolve({
-              showImdbCast: result.showImdbCast !== undefined ? result.showImdbCast : defaults.showImdbCast,
-              showImdbCompany: result.showImdbCompany !== undefined ? result.showImdbCompany : defaults.showImdbCompany,
-              showImdbAwards: result.showImdbAwards !== undefined ? result.showImdbAwards : defaults.showImdbAwards,
-              showImdbMain: result.showImdbMain !== undefined ? result.showImdbMain : defaults.showImdbMain
-            });
-          }
-        });
-      } else {
-        resolve(defaults);
-      }
-    } catch (error) {
-      console.warn('Error accessing chrome.storage for copy button settings:', error);
-      resolve(defaults);
-    }
-  });
+// Use StorageUtils for settings
+async function getCopyButtonSettings() {
+  const defaults = {
+    showImdbCast: true,
+    showImdbCompany: true,
+    showImdbAwards: true,
+    showImdbMain: true
+  };
+  return StorageUtils.getSettings(
+    ['showImdbCast', 'showImdbCompany', 'showImdbAwards', 'showImdbMain'],
+    defaults
+  );
 }
 
 let isProcessingIMDbButtons = false;
@@ -663,52 +566,16 @@ async function showCopyDialog(section, sectionName) {
   // Get additional theme-specific colors
   const dialogColors = getDialogColors(colors);
 
-  // Get default settings
-  const defaults = await new Promise((resolve) => {
-    try {
-      if (!isExtensionContextValid()) {
-        resolve({
-          count: 5,
-          content: 'name-role',
-          output: 'newline'
-        });
-        return;
-      }
-
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-        chrome.storage.sync.get(['defaultCastCount', 'defaultContentFormat', 'defaultOutputFormat'], (result) => {
-          if (chrome.runtime.lastError) {
-            console.warn('Error getting default settings:', chrome.runtime.lastError);
-            resolve({
-              count: 5,
-              content: 'name-role',
-              output: 'newline'
-            });
-          } else {
-            resolve({
-              count: result.defaultCastCount || 5,
-              content: result.defaultContentFormat || 'name-role',
-              output: result.defaultOutputFormat || 'newline'
-            });
-          }
-        });
-      } else {
-        // Fallback defaults
-        resolve({
-          count: 5,
-          content: 'name-role',
-          output: 'newline'
-        });
-      }
-    } catch (error) {
-      console.warn('Error accessing chrome.storage for defaults:', error);
-      resolve({
-        count: 5,
-        content: 'name-role',
-        output: 'newline'
-      });
-    }
-  });
+  // Get default settings using StorageUtils
+  const settingsResult = await StorageUtils.getSettings(
+    ['defaultCastCount', 'defaultContentFormat', 'defaultOutputFormat'],
+    { defaultCastCount: 5, defaultContentFormat: 'name-role', defaultOutputFormat: 'newline' }
+  );
+  const defaults = {
+    count: settingsResult.defaultCastCount,
+    content: settingsResult.defaultContentFormat,
+    output: settingsResult.defaultOutputFormat
+  };
 
   // Create backdrop
   const backdrop = document.createElement('div');
@@ -923,15 +790,26 @@ function copyCastData(section, count, content, outputFormat, sectionName) {
       break;
 
     case 'csv':
-      // CSV format: Name,Role per line
-      if (content === 'name-role') {
-        text = 'Name,Role\n' + castMembers.map(member =>
-          `"${member.name}","${member.role || ''}"`
-        ).join('\n');
-      } else if (content === 'name-only') {
-        text = 'Name\n' + castMembers.map(member => `"${member.name}"`).join('\n');
+      // CSV format using PapaParse for proper escaping
+      if (typeof Papa !== 'undefined') {
+        if (content === 'name-role') {
+          text = Papa.unparse(castMembers.map(m => ({ Name: m.name, Role: m.role || '' })));
+        } else if (content === 'name-only') {
+          text = Papa.unparse(castMembers.map(m => ({ Name: m.name })));
+        } else {
+          text = Papa.unparse(castMembers.map(m => ({ Role: m.role || '' })));
+        }
       } else {
-        text = 'Role\n' + castMembers.map(member => `"${member.role || ''}"`).join('\n');
+        // Fallback if PapaParse not available
+        if (content === 'name-role') {
+          text = 'Name,Role\n' + castMembers.map(member =>
+            `"${member.name.replace(/"/g, '""')}","${(member.role || '').replace(/"/g, '""')}"`
+          ).join('\n');
+        } else if (content === 'name-only') {
+          text = 'Name\n' + castMembers.map(member => `"${member.name.replace(/"/g, '""')}"`).join('\n');
+        } else {
+          text = 'Role\n' + castMembers.map(member => `"${(member.role || '').replace(/"/g, '""')}"`).join('\n');
+        }
       }
       break;
 
@@ -976,32 +854,15 @@ async function showCompanyCopyDialog(section, sectionName) {
   const colors = await getThemeColors();
   const dialogColors = getDialogColors(colors);
 
-  // Get default settings
-  const defaults = await new Promise((resolve) => {
-    try {
-      if (!isExtensionContextValid()) {
-        resolve({ count: 5, output: 'newline' });
-        return;
-      }
-
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-        chrome.storage.sync.get(['defaultCastCount', 'defaultOutputFormat'], (result) => {
-          if (chrome.runtime.lastError) {
-            resolve({ count: 5, output: 'newline' });
-          } else {
-            resolve({
-              count: result.defaultCastCount || 5,
-              output: result.defaultOutputFormat || 'newline'
-            });
-          }
-        });
-      } else {
-        resolve({ count: 5, output: 'newline' });
-      }
-    } catch (error) {
-      resolve({ count: 5, output: 'newline' });
-    }
-  });
+  // Get default settings using StorageUtils
+  const settingsResult2 = await StorageUtils.getSettings(
+    ['defaultCastCount', 'defaultOutputFormat'],
+    { defaultCastCount: 5, defaultOutputFormat: 'newline' }
+  );
+  const defaults = {
+    count: settingsResult2.defaultCastCount,
+    output: settingsResult2.defaultOutputFormat
+  };
 
   // Create backdrop
   const backdrop = document.createElement('div');
@@ -1177,12 +1038,22 @@ function copyCompanyData(section, count, content, outputFormat, sectionName) {
       break;
 
     case 'csv':
-      if (content === 'name-only') {
-        text = 'Company\n' + companies.map(company => `"${company.name}"`).join('\n');
+      // CSV format using PapaParse for proper escaping
+      if (typeof Papa !== 'undefined') {
+        if (content === 'name-only') {
+          text = Papa.unparse(companies.map(c => ({ Company: c.name })));
+        } else {
+          text = Papa.unparse(companies.map(c => ({ Company: c.name, Description: c.description || '' })));
+        }
       } else {
-        text = 'Company,Description\n' + companies.map(company =>
-          `"${company.name}","${company.description || ''}"`
-        ).join('\n');
+        // Fallback if PapaParse not available
+        if (content === 'name-only') {
+          text = 'Company\n' + companies.map(company => `"${company.name.replace(/"/g, '""')}"`).join('\n');
+        } else {
+          text = 'Company,Description\n' + companies.map(company =>
+            `"${company.name.replace(/"/g, '""')}","${(company.description || '').replace(/"/g, '""')}"`
+          ).join('\n');
+        }
       }
       break;
 
@@ -1214,38 +1085,8 @@ function copyCompanyData(section, count, content, outputFormat, sectionName) {
   });
 }
 
-function showNotification(message, isError = false) {
-  const notification = document.createElement('div');
-  notification.textContent = message;
-
-  // Calculate responsive positioning
-  const isMobile = window.innerWidth < 768;
-  const positionCSS = isMobile
-    ? 'bottom: 20px; left: 50%; transform: translateX(-50%);'
-    : 'bottom: 20px; right: 20px;';
-
-  notification.style.cssText = `
-    position: fixed;
-    ${positionCSS}
-    background: ${isError ? '#f44336' : '#4caf50'};
-    color: white;
-    padding: 15px 20px;
-    border-radius: 4px;
-    z-index: 10001;
-    font-weight: 600;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    max-width: 90%;
-    word-wrap: break-word;
-  `;
-
-  document.body.appendChild(notification);
-
-  setTimeout(() => {
-    if (document.body.contains(notification)) {
-      document.body.removeChild(notification);
-    }
-  }, 3000);
-}
+// Use UIUtils for notifications
+const showNotification = (message, isError = false) => UIUtils.showNotification(message, { isError });
 
 async function addMainPageCastButtons(colors) {
   // Check settings first

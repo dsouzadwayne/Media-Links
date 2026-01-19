@@ -52,15 +52,43 @@
   const SNAP_THRESHOLD = 20;
   const EDGE_MARGIN = 15;
 
+  // Use StorageUtils for extension context check
+  const isExtensionContextValid = () => typeof StorageUtils !== 'undefined' && StorageUtils.isExtensionContextValid();
+
   /**
-   * Check if extension context is valid
+   * Match a string against a glob pattern using minimatch
+   * Also handles subdomain matching for plain domain patterns
+   * @param {string} str - String to test (hostname or URL)
+   * @param {string} pattern - Glob pattern or domain name
+   * @param {string} hostname - Current hostname (for subdomain matching)
+   * @returns {boolean}
    */
-  function isExtensionContextValid() {
-    try {
-      return typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id;
-    } catch (e) {
-      return false;
+  function matchesPattern(str, pattern, hostname) {
+    if (!str || !pattern) return false;
+
+    // Use minimatch for glob patterns (contains *, ?, [, {)
+    if (/[*?[\]{}]/.test(pattern)) {
+      if (typeof minimatch !== 'function') return false;
+
+      // For URL patterns (contain :// or /), convert single * to ** so they match across path segments
+      // e.g., "https://example.com/path*" should match "https://example.com/path/to/page"
+      let adjustedPattern = pattern;
+      if (pattern.includes('/') || pattern.includes('://')) {
+        // Replace single * (not **) with ** for URL matching
+        adjustedPattern = pattern.replace(/(?<!\*)\*(?!\*)/g, '**');
+      }
+
+      return minimatch(str, adjustedPattern, { nocase: true });
     }
+
+    // For plain patterns without glob chars, check exact match and subdomain match
+    const lowerStr = str.toLowerCase();
+    const lowerPattern = pattern.toLowerCase();
+    const lowerHost = (hostname || str).toLowerCase();
+
+    return lowerStr === lowerPattern ||
+           lowerHost === lowerPattern ||
+           lowerHost.endsWith('.' + lowerPattern);
   }
 
   /**
@@ -85,27 +113,11 @@
       return true;
     }
 
-    return includedList.some(included => {
-      // Check if pattern contains path (/ or ://) - if so, match against full URL
-      const isUrlPattern = included.includes('/') || included.includes('://');
+    return includedList.some(pattern => {
+      // Check if pattern contains path - if so, match against full URL
+      const isUrlPattern = pattern.includes('/') && !pattern.startsWith('*://');
       const matchTarget = isUrlPattern ? currentUrl : currentHost;
-
-      // Handle wildcard patterns
-      if (included.startsWith('*') && included.endsWith('*') && included.length > 2) {
-        // *google.com* matches anything containing that pattern
-        const pattern = included.slice(1, -1); // Remove both *
-        return matchTarget.includes(pattern);
-      } else if (included.startsWith('*')) {
-        // *.example.com matches anything ending with that pattern
-        const pattern = included.slice(1); // Remove the *
-        return matchTarget.endsWith(pattern);
-      } else if (included.endsWith('*')) {
-        // example.* matches anything starting with that pattern
-        const pattern = included.slice(0, -1); // Remove the *
-        return matchTarget.startsWith(pattern);
-      }
-      // Handle both exact match and subdomain match
-      return currentHost === included || currentHost.endsWith('.' + included);
+      return matchesPattern(matchTarget, pattern, currentHost);
     });
   }
 
@@ -196,7 +208,7 @@
    * Save custom position to storage
    */
   function saveCustomPosition(position) {
-    if (!isExtensionContextValid()) return;
+    if (!StorageUtils.isExtensionContextValid()) return;
 
     settings.customPosition = position;
 
@@ -384,7 +396,7 @@
    * Load current theme from storage
    */
   async function loadCurrentTheme() {
-    if (!isExtensionContextValid()) return Promise.resolve();
+    if (!StorageUtils.isExtensionContextValid()) return Promise.resolve();
 
     return new Promise((resolve) => {
       try {
@@ -479,7 +491,7 @@
       }
 
       // Listen for theme change messages
-      if (isExtensionContextValid()) {
+      if (StorageUtils.isExtensionContextValid()) {
         try {
           chrome.runtime.onMessage.addListener((message) => {
             if (message.type === 'themeChanged') {
@@ -729,7 +741,7 @@
     };
 
     // First, request to focus this tab (brings user to this tab)
-    if (isExtensionContextValid()) {
+    if (StorageUtils.isExtensionContextValid()) {
       try {
         console.log('Stopwatch: Sending focusCurrentTab message');
         chrome.runtime.sendMessage({ type: 'focusCurrentTab' }, (response) => {
@@ -776,29 +788,18 @@
         rangeConfig = settings.randomTimeRangeByDomain[currentHostname];
       }
 
-      // Check wildcard patterns (same logic as getNotificationTimeForCurrentDomain)
+      // Check wildcard patterns using minimatch
       if (!rangeConfig) {
-        for (const domain of Object.keys(settings.randomTimeRangeByDomain)) {
-          if (domain === '*') continue;
+        for (const pattern of Object.keys(settings.randomTimeRangeByDomain)) {
+          if (pattern === '*') continue;
 
-          const config = settings.randomTimeRangeByDomain[domain];
+          const config = settings.randomTimeRangeByDomain[pattern];
           if (!config?.enabled) continue;
 
-          const isUrlPattern = domain.includes('/') && !domain.startsWith('*://');
+          const isUrlPattern = pattern.includes('/') && !pattern.startsWith('*://');
           const matchTarget = isUrlPattern ? currentUrl : currentHostname;
 
-          let matches = false;
-          if (domain.startsWith('*') && domain.endsWith('*') && domain.length > 2) {
-            matches = matchTarget.includes(domain.slice(1, -1));
-          } else if (domain.startsWith('*')) {
-            matches = matchTarget.endsWith(domain.slice(1));
-          } else if (domain.endsWith('*')) {
-            matches = matchTarget.startsWith(domain.slice(0, -1));
-          } else {
-            matches = currentHostname === domain || currentHostname.endsWith('.' + domain);
-          }
-
-          if (matches) {
+          if (matchesPattern(matchTarget, pattern, currentHostname)) {
             rangeConfig = config;
             break;
           }
@@ -877,34 +878,16 @@
       return settings.notificationTimeByDomain[currentHostname];
     }
 
-    // Check for partial matches and wildcard patterns
-    for (const domain of Object.keys(settings.notificationTimeByDomain)) {
-      if (domain === '*') continue; // Handle global wildcard separately
+    // Check for partial matches and wildcard patterns using minimatch
+    for (const pattern of Object.keys(settings.notificationTimeByDomain)) {
+      if (pattern === '*') continue; // Handle global wildcard separately
 
       // Check if pattern contains path - if so, match against full URL
-      const isUrlPattern = domain.includes('/') && !domain.startsWith('*://');
+      const isUrlPattern = pattern.includes('/') && !pattern.startsWith('*://');
       const matchTarget = isUrlPattern ? currentUrl : currentHostname;
 
-      let matches = false;
-
-      // Handle wildcard patterns (same logic as isDomainIncluded)
-      if (domain.startsWith('*') && domain.endsWith('*') && domain.length > 2) {
-        const pattern = domain.slice(1, -1);
-        matches = matchTarget.includes(pattern);
-      } else if (domain.startsWith('*')) {
-        const pattern = domain.slice(1);
-        matches = matchTarget.endsWith(pattern);
-      } else if (domain.endsWith('*')) {
-        const pattern = domain.slice(0, -1);
-        matches = matchTarget.startsWith(pattern);
-      } else {
-        // Exact match or current hostname is a subdomain of the pattern
-        matches = currentHostname === domain ||
-                  currentHostname.endsWith('.' + domain);
-      }
-
-      if (matches) {
-        return settings.notificationTimeByDomain[domain];
+      if (matchesPattern(matchTarget, pattern, currentHostname)) {
+        return settings.notificationTimeByDomain[pattern];
       }
     }
 
@@ -937,34 +920,16 @@
       return settings.silentModeByDomain[currentHostname];
     }
 
-    // Check for partial matches and wildcard patterns
-    for (const domain of Object.keys(settings.silentModeByDomain)) {
-      if (domain === '*') continue; // Handle global wildcard separately
+    // Check for partial matches and wildcard patterns using minimatch
+    for (const pattern of Object.keys(settings.silentModeByDomain)) {
+      if (pattern === '*') continue; // Handle global wildcard separately
 
       // Check if pattern contains path - if so, match against full URL
-      const isUrlPattern = domain.includes('/') && !domain.startsWith('*://');
+      const isUrlPattern = pattern.includes('/') && !pattern.startsWith('*://');
       const matchTarget = isUrlPattern ? currentUrl : currentHostname;
 
-      let matches = false;
-
-      // Handle wildcard patterns (same logic as isDomainIncluded)
-      if (domain.startsWith('*') && domain.endsWith('*') && domain.length > 2) {
-        const pattern = domain.slice(1, -1);
-        matches = matchTarget.includes(pattern);
-      } else if (domain.startsWith('*')) {
-        const pattern = domain.slice(1);
-        matches = matchTarget.endsWith(pattern);
-      } else if (domain.endsWith('*')) {
-        const pattern = domain.slice(0, -1);
-        matches = matchTarget.startsWith(pattern);
-      } else {
-        // Exact match or current hostname is a subdomain of the pattern
-        matches = currentHostname === domain ||
-                  currentHostname.endsWith('.' + domain);
-      }
-
-      if (matches) {
-        return settings.silentModeByDomain[domain];
+      if (matchesPattern(matchTarget, pattern, currentHostname)) {
+        return settings.silentModeByDomain[pattern];
       }
     }
 
@@ -996,36 +961,13 @@
       return settings.delayByDomain[currentHostname];
     }
 
-    // Check for wildcard/pattern matches (same logic as isDomainIncluded)
-    for (const domain of Object.keys(settings.delayByDomain)) {
-      // Skip exact match (already checked)
-      if (domain === currentHostname) continue;
+    // Check for wildcard/pattern matches using minimatch
+    for (const pattern of Object.keys(settings.delayByDomain)) {
+      // Skip exact match (already checked) and global wildcard
+      if (pattern === currentHostname || pattern === '*') continue;
 
-      // Handle wildcards
-      if (domain.includes('*')) {
-        // Pattern: *.domain.com - matches any subdomain
-        if (domain.startsWith('*.')) {
-          const baseDomain = domain.slice(2);
-          if (currentHostname === baseDomain || currentHostname.endsWith('.' + baseDomain)) {
-            return settings.delayByDomain[domain];
-          }
-        }
-        // Pattern: domain.* - matches domain with any TLD
-        else if (domain.endsWith('.*')) {
-          const domainBase = domain.slice(0, -2);
-          const parts = currentHostname.split('.');
-          const hostnameBase = parts.slice(0, -1).join('.');
-          if (hostnameBase === domainBase || currentHostname.startsWith(domainBase + '.')) {
-            return settings.delayByDomain[domain];
-          }
-        }
-        // Pattern: *keyword* - matches if hostname contains keyword
-        else if (domain.startsWith('*') && domain.endsWith('*')) {
-          const keyword = domain.slice(1, -1).toLowerCase();
-          if (currentHostname.includes(keyword)) {
-            return settings.delayByDomain[domain];
-          }
-        }
+      if (matchesPattern(currentHostname, pattern, currentHostname)) {
+        return settings.delayByDomain[pattern];
       }
     }
 
@@ -1059,38 +1001,17 @@
       result = [...settings.bookmarksByDomain[currentHostname]];
     }
 
-    // Check for partial matches and wildcard patterns
+    // Check for partial matches and wildcard patterns using minimatch
     if (result.length === 0) {
-      for (const domain of Object.keys(settings.bookmarksByDomain)) {
-        if (domain === '*') continue; // Handle global wildcard separately
+      for (const pattern of Object.keys(settings.bookmarksByDomain)) {
+        if (pattern === '*') continue; // Handle global wildcard separately
 
-        // Check if pattern contains path (/ after domain) - if so, match against full URL
-        const isUrlPattern = domain.includes('/') && !domain.startsWith('*://');
+        // Check if pattern contains path - if so, match against full URL
+        const isUrlPattern = pattern.includes('/') && !pattern.startsWith('*://');
         const matchTarget = isUrlPattern ? currentUrl : currentHostname;
 
-        let matches = false;
-
-        // Handle wildcard patterns (same logic as isDomainIncluded)
-        if (domain.startsWith('*') && domain.endsWith('*') && domain.length > 2) {
-          // *keyword* matches anything containing that pattern
-          const pattern = domain.slice(1, -1); // Remove both *
-          matches = matchTarget.includes(pattern);
-        } else if (domain.startsWith('*')) {
-          // *.example.com matches anything ending with that pattern
-          const pattern = domain.slice(1); // Remove the *
-          matches = matchTarget.endsWith(pattern);
-        } else if (domain.endsWith('*')) {
-          // example.* matches anything starting with that pattern
-          const pattern = domain.slice(0, -1); // Remove the *
-          matches = matchTarget.startsWith(pattern);
-        } else {
-          // Exact match or current hostname is a subdomain of the pattern
-          matches = currentHostname === domain ||
-                    currentHostname.endsWith('.' + domain);
-        }
-
-        if (matches) {
-          result = [...settings.bookmarksByDomain[domain]];
+        if (matchesPattern(matchTarget, pattern, currentHostname)) {
+          result = [...settings.bookmarksByDomain[pattern]];
           break;
         }
       }
@@ -1116,7 +1037,7 @@
       return;
     }
 
-    if (!isExtensionContextValid()) {
+    if (!StorageUtils.isExtensionContextValid()) {
       console.warn('Stopwatch: Extension context invalid, cannot execute custom bookmarklets');
       return;
     }
@@ -1267,7 +1188,7 @@
 
     // Send regular bookmarks to background script to open in new tabs
     if (regularBookmarks.length > 0) {
-      if (!isExtensionContextValid()) {
+      if (!StorageUtils.isExtensionContextValid()) {
         console.warn('Stopwatch: Extension context invalid, cannot open regular bookmarks');
         return;
       }
@@ -1339,7 +1260,7 @@
    * Load settings and initialize
    */
   async function loadSettings() {
-    if (!isExtensionContextValid()) return;
+    if (!StorageUtils.isExtensionContextValid()) return;
 
     try {
       return new Promise((resolve) => {
@@ -1432,7 +1353,7 @@
   /**
    * Listen for settings changes
    */
-  if (isExtensionContextValid()) {
+  if (StorageUtils.isExtensionContextValid()) {
     try {
       chrome.storage.onChanged.addListener((changes, namespace) => {
         if (namespace !== 'sync') return;

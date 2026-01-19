@@ -36,9 +36,6 @@
     core.safeSetValue('bookmyshow-cast-count', settings.bookMyShowCastCount);
     core.safeSetValue('bookmyshow-output-format', settings.bookMyShowOutputFormat);
     core.safeSetChecked('bookmyshow-include-roles', settings.bookMyShowIncludeRoles);
-
-    // Date format (shared across sites)
-    core.safeSetValue('hotstar-date-format', settings.hotstarDateFormat || 'DD MMM YYYY');
   }
 
   // Attach copy event listeners
@@ -79,10 +76,7 @@
       showBookMyShowCopy: core.getSafeValue('show-bookmyshow-copy', 'checked'),
       bookMyShowCastCount: core.validateNumericInput(core.getSafeValue('bookmyshow-cast-count'), 1, 1000, 10),
       bookMyShowOutputFormat: core.getSafeValue('bookmyshow-output-format'),
-      bookMyShowIncludeRoles: core.getSafeValue('bookmyshow-include-roles', 'checked'),
-
-      // Date format
-      hotstarDateFormat: core.getSafeValue('hotstar-date-format')
+      bookMyShowIncludeRoles: core.getSafeValue('bookmyshow-include-roles', 'checked')
     };
   }
 

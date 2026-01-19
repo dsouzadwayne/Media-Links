@@ -1,4 +1,5 @@
 // Wikipedia Cast Copy Functionality
+// Uses: StorageUtils, UIUtils from lib/
 
 (function() {
   'use strict';
@@ -9,20 +10,8 @@
     return;
   }
 
-  // Check if extension context is still valid
-  function isExtensionContextValid() {
-    try {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
-        return false;
-      }
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
   // Early exit if extension context is invalid
-  if (!isExtensionContextValid()) {
+  if (!StorageUtils.isExtensionContextValid()) {
     console.log('Extension context invalidated, skipping Wikipedia cast copy functionality');
     return;
   }
@@ -40,66 +29,16 @@ function isWikipediaCastPage() {
          document.querySelector('.infobox');
 }
 
-function getThemeColors() {
-  // Use ThemeManager if available, fallback to default colors
-  return new Promise((resolve) => {
-    try {
-      if (typeof ThemeManager !== 'undefined') {
-        const colors = ThemeManager.getThemeColors();
-        resolve(colors);
-      } else {
-        // Fallback: return default light theme colors
-        resolve({
-          button: '#6366f1',
-          buttonHover: '#4f46e5',
-          buttonText: '#fff'
-        });
-      }
-    } catch (error) {
-      console.warn('Error getting theme colors:', error);
-      resolve({
-        button: '#6366f1',
-        buttonHover: '#4f46e5',
-        buttonText: '#fff'
-      });
-    }
-  });
-}
+// Use UIUtils for theme colors
+const getThemeColors = () => UIUtils.getThemeColors();
 
-function getCopyButtonSettings() {
-  // Get copy button visibility settings from storage
-  return new Promise((resolve) => {
-    const defaults = {
-      showWikiCast: true,
-      showWikiTables: true
-    };
-
-    try {
-      if (!isExtensionContextValid()) {
-        resolve(defaults);
-        return;
-      }
-
-      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-        chrome.storage.sync.get(['showWikiCast', 'showWikiTables'], (result) => {
-          if (chrome.runtime.lastError) {
-            console.warn('Error getting copy button settings:', chrome.runtime.lastError);
-            resolve(defaults);
-          } else {
-            resolve({
-              showWikiCast: result.showWikiCast !== undefined ? result.showWikiCast : defaults.showWikiCast,
-              showWikiTables: result.showWikiTables !== undefined ? result.showWikiTables : defaults.showWikiTables
-            });
-          }
-        });
-      } else {
-        resolve(defaults);
-      }
-    } catch (error) {
-      console.warn('Error accessing chrome.storage for copy button settings:', error);
-      resolve(defaults);
-    }
-  });
+// Use StorageUtils for settings
+async function getCopyButtonSettings() {
+  const defaults = {
+    showWikiCast: true,
+    showWikiTables: true
+  };
+  return StorageUtils.getSettings(['showWikiCast', 'showWikiTables'], defaults);
 }
 
 let isProcessingWikiButtons = false;
@@ -669,7 +608,7 @@ async function showWikiCopyDialog(castSection, sectionName) {
   // Get default settings
   const defaults = await new Promise((resolve) => {
     try {
-      if (!isExtensionContextValid()) {
+      if (!StorageUtils.isExtensionContextValid()) {
         resolve({ count: 5, content: 'name-role', output: 'newline' });
         return;
       }
@@ -1000,7 +939,7 @@ async function showTableCopyDialog(td, sectionName) {
   // Get default settings
   const defaults = await new Promise((resolve) => {
     try {
-      if (!isExtensionContextValid()) {
+      if (!StorageUtils.isExtensionContextValid()) {
         resolve({ count: 5, content: 'name-only', output: 'newline' });
         return;
       }
@@ -1231,30 +1170,8 @@ function copyTableCastData(castMembers, count, outputFormat, sectionName) {
   });
 }
 
-function showNotification(message, isError = false) {
-  const notification = document.createElement('div');
-  notification.textContent = message;
-  notification.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: ${isError ? '#f44336' : '#4caf50'};
-    color: white;
-    padding: 15px 20px;
-    border-radius: 4px;
-    z-index: 10001;
-    font-weight: 600;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-  `;
-
-  document.body.appendChild(notification);
-
-  setTimeout(() => {
-    if (document.body.contains(notification)) {
-      document.body.removeChild(notification);
-    }
-  }, 3000);
-}
+// Use UIUtils for notifications
+const showNotification = (message, isError = false) => UIUtils.showNotification(message, { isError });
 
 // Initialize on page load and when content changes
 if (isWikipediaCastPage()) {

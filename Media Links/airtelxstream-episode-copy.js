@@ -1,4 +1,5 @@
 // Copy buttons for Airtel Xstream episode descriptions
+// Uses: StorageUtils, UIUtils from lib/
 
 (function() {
     'use strict';
@@ -26,17 +27,8 @@
 
     let historyWrapped = false;
 
-    // Check if Chrome storage API is available
-    function isChromeStorageAvailable() {
-        try {
-            return typeof chrome !== 'undefined' &&
-                   typeof chrome.storage !== 'undefined' &&
-                   typeof chrome.storage.sync !== 'undefined';
-        } catch (error) {
-            log('Chrome storage check error:', error);
-            return false;
-        }
-    }
+    // Use StorageUtils for checking extension context
+    const isChromeStorageAvailable = () => StorageUtils.isExtensionContextValid();
 
     // Theme colors mapping
     const THEME_COLORS = {
@@ -139,49 +131,13 @@
         return color;
     }
 
-    // Create and show a toast notification
+    // Use UIUtils for toast notifications
     function showToast(message, type = 'success') {
-        const toast = document.createElement('div');
-        toast.className = 'airtelxstream-episode-copy-toast';
-        toast.textContent = message;
-
-        const successColor = getThemeColor('success');
-        const errorColor = getThemeColor('error');
-        const primaryColor = getThemeColor('primary');
-
-        // Styling
-        Object.assign(toast.style, {
-            position: 'fixed',
-            bottom: '20px',
-            right: '20px',
-            padding: '12px 20px',
-            borderRadius: '4px',
-            fontSize: '14px',
-            fontWeight: '500',
-            zIndex: '999999',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.2)',
-            transition: 'opacity 0.3s ease',
-            opacity: '1',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-            color: '#ffffff'
+        UIUtils.showNotification(message, {
+            type: type,
+            duration: CONFIG.toastDuration,
+            position: 'bottom-right'
         });
-
-        if (type === 'success') {
-            toast.style.backgroundColor = successColor;
-        } else if (type === 'error') {
-            toast.style.backgroundColor = errorColor;
-        } else {
-            toast.style.backgroundColor = primaryColor;
-        }
-
-        document.body.appendChild(toast);
-
-        setTimeout(() => {
-            toast.style.opacity = '0';
-            setTimeout(() => {
-                toast.remove();
-            }, 300);
-        }, CONFIG.toastDuration);
     }
 
     // Create a copy button for an episode tile
@@ -566,37 +522,12 @@
         log('Theme listener set up');
     }
 
-    // Load theme from storage - returns a promise
-    function loadThemeFromStorage() {
-        return new Promise((resolve) => {
-            if (!isChromeStorageAvailable()) {
-                log('Chrome storage not available, using default theme');
-                CONFIG.theme = 'light';
-                resolve(CONFIG.theme);
-                return;
-            }
-
-            try {
-                chrome.storage.sync.get(['theme'], (result) => {
-                    if (chrome.runtime.lastError) {
-                        log('Storage error:', chrome.runtime.lastError);
-                        CONFIG.theme = 'light';
-                    } else if (result && result.theme) {
-                        CONFIG.theme = result.theme;
-                        log('✓ Loaded theme from storage:', CONFIG.theme);
-                    } else {
-                        log('⚠ No theme in storage, using default: light');
-                        CONFIG.theme = 'light';
-                    }
-                    log('CONFIG.theme is now:', CONFIG.theme);
-                    resolve(CONFIG.theme);
-                });
-            } catch (error) {
-                log('✗ Could not access chrome storage:', error);
-                CONFIG.theme = 'light';
-                resolve(CONFIG.theme);
-            }
-        });
+    // Load theme from storage using StorageUtils
+    async function loadThemeFromStorage() {
+        const result = await StorageUtils.getSettings(['theme'], { theme: 'light' });
+        CONFIG.theme = result.theme || 'light';
+        log('✓ Loaded theme from storage:', CONFIG.theme);
+        return CONFIG.theme;
     }
 
     // Listen for storage changes (when settings are updated)

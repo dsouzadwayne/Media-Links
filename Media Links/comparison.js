@@ -1,23 +1,12 @@
 // Media Links Comparison Feature
 // Compares data between Wikipedia and IMDb sources
+// Uses: StorageUtils from lib/
 
 (function() {
   'use strict';
 
-  // Check if extension context is still valid
-  function isExtensionContextValid() {
-    try {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
-        return false;
-      }
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
   // Early exit if extension context is invalid
-  if (!isExtensionContextValid()) {
+  if (typeof StorageUtils === 'undefined' || !StorageUtils.isExtensionContextValid()) {
     console.log('Extension context invalidated, skipping comparison script');
     return;
   }
@@ -596,7 +585,7 @@
    * Listen for settings changes to show/hide comparison button
    */
   try {
-    if (isExtensionContextValid() && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+    if (StorageUtils.isExtensionContextValid() && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
       chrome.storage.onChanged.addListener((changes, namespace) => {
         if (namespace === 'sync') {
           // Check if any comparison-related settings changed

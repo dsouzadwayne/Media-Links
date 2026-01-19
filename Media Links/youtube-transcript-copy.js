@@ -1,23 +1,12 @@
 // YouTube Transcript Copy Functionality
 // Uses YouTube's InnerTube API to fetch transcripts (similar to youtube-caption-extractor)
+// Uses: StorageUtils, UIUtils from lib/
 
 (function() {
   'use strict';
 
-  // Check if extension context is still valid
-  function isExtensionContextValid() {
-    try {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
-        return false;
-      }
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
   // Early exit if extension context is invalid
-  if (!isExtensionContextValid()) {
+  if (!StorageUtils.isExtensionContextValid()) {
     console.log('Extension context invalidated, skipping YouTube transcript functionality');
     return;
   }
@@ -49,54 +38,24 @@
     return document.title.replace(' - YouTube', '').trim() || 'YouTube Video';
   }
 
-  function getThemeColors() {
-    return new Promise((resolve) => {
-      try {
-        if (typeof ThemeManager !== 'undefined') {
-          const colors = ThemeManager.getThemeColors();
-          resolve(colors);
-        } else {
-          resolve({
-            button: '#ff0000',
-            buttonHover: '#cc0000',
-            buttonText: '#fff'
-          });
-        }
-      } catch (error) {
-        resolve({
-          button: '#ff0000',
-          buttonHover: '#cc0000',
-          buttonText: '#fff'
-        });
-      }
-    });
+  // Use UIUtils for theme colors (with YouTube-specific fallback)
+  async function getThemeColors() {
+    const colors = await UIUtils.getThemeColors();
+    // YouTube uses red as default, so override if using default colors
+    if (colors.button === '#6366f1') {
+      return {
+        button: '#ff0000',
+        buttonHover: '#cc0000',
+        buttonText: '#fff'
+      };
+    }
+    return colors;
   }
 
-  function getCopyButtonSettings() {
-    return new Promise((resolve) => {
-      const defaults = { showYouTubeTranscript: true };
-      try {
-        if (!isExtensionContextValid()) {
-          resolve(defaults);
-          return;
-        }
-        if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
-          chrome.storage.sync.get(['showYouTubeTranscript'], (result) => {
-            if (chrome.runtime.lastError) {
-              resolve(defaults);
-            } else {
-              resolve({
-                showYouTubeTranscript: result.showYouTubeTranscript !== undefined ? result.showYouTubeTranscript : true
-              });
-            }
-          });
-        } else {
-          resolve(defaults);
-        }
-      } catch (error) {
-        resolve(defaults);
-      }
-    });
+  // Use StorageUtils for settings
+  async function getCopyButtonSettings() {
+    const defaults = { showYouTubeTranscript: true };
+    return StorageUtils.getSettings(['showYouTubeTranscript'], defaults);
   }
 
   let isProcessing = false;

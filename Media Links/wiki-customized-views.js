@@ -1,5 +1,6 @@
 // Wikipedia Customized Views - Extract and display movie/TV show data
 // Similar to IMDb customized views with Directors, Producers, Writers, Cast, etc.
+// Uses: StorageUtils from lib/
 
 (function() {
   'use strict';
@@ -9,20 +10,8 @@
     return;
   }
 
-  // Check if extension context is still valid
-  function isExtensionContextValid() {
-    try {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
-        return false;
-      }
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
   // Early exit if extension context is invalid
-  if (!isExtensionContextValid()) {
+  if (!StorageUtils.isExtensionContextValid()) {
     console.log('Extension context invalidated, skipping Wikipedia customized views');
     return;
   }
@@ -920,7 +909,7 @@
   function getCustomizedViewButtonSetting() {
     return new Promise((resolve) => {
       try {
-        if (!isExtensionContextValid()) {
+        if (!StorageUtils.isExtensionContextValid()) {
           resolve(true); // Default to enabled
           return;
         }
@@ -1002,7 +991,7 @@
    */
   async function openCustomizedView() {
     try {
-      if (!isExtensionContextValid()) {
+      if (!StorageUtils.isExtensionContextValid()) {
         alert('Extension context has been invalidated. Please reload the page and try again.');
         return;
       }
@@ -1049,7 +1038,7 @@
       // Save to chrome storage
       if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
         chrome.storage.local.set({ 'customized-view-temp': viewData }, () => {
-          if (!isExtensionContextValid()) {
+          if (!StorageUtils.isExtensionContextValid()) {
             console.warn('Extension context invalidated during storage operation');
             return;
           }
@@ -1104,7 +1093,7 @@
    * Listen for settings changes to show/hide button
    */
   try {
-    if (isExtensionContextValid() && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+    if (StorageUtils.isExtensionContextValid() && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
       chrome.storage.onChanged.addListener((changes, namespace) => {
         if (namespace === 'sync' && changes.showWikiCustomizedViewBtn) {
           const isEnabled = changes.showWikiCustomizedViewBtn.newValue !== false;
@@ -1124,7 +1113,7 @@
    * Listen for comparison extraction requests
    */
   try {
-    if (isExtensionContextValid()) {
+    if (StorageUtils.isExtensionContextValid()) {
       chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.action === 'extractForComparison' && request.pageType === 'Wikipedia') {
           console.log('Wikipedia: Received comparison extraction request');

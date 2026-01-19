@@ -5,7 +5,7 @@
    "content_scripts": [
       {
          "matches": ["<all_urls>"],
-         "js": ["lib/bookmarklet-parser.js", "theme-manager.js", "settings-utils.js", "monkey.js", "bookmarklets.js", "bookmarklet-editor/domain-trigger.js", "content.js", "stopwatch.js"],
+         "js": ["lib/storage-utils.js", "lib/ui-utils.js", "lib/dom-utils.js", "lib/luxon.min.js", "lib/date-utils.js", "lib/minimatch.min.js", "lib/papaparse.min.js", "lib/fuse.min.js", "lib/bookmarklet-parser.js", "theme-manager.js", "settings-utils.js", "monkey.js", "bookmarklets.js", "bookmarklet-editor/domain-trigger.js", "content.js", "stopwatch.js"],
          "run_at": "document_start"
       },
       {
@@ -80,10 +80,10 @@
       "pages": ["sandbox.html"]
    },
    "update_url": "https://clients2.google.com/service/update2/crx",
-   "version": "0.859",
+   "version": "0.9.0",
    "web_accessible_resources": [
       {
-         "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html", "offscreen.html", "consolidated-view-page.html", "consolidated-view-page.js", "comparison-view-page.html", "comparison-view-page.js", "customized-views.js", "theme-manager.js", "settings-utils.js", "hotstar-episode-copy.js", "hotstar-show-title-copy.js", "airtelxstream-episode-copy.js", "airtelxstream-cast-copy.js", "appletv-view-page.html", "appletv-view-page.js", "appletv-customized-views.js", "filters/role-filters.js", "youtube-transcript-view.html", "youtube-transcript-view.js", "bookmarklet-editor/bookmarkleteditor.html", "bookmarklet-editor/bookmarkleteditor.js", "bookmarklet-editor/bookmarkleteditor.css", "bookmarklet-editor/scheduler-storage.js", "lib/element-detection.js", "lib/bookmarklet-parser.js"],
+         "resources": ["tesseract-worker.min.js", "tesseract-core.wasm.js", "tesseract.min.js", "lang-data/*", "sandbox.html", "offscreen.html", "consolidated-view-page.html", "consolidated-view-page.js", "comparison-view-page.html", "comparison-view-page.js", "customized-views.js", "theme-manager.js", "settings-utils.js", "hotstar-episode-copy.js", "hotstar-show-title-copy.js", "airtelxstream-episode-copy.js", "airtelxstream-cast-copy.js", "appletv-view-page.html", "appletv-view-page.js", "appletv-customized-views.js", "filters/role-filters.js", "youtube-transcript-view.html", "youtube-transcript-view.js", "bookmarklet-editor/bookmarkleteditor.html", "bookmarklet-editor/bookmarkleteditor.js", "bookmarklet-editor/bookmarkleteditor.css", "bookmarklet-editor/scheduler-storage.js", "lib/element-detection.js", "lib/bookmarklet-parser.js", "lib/storage-utils.js", "lib/ui-utils.js", "lib/dom-utils.js", "lib/luxon.min.js", "lib/date-utils.js", "lib/minimatch.min.js", "lib/papaparse.min.js", "lib/fuse.min.js"],
          "matches": ["<all_urls>"],
          "use_dynamic_url": true
       }

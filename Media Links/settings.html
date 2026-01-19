@@ -21,6 +21,7 @@
         <div class="sidebar-header">Sections</div>
         <ul class="sidebar-nav">
           <li><a href="#appearance" class="sidebar-link active" data-section="appearance">🎨 Appearance</a></li>
+          <li><a href="#date-formats" class="sidebar-link" data-section="date-formats">📅 Date Formats</a></li>
           <li><a href="#search-query" class="sidebar-link" data-section="search-query">🔍 Search & Query</a></li>
           <li><a href="#query-patterns" class="sidebar-link" data-section="query-patterns">🔗 Query Patterns</a></li>
           <li><a href="#copy-visibility" class="sidebar-link" data-section="copy-visibility">👁️ Copy Visibility</a></li>
@@ -75,6 +76,156 @@
             <input type="checkbox" id="show-sidebar-bookmarklet-runner">
             <span class="toggle-slider"></span>
           </label>
+        </div>
+      </section>
+
+      <!-- Date Formats Section -->
+      <section class="settings-section" id="date-formats">
+        <div class="section-header">
+          <h2>📅 Date Formats</h2>
+          <p class="section-description">Configure date display formats globally, per-view, or per-field</p>
+        </div>
+
+        <!-- Global Default -->
+        <div class="setting-group">
+          <h3 class="group-title">Global Default</h3>
+          <div class="setting-item">
+            <label for="date-format-default" class="setting-label">
+              <span class="label-text">Default Date Format</span>
+              <span class="label-description">Used across all views unless overridden</span>
+            </label>
+            <select id="date-format-default" class="setting-input">
+              <option value="DD MMM YYYY">DD MMM YYYY (e.g., 25 Nov 2025)</option>
+              <option value="YYYY-MM-DD">YYYY-MM-DD (e.g., 2025-11-25)</option>
+              <option value="MM/DD/YYYY">MM/DD/YYYY (e.g., 11/25/2025)</option>
+              <option value="DD/MM/YYYY">DD/MM/YYYY (e.g., 25/11/2025)</option>
+              <option value="MMM DD, YYYY">MMM DD, YYYY (e.g., Nov 25, 2025)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Per-View Overrides -->
+        <div class="setting-group">
+          <h3 class="group-title">Per-View Formats</h3>
+          <p class="label-description" style="margin-bottom: 15px;">Override the default format for specific views. Leave as "Use Default" to inherit the global format.</p>
+
+          <div class="setting-item">
+            <label for="date-format-imdb" class="setting-label">
+              <span class="label-text">IMDb</span>
+              <span class="label-description">Customized views and copy operations on IMDb pages</span>
+            </label>
+            <select id="date-format-imdb" class="setting-input">
+              <option value="">Use Default</option>
+              <option value="DD MMM YYYY">DD MMM YYYY</option>
+              <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+              <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+              <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+              <option value="MMM DD, YYYY">MMM DD, YYYY</option>
+            </select>
+          </div>
+
+          <div class="setting-item">
+            <label for="date-format-wikipedia" class="setting-label">
+              <span class="label-text">Wikipedia</span>
+              <span class="label-description">Customized views and copy operations on Wikipedia pages</span>
+            </label>
+            <select id="date-format-wikipedia" class="setting-input">
+              <option value="">Use Default</option>
+              <option value="DD MMM YYYY">DD MMM YYYY</option>
+              <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+              <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+              <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+              <option value="MMM DD, YYYY">MMM DD, YYYY</option>
+            </select>
+          </div>
+
+          <div class="setting-item">
+            <label for="date-format-hotstar" class="setting-label">
+              <span class="label-text">Hotstar</span>
+              <span class="label-description">Episode lists and other Hotstar date displays</span>
+            </label>
+            <select id="date-format-hotstar" class="setting-input">
+              <option value="">Use Default</option>
+              <option value="DD MMM YYYY">DD MMM YYYY</option>
+              <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+              <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+              <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+              <option value="MMM DD, YYYY">MMM DD, YYYY</option>
+            </select>
+          </div>
+
+          <div class="setting-item">
+            <label for="date-format-consolidated" class="setting-label">
+              <span class="label-text">Consolidated View</span>
+              <span class="label-description">The consolidated overview page</span>
+            </label>
+            <select id="date-format-consolidated" class="setting-input">
+              <option value="">Use Default</option>
+              <option value="DD MMM YYYY">DD MMM YYYY</option>
+              <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+              <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+              <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+              <option value="MMM DD, YYYY">MMM DD, YYYY</option>
+            </select>
+          </div>
+
+          <div class="setting-item">
+            <label for="date-format-comparison" class="setting-label">
+              <span class="label-text">Comparison View</span>
+              <span class="label-description">The Wikipedia vs IMDb comparison page</span>
+            </label>
+            <select id="date-format-comparison" class="setting-input">
+              <option value="">Use Default</option>
+              <option value="DD MMM YYYY">DD MMM YYYY</option>
+              <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+              <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+              <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+              <option value="MMM DD, YYYY">MMM DD, YYYY</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Per-Field Overrides -->
+        <div class="setting-group">
+          <h3 class="group-title">Per-Field Overrides</h3>
+          <p class="label-description" style="margin-bottom: 15px;">Override formats for specific field types (e.g., Release Dates, Birth Date). These take highest priority.</p>
+
+          <div id="field-overrides-list">
+            <!-- Dynamic field overrides will be added here -->
+          </div>
+
+          <div class="setting-item" style="margin-top: 15px;">
+            <div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap;">
+              <div style="flex: 1; min-width: 200px;">
+                <label for="new-field-name" class="setting-label" style="margin-bottom: 5px;">
+                  <span class="label-text">Field Name</span>
+                </label>
+                <input type="text" id="new-field-name" class="setting-input" placeholder="e.g., Release Dates" list="field-suggestions">
+                <datalist id="field-suggestions">
+                  <option value="Release Dates">
+                  <option value="Release Date">
+                  <option value="Air Date">
+                  <option value="Birth Date">
+                  <option value="Year">
+                </datalist>
+              </div>
+              <div style="flex: 1; min-width: 150px;">
+                <label for="new-field-format" class="setting-label" style="margin-bottom: 5px;">
+                  <span class="label-text">Format</span>
+                </label>
+                <select id="new-field-format" class="setting-input">
+                  <option value="DD MMM YYYY">DD MMM YYYY</option>
+                  <option value="YYYY-MM-DD">YYYY-MM-DD</option>
+                  <option value="MM/DD/YYYY">MM/DD/YYYY</option>
+                  <option value="DD/MM/YYYY">DD/MM/YYYY</option>
+                  <option value="MMM DD, YYYY">MMM DD, YYYY</option>
+                </select>
+              </div>
+              <button type="button" id="add-field-override-btn" class="primary-button" style="padding: 8px 16px;">
+                + Add Override
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -323,25 +474,6 @@
                 <option value="table">Markdown Table</option>
               </select>
             </div>
-          </div>
-        </div>
-
-        <!-- Date Format Settings -->
-        <div class="setting-group">
-          <h3 class="group-title">Date Format</h3>
-
-          <div class="setting-item">
-            <label for="hotstar-date-format" class="setting-label">
-              <span class="label-text">Default Date Format</span>
-              <span class="label-description">Choose the format for copying dates across all views (Wikipedia, IMDb, Hotstar, etc.)</span>
-            </label>
-            <select id="hotstar-date-format" class="setting-input">
-              <option value="DD MMM YYYY">DD MMM YYYY (e.g., 25 Nov 2025)</option>
-              <option value="YYYY-MM-DD">YYYY-MM-DD (e.g., 2025-11-25)</option>
-              <option value="MM/DD/YYYY">MM/DD/YYYY (e.g., 11/25/2025)</option>
-              <option value="DD/MM/YYYY">DD/MM/YYYY (e.g., 25/11/2025)</option>
-              <option value="MMM DD, YYYY">MMM DD, YYYY (e.g., Nov 25, 2025)</option>
-            </select>
           </div>
         </div>
 
@@ -995,6 +1127,7 @@
   <!-- Settings modules - core must load first, then individual modules -->
   <script src="settings/settings-core.js"></script>
   <script src="settings/settings-appearance.js"></script>
+  <script src="settings/settings-dates.js"></script>
   <script src="settings/settings-search.js"></script>
   <script src="settings/settings-patterns.js"></script>
   <script src="settings/settings-copy.js"></script>

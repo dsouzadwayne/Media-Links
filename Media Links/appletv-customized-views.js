@@ -1,5 +1,6 @@
 // Apple TV+ Customized Views - Episode and Cast/Crew extraction
 // Creates customized view data from Apple TV+ show pages
+// Uses: StorageUtils from lib/
 
 (function() {
   'use strict';
@@ -9,16 +10,8 @@
     return;
   }
 
-  // Check if extension context is still valid
-  function isExtensionContextValid() {
-    try {
-      return typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  if (!isExtensionContextValid()) {
+  // Early exit if extension context is invalid
+  if (!StorageUtils.isExtensionContextValid()) {
     console.log('Extension context invalidated, skipping Apple TV+ customized views');
     return;
   }

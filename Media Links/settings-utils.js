@@ -32,6 +32,11 @@ window.SettingsUtils = (() => {
     hotstarAutoViewMorePaused: false,
     hotstarDateFormat: 'DD MMM YYYY',
 
+    // Date Format Settings (granular)
+    dateFormatDefault: 'DD MMM YYYY',
+    dateFormatByView: {},  // { 'imdb': 'YYYY-MM-DD', 'wikipedia': null, ... }
+    dateFormatByField: {}, // { 'Release Dates': 'YYYY-MM-DD', ... }
+
     // IMDb Settings
     showImdbCast: true,
     showImdbCompany: true,
@@ -183,6 +188,19 @@ window.SettingsUtils = (() => {
       type: 'string',
       enum: ['DD MMM YYYY', 'YYYY-MM-DD', 'MM/DD/YYYY', 'DD/MM/YYYY', 'MMM DD, YYYY'],
       default: 'DD MMM YYYY'
+    },
+    dateFormatDefault: {
+      type: 'string',
+      enum: ['DD MMM YYYY', 'YYYY-MM-DD', 'MM/DD/YYYY', 'DD/MM/YYYY', 'MMM DD, YYYY'],
+      default: 'DD MMM YYYY'
+    },
+    dateFormatByView: {
+      type: 'object',
+      default: {}
+    },
+    dateFormatByField: {
+      type: 'object',
+      default: {}
     },
     showImdbCast: {
       type: 'boolean',

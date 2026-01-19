@@ -4,13 +4,10 @@
 (function() {
   'use strict';
 
-  // Check if extension context is still valid
+  // Local helper to check extension context validity
   function isExtensionContextValid() {
     try {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
-        return false;
-      }
-      return true;
+      return typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id;
     } catch (e) {
       return false;
     }
@@ -37,6 +34,7 @@
       this.title = options.title || 'Cast & Crew';
       this.columns = options.columns || ['name', 'role'];
       this.pagePath = options.pagePath || window.location.pathname;
+      this.viewName = options.viewName || this.detectViewName(); // For date format context
 
       // Filter state
       this.searchQuery = '';
@@ -54,8 +52,31 @@
       // Debounce timer for render calls
       this.renderDebounceTimer = null;
 
+      // Initialize Fuse.js for fuzzy search if available
+      this.fuse = null;
+      this.initFuseSearch();
+
       // Set up MutationObserver to clean up removed dropdowns
       this.setupDropdownCleanupObserver();
+    }
+
+    /**
+     * Initialize Fuse.js for fuzzy search
+     */
+    initFuseSearch() {
+      if (typeof Fuse === 'undefined' || !this.data || this.data.length === 0) {
+        this.fuse = null;
+        return;
+      }
+
+      this.fuse = new Fuse(this.data, {
+        keys: ['name', 'role'],
+        threshold: 0.4,        // 0 = exact match, 1 = match anything
+        distance: 100,         // How close the match must be to the fuzzy location
+        ignoreLocation: true,  // Search entire string, not just beginning
+        includeScore: true,    // Include match score for potential ranking
+        minMatchCharLength: 2  // Minimum characters before matching
+      });
     }
 
     /**
@@ -160,6 +181,28 @@
     }
 
     /**
+     * Auto-detect the view name based on context
+     */
+    detectViewName() {
+      const hostname = window.location?.hostname || '';
+      const pathname = window.location?.pathname || '';
+
+      if (hostname.includes('imdb.com')) {
+        return 'imdb';
+      } else if (hostname.includes('wikipedia.org')) {
+        return 'wikipedia';
+      } else if (hostname.includes('hotstar.com')) {
+        return 'hotstar';
+      } else if (pathname.includes('consolidated')) {
+        return 'consolidated';
+      } else if (pathname.includes('comparison')) {
+        return 'comparison';
+      }
+
+      return null;
+    }
+
+    /**
      * Define role type order
      */
     getRoleTypeOrder() {
@@ -248,24 +291,35 @@
 
     /**
      * Filter data based on search and role selection
+     * Uses Fuse.js for fuzzy search if available
      */
     getFilteredData() {
+      const query = this.searchQuery.trim();
+
+      // If no search query, just filter by role
+      if (!query) {
+        return this.data.filter(item => this.selectedRoles.has(item.roleType));
+      }
+
+      // Use Fuse.js for fuzzy search if available
+      if (this.fuse) {
+        const fuseResults = this.fuse.search(query);
+        // Filter fuse results by selected roles
+        return fuseResults
+          .map(result => result.item)
+          .filter(item => this.selectedRoles.has(item.roleType));
+      }
+
+      // Fallback to simple includes search
+      const lowerQuery = query.toLowerCase();
       return this.data.filter(item => {
-        // Check role filter
         if (!this.selectedRoles.has(item.roleType)) {
           return false;
         }
-
-        // Check search filter
-        if (this.searchQuery.trim()) {
-          const query = this.searchQuery.toLowerCase();
-          return (
-            (item.name && item.name.toLowerCase().includes(query)) ||
-            (item.role && item.role.toLowerCase().includes(query))
-          );
-        }
-
-        return true;
+        return (
+          (item.name && item.name.toLowerCase().includes(lowerQuery)) ||
+          (item.role && item.role.toLowerCase().includes(lowerQuery))
+        );
       });
     }
 
@@ -276,7 +330,7 @@
     savePreferences() {
       return new Promise((resolve) => {
         try {
-          if (!isExtensionContextValid()) {
+          if (!this.isExtensionContextValid()) {
             resolve(false);
             return;
           }
@@ -312,7 +366,7 @@
     loadPreferences() {
       return new Promise((resolve) => {
         try {
-          if (!isExtensionContextValid()) {
+          if (!this.isExtensionContextValid()) {
             resolve(null);
             return;
           }
@@ -455,9 +509,12 @@
       // Get user date format if needed and DateFormattingUtils is available
       if (isDateSection && typeof window.DateFormattingUtils !== 'undefined') {
         try {
-          userFormat = await window.DateFormattingUtils.getUserDateFormat();
+          userFormat = await window.DateFormattingUtils.getUserDateFormat({
+            view: this.viewName,
+            field: roleType
+          });
         } catch (error) {
-          console.warn('Failed to get user date format:', error);
+          console.log('Failed to get user date format:', error);
         }
       }
 
@@ -516,12 +573,15 @@
     /**
      * Copy a single date value with optional formatting
      * Supports date formatting from user preferences
+     * @param {string} dateString - The date string to copy
+     * @param {string} columnName - The column/field name for context
+     * @param {string} roleType - Optional roleType for field-specific formatting
      */
-    async copyDateValue(dateString, columnName = 'Date') {
+    async copyDateValue(dateString, columnName = 'Date', roleType = null) {
       try {
         // Check if DateFormattingUtils is available
         if (typeof window.DateFormattingUtils === 'undefined') {
-          console.warn('DateFormattingUtils not available, copying raw date string');
+          console.log('DateFormattingUtils not available, copying raw date string');
           navigator.clipboard.writeText(dateString).then(() => {
             this.showCopyNotification(`Copied ${columnName}`);
           }).catch(err => {
@@ -535,8 +595,11 @@
           return;
         }
 
-        // Try to parse and reformat the date
-        const userFormat = await window.DateFormattingUtils.getUserDateFormat();
+        // Try to parse and reformat the date with context
+        const userFormat = await window.DateFormattingUtils.getUserDateFormat({
+          view: this.viewName,
+          field: roleType || columnName
+        });
         const formattedDate = window.DateFormattingUtils.parseAndFormat(dateString, userFormat);
 
         // Use formatted date if parsing succeeded, otherwise use original
@@ -1283,12 +1346,12 @@
               // If it's a date column and DateFormattingUtils is available, try to format it
               let finalText = textToCopy;
               if (isDate && typeof window.DateFormattingUtils !== 'undefined' && textToCopy !== '-') {
-                const userFormat = await window.DateFormattingUtils.getUserDateFormat();
+                const userFormat = await window.DateFormattingUtils.getUserDateFormat({
+                  view: self.viewName,
+                  field: roleType
+                });
                 const formatted = window.DateFormattingUtils.parseAndFormat(textToCopy, userFormat);
-                // BUG FIX: Warn if date parsing fails
-                if (!formatted) {
-                  console.warn(`Failed to parse date: "${textToCopy}" in format "${userFormat}"`);
-                }
+                // parseAndFormat logs internally if parsing fails
                 finalText = formatted || textToCopy; // Use formatted if available, else original
               }
 
@@ -1437,13 +1500,16 @@
             let finalValue = colValue;
             if (isDate && typeof window.DateFormattingUtils !== 'undefined' && colValue && colValue !== '-') {
               try {
-                const userFormat = await window.DateFormattingUtils.getUserDateFormat();
+                const userFormat = await window.DateFormattingUtils.getUserDateFormat({
+                  view: self.viewName,
+                  field: roleType
+                });
                 const formatted = window.DateFormattingUtils.parseAndFormat(colValue, userFormat);
                 if (formatted) {
                   finalValue = formatted;
                 }
               } catch (error) {
-                console.warn('Failed to format date in row copy:', error);
+                console.log('Failed to format date in row copy:', error);
               }
             }
 
@@ -1504,13 +1570,16 @@
             // Apply date formatting if needed
             if (isDate && typeof window.DateFormattingUtils !== 'undefined' && colValue && colValue !== '-') {
               try {
-                const userFormat = await window.DateFormattingUtils.getUserDateFormat();
+                const userFormat = await window.DateFormattingUtils.getUserDateFormat({
+                  view: self.viewName,
+                  field: roleType
+                });
                 const formatted = window.DateFormattingUtils.parseAndFormat(colValue, userFormat);
                 if (formatted) {
                   colValue = formatted;
                 }
               } catch (error) {
-                console.warn('Failed to format date:', error);
+                console.log('Failed to format date:', error);
               }
             }
             parts.push(colValue);

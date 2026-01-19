@@ -1,5 +1,6 @@
 // IMDb Customized Views Integration
 // Extracts cast/crew data and creates customized views on IMDb pages
+// Uses: StorageUtils from lib/
 
 (function() {
   'use strict';
@@ -20,18 +21,6 @@
     }
   }
 
-  // Check if extension context is still valid
-  function isExtensionContextValid() {
-    try {
-      if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.runtime.id) {
-        return false;
-      }
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-
   /**
    * Sanitize HTML to prevent XSS attacks
    * Escapes special characters that could be used for script injection
@@ -44,7 +33,7 @@
   }
 
   // Early exit if extension context is invalid
-  if (!isExtensionContextValid()) {
+  if (!StorageUtils.isExtensionContextValid()) {
     console.log('Extension context invalidated, skipping IMDb customized views');
     return;
   }
@@ -1019,7 +1008,7 @@
    */
   function storeConsolidatedData(pageType, data, customStorageKey) {
     // Check if extension context is still valid before making API call
-    if (!isExtensionContextValid()) {
+    if (!StorageUtils.isExtensionContextValid()) {
       console.log('Extension context invalidated, cannot store consolidated data');
       return;
     }
@@ -1028,7 +1017,7 @@
       const storageKey = customStorageKey || `consolidatedViewData_${pageType}`;
       chrome.storage.local.set({ [storageKey]: data }, () => {
         // Check context again in the callback
-        if (!isExtensionContextValid()) {
+        if (!StorageUtils.isExtensionContextValid()) {
           console.log('Extension context invalidated in callback');
           return;
         }
@@ -1306,7 +1295,7 @@
     return new Promise((resolve) => {
       try {
         // Check if extension context is still valid before making API call
-        if (!isExtensionContextValid()) {
+        if (!StorageUtils.isExtensionContextValid()) {
           console.log('Extension context invalidated, using default settings');
           resolve({
             showBtn: true,
@@ -1320,7 +1309,7 @@
         if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.sync) {
           chrome.storage.sync.get(['showCustomizedViewBtn', 'defaultViewColumns', 'showConsolidatedViewBtn', 'autoOpenConsolidatedView'], (result) => {
             // Check context again in the callback in case it was invalidated during the async operation
-            if (!isExtensionContextValid()) {
+            if (!StorageUtils.isExtensionContextValid()) {
               console.log('Extension context invalidated in callback, using default settings');
               resolve({
                 showBtn: true,
@@ -1503,7 +1492,7 @@
         }
       };
 
-      if (!isExtensionContextValid()) {
+      if (!StorageUtils.isExtensionContextValid()) {
         handleExtensionContextError();
         return;
       }
@@ -1528,7 +1517,7 @@
       // (context was already checked above, no need to check again)
 
       chrome.runtime.sendMessage({ type: 'getCurrentTabId' }, (response) => {
-        if (!isExtensionContextValid()) {
+        if (!StorageUtils.isExtensionContextValid()) {
           handleExtensionContextError();
           return;
         }
@@ -2366,7 +2355,7 @@
    */
   // Register message listener with error handling
   try {
-    if (isExtensionContextValid()) {
+    if (StorageUtils.isExtensionContextValid()) {
       chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         if (request.type === 'performConsolidatedExtraction') {
           const pageType = request.pageType;
@@ -2376,7 +2365,7 @@
           (async () => {
             try {
               // Check context at the start of the async operation
-              if (!isExtensionContextValid()) {
+              if (!StorageUtils.isExtensionContextValid()) {
                 console.warn('Extension context invalidated during extraction');
                 sendResponse({ success: false, error: 'Extension context invalidated' });
                 return;
@@ -2412,7 +2401,7 @@
               }
 
               // Check context before storing data
-              if (!isExtensionContextValid()) {
+              if (!StorageUtils.isExtensionContextValid()) {
                 console.warn('Extension context invalidated before storing data');
                 sendResponse({ success: false, error: 'Extension context invalidated' });
                 return;
@@ -2449,7 +2438,7 @@
    * Listen for settings changes to show/hide customized view buttons
    */
   try {
-    if (isExtensionContextValid() && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+    if (StorageUtils.isExtensionContextValid() && typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
       chrome.storage.onChanged.addListener((changes, namespace) => {
         if (namespace === 'sync') {
           // Check if consolidated view button setting changed
